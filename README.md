@@ -95,3 +95,7 @@ Patch-version bumps (e.g. `12.0.2 → 12.0.3`) may be merged without review if a
 ## License
 
 Licensed under MIT OR Apache-2.0; see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
+
+---
+
+_Note: issue and pull-request numbers mentioned in this repository refer to a private archive that predates this public repository; they are not links into this repo._
