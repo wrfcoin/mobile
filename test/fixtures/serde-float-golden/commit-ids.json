@@ -1,0 +1,158 @@
+[
+  {
+    "raw": "1008.2767333984375",
+    "printed": "1008.28",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":1008.28,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "e7a02a7326b3be9a1c92c08d8895e3ffd1bc788566179b32f60c9dae4f5a52e6"
+  },
+  {
+    "raw": "29.876432418823242",
+    "printed": "29.88",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":29.88,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "72246bc3c3184cafd1f17984f2171bbc54fa39adb52b2985bf92200ca53f9293"
+  },
+  {
+    "raw": "983.7742716528799",
+    "printed": "983.77",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":983.77,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "7ac821325bb433f24952d88caf32b4212b395f64802cab1935c5d8a7f732018c"
+  },
+  {
+    "raw": "-14.623193740844727",
+    "printed": "-14.62",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":-14.62,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "fb896418e3e87a74f7a0374633c8fcfc29f9a15685b6e50bd6575390737471b9"
+  },
+  {
+    "raw": "11.133861541748047",
+    "printed": "11.13",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":11.13,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "e8f90d41a897839401c727bb1af5820ed54be35fd43a7196ebb364dd21815174"
+  },
+  {
+    "raw": "986.6014394478993",
+    "printed": "986.6",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":986.6,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "853e55b2e79503847eb5783ebffebae367f7f015715f40f97e0d74b82c2c6172"
+  },
+  {
+    "raw": "91.87244415283203",
+    "printed": "91.87",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":91.87,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "625eca53b80af62cbfa431b25c049b23207d1dd557d42b4eb52d7992610f95a6"
+  },
+  {
+    "raw": "18.848947525024414",
+    "printed": "18.85",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":18.85,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "dd1e9be9c709f23b069e921a8b24d893432e921629d6eb9311c1f60c513230ff"
+  },
+  {
+    "raw": "961.1067660186405",
+    "printed": "961.11",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":961.11,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "0fab0881f0cf4c4c71bda67c658716bf1375c24b39862799648e262638ce6c89"
+  },
+  {
+    "raw": "975.4142425460773",
+    "printed": "975.41",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":975.41,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "70c357d96e010e1e0110ef665764ba6f813f635b12216ffbceea242edd8cf133"
+  },
+  {
+    "raw": "21.526437759399414",
+    "printed": "21.53",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":21.53,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "04cd8323fef2164010e9d4445805c4816de432fdf6e2f51be855d560c901454c"
+  },
+  {
+    "raw": "952.2795318172925",
+    "printed": "952.28",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":952.28,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "526059d8b3a05d6a16c0316c69d3e3a92f711e85118233bac95622afcd2c640c"
+  },
+  {
+    "raw": "0",
+    "printed": "0",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "fc2d32c396e7bbfab68349159a85b2c90a447c7c574d25ab95084971ac125565"
+  },
+  {
+    "raw": "-0",
+    "printed": "0",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "fc2d32c396e7bbfab68349159a85b2c90a447c7c574d25ab95084971ac125565"
+  },
+  {
+    "raw": "0.005",
+    "printed": "0.01",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0.01,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "63eac39d4b1983b26ae5c8f3f7c7306d9537dd0e831db2061ab691b12c079683"
+  },
+  {
+    "raw": "-0.005",
+    "printed": "-0.01",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":-0.01,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "53cf78b5a9cc5e998710322f01957bf10e7e55e0f9bf6e9b8d7647832ec74e9c"
+  },
+  {
+    "raw": "0.015",
+    "printed": "0.02",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0.02,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "64e13e875aa967fd312f26240bbc00af9c5a19c6901c95fc286341aa31944557"
+  },
+  {
+    "raw": "1.005",
+    "printed": "1",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":1,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "dc0728eef32b43d90e64d2f904d0015f1c12c2600fd03ffd7d96e9cab691cbdb"
+  },
+  {
+    "raw": "2.675",
+    "printed": "2.68",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":2.68,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "c227f416d6c4f0fc30f8a0fae09bcbf9e5a0956797e60d6420425876eb729738"
+  },
+  {
+    "raw": "-1.005",
+    "printed": "-1",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":-1,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "e80af41a9fc3565af6b519414ec1178918e35a65997be61969ad90437a403305"
+  },
+  {
+    "raw": "1013.25",
+    "printed": "1013.25",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":1013.25,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "ca5493f9408d8cd938c173e8152230665a40023a296b61a21a6a5c459b770096"
+  },
+  {
+    "raw": "99999.994",
+    "printed": "99999.99",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":99999.99,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "7e810b77c381ee7731fdfd9ca76df785104814f4c18bac000e504402fd657cf1"
+  },
+  {
+    "raw": "1e-7",
+    "printed": "0",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "fc2d32c396e7bbfab68349159a85b2c90a447c7c574d25ab95084971ac125565"
+  },
+  {
+    "raw": "-1e-7",
+    "printed": "0",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "fc2d32c396e7bbfab68349159a85b2c90a447c7c574d25ab95084971ac125565"
+  },
+  {
+    "raw": "22.5",
+    "printed": "22.5",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":22.5,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "91eeee3cbd6220ecadbd7744487128a884c3a25fb4373cef2f39333581169dd7"
+  },
+  {
+    "raw": "0.125",
+    "printed": "0.13",
+    "payload": "{\"humidity_pct\":0,\"pressure_hpa\":0.13,\"rainfall_mm\":0,\"temperature_c\":0,\"wind_mps\":0}",
+    "commitId": "b3766816520d959949cd43d7cc7e82fa999c2d9296bfa1205d3dc8ce5edb5798"
+  }
+]

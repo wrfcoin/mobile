@@ -1,0 +1,34 @@
+{
+  "seam": "mobile-wallet-auth",
+  "walletLogin": {
+    "endpoint": "/api/auth/wallet-login",
+    "messageTemplate": "WRFCoin wallet login nonce: {nonce}",
+    "request": {
+      "requiredFields": ["address", "signature", "nonce"],
+      "addressFormat": "^0x[a-f0-9]{40}$",
+      "signaturePrefix": "0x",
+      "addressLowercase": true
+    },
+    "successResponse": {
+      "envelope": {
+        "success": true,
+        "dataKey": "data"
+      },
+      "requiredDataFields": ["jwt", "refreshToken", "expiresIn"],
+      "minimumExpiresInSeconds": 1
+    }
+  },
+  "refresh": {
+    "endpoint": "/api/auth/refresh",
+    "request": {
+      "requiredFields": ["refreshToken"]
+    },
+    "successResponse": {
+      "envelope": {
+        "success": true,
+        "dataKey": "data"
+      },
+      "requiredDataFields": ["jwt", "refreshToken", "expiresIn"]
+    }
+  }
+}

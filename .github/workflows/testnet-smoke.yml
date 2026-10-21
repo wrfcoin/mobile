@@ -1,0 +1,46 @@
+name: testnet-smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+# PARKED 2026-07-31 to protect the August Actions budget (3,000 min/month, private repo).
+# Only the `schedule:` trigger is parked -- every other trigger (pull_request / push /
+# workflow_dispatch) is untouched, so PR gating is unchanged and this can still be run
+# on demand with `gh workflow run <file>`. Restore by deleting this banner and
+# uncommenting below. Same treatment as core4 #2652; restore list: reenable-workflows.sh
+  # schedule:
+  # - cron: "30 6 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: offline mobile submission smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Smoke wiring regression
+        run: python3 -m unittest discover -s scripts/tests
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Hosted setup retains its existing pub fallback; warm caches win first.
+      # Do not copy this bootstrap to a self-hosted runner: that needs a preinstalled SDK/cache.
+      - run: bash scripts/ci_pub_get.sh
+
+      - name: Run synthetic probes and wallet-send app flow
+        run: bash scripts/run_mobile_smoke.sh

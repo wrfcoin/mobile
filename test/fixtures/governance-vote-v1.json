@@ -1,0 +1,17 @@
+{
+  "provenance": "Node 24 crypto independent ed25519, synthetic seed [7;32], backend#1337 raw preimage",
+  "vectors": [
+    {
+      "choice": "approve",
+      "publicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "messageHex": "676f7665726e616e63652d766f74652d76317c70726f706f73616c2d317c617070726f7665",
+      "signature": "27a2c3945c7e4c9590353dda5b7b2649133e4be5af213118890c7fa5499aa5d441153efb18860d82a6a24adc97038c2526e4955accef690a0dbedf63fee75001"
+    },
+    {
+      "choice": "reject",
+      "publicKey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+      "messageHex": "676f7665726e616e63652d766f74652d76317c70726f706f73616c2d317c72656a656374",
+      "signature": "0efabf636d52dc84c2cdf2be022246e9b2bbb47be2e9f383860cd0321849914a76cc11a436af7d70e9315e0b3367aa114221011dc10760329d89ff4c68a88302"
+    }
+  ]
+}

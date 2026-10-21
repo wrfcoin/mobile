@@ -1,0 +1,232 @@
+{
+  "source": "wrfcoin/backend main 920b2f81d8c6cbab0c2fca6a01c91b6da63e60ae; server/services/chain-rewards/earnings.ts; __tests__/chain-role-earnings-b2.test.ts. Synthetic only.",
+  "boards": {
+    "contribution": {
+      "success": true,
+      "units": {
+        "currency": "WRF",
+        "decimals": 8,
+        "scale": "100000000"
+      },
+      "role": "contribution",
+      "status": "unavailable",
+      "complete": false,
+      "paidBaseUnits": null,
+      "message": "Paid-event coverage unavailable",
+      "requestedScope": "all",
+      "effectiveScope": null,
+      "coverage": null,
+      "asOf": null,
+      "finalityPolicy": null,
+      "rows": []
+    },
+    "attester": {
+      "success": true,
+      "units": {
+        "currency": "WRF",
+        "decimals": 8,
+        "scale": "100000000"
+      },
+      "coverage": {
+        "fromHeight": "1",
+        "throughHeight": "4",
+        "complete": true
+      },
+      "asOf": {
+        "height": "4",
+        "hash": "0000000000000000000000000000000000000000000000000000000000000004",
+        "time": "2026-10-11T12:00:00.000001Z",
+        "checkedAt": "2026-10-11T12:00:00.000Z"
+      },
+      "finalityPolicy": "confirmed-canonical-with-rollback",
+      "role": "attester",
+      "requestedScope": "all",
+      "effectiveScope": "all",
+      "status": "available",
+      "complete": true,
+      "window": {
+        "from": null,
+        "through": "2026-10-11T12:00:00.000001Z"
+      },
+      "rows": [
+        {
+          "rank": 1,
+          "profileKey": "c_aaaaaaaaaaaaaaaaaaaaaaaa",
+          "shortAddress": "0x0000\u20260001",
+          "displayName": "Operator-aaaaaaaa",
+          "paidBaseUnits": "9007199254741000",
+          "paidDisplay": "90071992.54741000",
+          "isYou": true
+        }
+      ]
+    },
+    "producer": {
+      "success": true,
+      "units": {
+        "currency": "WRF",
+        "decimals": 8,
+        "scale": "100000000"
+      },
+      "coverage": {
+        "fromHeight": "1",
+        "throughHeight": "4",
+        "complete": true
+      },
+      "asOf": {
+        "height": "4",
+        "hash": "0000000000000000000000000000000000000000000000000000000000000004",
+        "time": "2026-10-11T12:00:00.000001Z",
+        "checkedAt": "2026-10-11T12:00:00.000Z"
+      },
+      "finalityPolicy": "confirmed-canonical-with-rollback",
+      "role": "producer",
+      "requestedScope": "all",
+      "effectiveScope": "all",
+      "status": "available",
+      "complete": true,
+      "window": {
+        "from": null,
+        "through": "2026-10-11T12:00:00.000001Z"
+      },
+      "rows": [
+        {
+          "rank": 1,
+          "profileKey": "c_aaaaaaaaaaaaaaaaaaaaaaaa",
+          "shortAddress": "0x0000\u20260001",
+          "displayName": "Operator-aaaaaaaa",
+          "paidBaseUnits": "9007199254741000",
+          "paidDisplay": "90071992.54741000",
+          "isYou": true
+        }
+      ]
+    },
+    "node": {
+      "success": true,
+      "units": {
+        "currency": "WRF",
+        "decimals": 8,
+        "scale": "100000000"
+      },
+      "role": "node",
+      "status": "unsupported",
+      "complete": false,
+      "paidBaseUnits": null,
+      "message": "Node payments are not implemented yet",
+      "requestedScope": "all",
+      "effectiveScope": null,
+      "coverage": null,
+      "asOf": null,
+      "finalityPolicy": null,
+      "rows": []
+    },
+    "forecast": {
+      "success": true,
+      "units": {
+        "currency": "WRF",
+        "decimals": 8,
+        "scale": "100000000"
+      },
+      "role": "forecast",
+      "status": "unavailable",
+      "complete": false,
+      "paidBaseUnits": null,
+      "message": "Paid-event coverage unavailable",
+      "requestedScope": "all",
+      "effectiveScope": null,
+      "coverage": null,
+      "asOf": null,
+      "finalityPolicy": null,
+      "rows": []
+    }
+  },
+  "ownProfile": {
+    "success": true,
+    "profile": {
+      "isYou": true,
+      "walletAddress": "0x0000000000000000000000000000000000000001",
+      "totalRewardsEarned": null,
+      "roleEarnings": {
+        "units": {
+          "currency": "WRF",
+          "decimals": 8,
+          "scale": "100000000"
+        },
+        "coverage": {
+          "fromHeight": "1",
+          "throughHeight": "4",
+          "complete": true
+        },
+        "asOf": {
+          "height": "4",
+          "hash": "0000000000000000000000000000000000000000000000000000000000000004",
+          "time": "2026-10-11T12:00:00.000001Z",
+          "checkedAt": "2026-10-11T12:00:00.000Z"
+        },
+        "finalityPolicy": "confirmed-canonical-with-rollback",
+        "roles": {
+          "contribution": {
+            "role": "contribution",
+            "status": "unavailable",
+            "complete": false,
+            "paidBaseUnits": null,
+            "message": "Paid-event coverage unavailable"
+          },
+          "attester": {
+            "role": "attester",
+            "status": "available",
+            "complete": true,
+            "paidBaseUnits": "9007199254741000",
+            "paidDisplay": "90071992.54741000",
+            "displayName": "Operator-aaaaaaaa",
+            "coverage": {
+              "fromHeight": "1",
+              "throughHeight": "4",
+              "complete": true
+            },
+            "asOf": {
+              "height": "4",
+              "hash": "0000000000000000000000000000000000000000000000000000000000000004",
+              "time": "2026-10-11T12:00:00.000001Z",
+              "checkedAt": "2026-10-11T12:00:00.000Z"
+            }
+          },
+          "producer": {
+            "role": "producer",
+            "status": "available",
+            "complete": true,
+            "paidBaseUnits": "9007199254741000",
+            "paidDisplay": "90071992.54741000",
+            "displayName": "Operator-aaaaaaaa",
+            "coverage": {
+              "fromHeight": "1",
+              "throughHeight": "4",
+              "complete": true
+            },
+            "asOf": {
+              "height": "4",
+              "hash": "0000000000000000000000000000000000000000000000000000000000000004",
+              "time": "2026-10-11T12:00:00.000001Z",
+              "checkedAt": "2026-10-11T12:00:00.000Z"
+            }
+          },
+          "node": {
+            "role": "node",
+            "status": "unsupported",
+            "complete": false,
+            "paidBaseUnits": null,
+            "message": "Node payments are not implemented yet"
+          },
+          "forecast": {
+            "role": "forecast",
+            "status": "unavailable",
+            "complete": false,
+            "paidBaseUnits": null,
+            "message": "Paid-event coverage unavailable"
+          }
+        },
+        "overallPaidBaseUnits": null,
+        "overallComplete": false
+      }
+    }
+  }
+}

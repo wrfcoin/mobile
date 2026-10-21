@@ -1,0 +1,2 @@
+team_id(ENV.fetch("WRFCOIN_IOS_TEAM_ID"))
+app_identifier(ENV.fetch("WRFCOIN_IOS_BUNDLE_IDENTIFIER"))

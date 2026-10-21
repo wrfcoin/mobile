@@ -1,0 +1,221 @@
+name: mobile-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Semantic version to release. Leave blank to use pubspec.yaml.
+        required: false
+        type: string
+      build_number:
+        description: Build number override. Leave blank to use the pubspec.yaml version or GitHub run number.
+        required: false
+        type: string
+      release_ios:
+        description: Build and upload iOS
+        required: false
+        type: boolean
+        default: true
+      release_android:
+        description: Build and upload Android
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: mobile-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.release_version }}
+      BUILD_NUMBER: ${{ github.event.inputs.build_number }}
+      RELEASE_IOS: ${{ inputs.release_ios }}
+      RELEASE_ANDROID: ${{ inputs.release_android }}
+      MATCH_READONLY: "true"
+      PLAY_TRACK: internal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Validate release TLS pins
+        env:
+          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
+          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+        run: bash scripts/validate-release-tls-pins.sh
+
+      - name: Validate release API host
+        env:
+          WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
+        run: bash scripts/validate-release-api-host.sh "$WRFCOIN_API_BASE_URL"
+
+      - name: Validate release context
+        run: bundle exec fastlane validate_release_context
+
+      - name: Verify beta release pipeline
+        env:
+          WRFCOIN_IOS_BUNDLE_IDENTIFIER: ${{ secrets.WRFCOIN_IOS_BUNDLE_IDENTIFIER }}
+          WRFCOIN_IOS_TEAM_ID: ${{ secrets.WRFCOIN_IOS_TEAM_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
+          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
+          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+          WRFCOIN_ANDROID_KEYSTORE_BASE64: ${{ secrets.WRFCOIN_ANDROID_KEYSTORE_BASE64 }}
+          WRFCOIN_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.WRFCOIN_ANDROID_KEYSTORE_PASSWORD }}
+          WRFCOIN_ANDROID_KEY_ALIAS: ${{ secrets.WRFCOIN_ANDROID_KEY_ALIAS }}
+          WRFCOIN_ANDROID_KEY_PASSWORD: ${{ secrets.WRFCOIN_ANDROID_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON_BASE64: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}
+        run: bundle exec fastlane verify_release_pipeline
+
+  ios_release:
+    if: ${{ inputs.release_ios }}
+    needs: preflight
+    runs-on: macos-14
+    timeout-minutes: 120
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.release_version }}
+      BUILD_NUMBER: ${{ github.event.inputs.build_number }}
+      MATCH_READONLY: "true"
+      PLAY_TRACK: internal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build, sign, and upload iOS
+        env:
+          WRFCOIN_IOS_BUNDLE_IDENTIFIER: ${{ secrets.WRFCOIN_IOS_BUNDLE_IDENTIFIER }}
+          WRFCOIN_IOS_TEAM_ID: ${{ secrets.WRFCOIN_IOS_TEAM_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/app-store-connect-key.p8
+          WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
+          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
+          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${APP_STORE_CONNECT_KEY_BASE64}" | base64 --decode > "${APP_STORE_CONNECT_KEY_PATH}"
+          bundle exec fastlane ios release
+
+      - name: Upload iOS metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-release-metadata
+          path: |
+            build/ios/ipa/*.ipa
+            build/release/ios-release-metadata.json
+          if-no-files-found: error
+
+  android_release:
+    if: ${{ inputs.release_android }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.release_version }}
+      BUILD_NUMBER: ${{ github.event.inputs.build_number }}
+      MATCH_READONLY: "true"
+      PLAY_TRACK: internal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Materialize Android signing secrets
+        env:
+          WRFCOIN_ANDROID_KEYSTORE_BASE64: ${{ secrets.WRFCOIN_ANDROID_KEYSTORE_BASE64 }}
+          PLAY_SERVICE_ACCOUNT_JSON_BASE64: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          install -d "${RUNNER_TEMP}/wrfcoin-android"
+          printf '%s' "${WRFCOIN_ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/wrfcoin-android/release-keystore.jks"
+          printf '%s' "${PLAY_SERVICE_ACCOUNT_JSON_BASE64}" | base64 --decode > "${RUNNER_TEMP}/wrfcoin-android/play-service-account.json"
+
+      - name: Build, sign, and upload Android
+        env:
+          WRFCOIN_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/wrfcoin-android/release-keystore.jks
+          WRFCOIN_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.WRFCOIN_ANDROID_KEYSTORE_PASSWORD }}
+          WRFCOIN_ANDROID_KEY_ALIAS: ${{ secrets.WRFCOIN_ANDROID_KEY_ALIAS }}
+          WRFCOIN_ANDROID_KEY_PASSWORD: ${{ secrets.WRFCOIN_ANDROID_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON_PATH: ${{ runner.temp }}/wrfcoin-android/play-service-account.json
+          WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
+          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
+          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+        run: bundle exec fastlane android release
+
+      - name: Upload Android metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release-metadata
+          path: |
+            build/app/outputs/bundle/release/*.aab
+            build/release/android-release-metadata.json
+          if-no-files-found: error
+
+  release-terminal-gate:
+    name: Release terminal gate
+    runs-on: ubuntu-latest
+    needs: [preflight, ios_release, android_release]
+    if: always()
+    steps:
+      - uses: actions/checkout@v7
+      - name: Reject skipped selected release work
+        env:
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          IOS_RESULT: ${{ needs.ios_release.result }}
+          ANDROID_RESULT: ${{ needs.android_release.result }}
+          RELEASE_IOS: ${{ inputs.release_ios }}
+          RELEASE_ANDROID: ${{ inputs.release_android }}
+        run: bash scripts/assert-release-terminal-gate.sh

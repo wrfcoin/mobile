@@ -1,0 +1,7 @@
+git_url(ENV.fetch("MATCH_GIT_URL"))
+storage_mode("git")
+type("appstore")
+app_identifier(ENV.fetch("WRFCOIN_IOS_BUNDLE_IDENTIFIER"))
+team_id(ENV.fetch("WRFCOIN_IOS_TEAM_ID"))
+git_branch(ENV.fetch("MATCH_BRANCH", "main"))
+readonly(ENV.fetch("MATCH_READONLY", "true") != "false")

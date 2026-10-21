@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+# PARKED 2026-07-31 to protect the August Actions budget (3,000 min/month, private repo).
+# Only the `schedule:` trigger is parked -- every other trigger (pull_request / push /
+# workflow_dispatch) is untouched, so PR gating is unchanged and this can still be run
+# on demand with `gh workflow run <file>`. Restore by deleting this banner and
+# uncommenting below. Same treatment as core4 #2652; restore list: reenable-workflows.sh
+  # schedule:
+  # - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+# PR supersession only; main and dispatch runs have isolated groups.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # PR gate (#209): analyze + test must pass on every PR and push to main.
+  analyze-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Smoke wiring regression
+        run: python3 -m unittest discover -s scripts/tests
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      # Existing hosted-only bootstrap: prefer cached packages before the same
+      # network fallback this job already used. No self-hosted runner toolchain downloads.
+      - run: bash scripts/ci_pub_get.sh
+      - name: Release/profile chain define compile controls
+        run: |
+          bash scripts/test-release-chain-define.sh
+          bash scripts/test_build_profile_apk_gate.sh
+      - run: flutter analyze --no-pub
+      - run: flutter test --no-pub --concurrency=2
+
+  # APK build + dependency drift stay on the nightly cron (#209): too slow
+  # for a PR gate and the drift report only makes sense against main.
+  nightly-build:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: bash scripts/dependency_drift_report.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dependency-drift
+          path: artifacts/dependency-drift.txt
+      - run: flutter build apk --debug

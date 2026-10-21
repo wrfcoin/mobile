@@ -1,0 +1,407 @@
+default_platform(:ios)
+
+require "digest"
+require "fileutils"
+require "json"
+require "shellwords"
+require "time"
+
+def env_or_nil(key)
+  value = ENV[key]
+  return nil if value.nil?
+
+  stripped = value.strip
+  stripped.empty? ? nil : stripped
+end
+
+def required_env!(key)
+  value = env_or_nil(key)
+  UI.user_error!("Missing required environment variable #{key}") if value.nil?
+  value
+end
+
+def required_envs!(keys)
+  missing = keys.select { |key| env_or_nil(key).nil? }
+  return if missing.empty?
+
+  UI.user_error!("Missing required environment variables: #{missing.join(", ")}")
+end
+
+def valid_tls_pin?(value)
+  candidate = value.to_s.upcase
+  (candidate.match?(/\A[0-9A-F]{64}\z/) || candidate.match?(/\A(?:[0-9A-F]{2}:){31}[0-9A-F]{2}\z/)) &&
+    !value.match?(/CONFIGURE|PLACEHOLDER|CHANGEME/i)
+end
+
+def release_tls_pins!
+  current = required_env!("WRFCOIN_TLS_PIN_SHA256_CURRENT")
+  next_pin = env_or_nil("WRFCOIN_TLS_PIN_SHA256_NEXT")
+  UI.user_error!("WRFCOIN_TLS_PIN_SHA256_CURRENT is malformed or a placeholder") unless valid_tls_pin?(current)
+  if next_pin
+    UI.user_error!("WRFCOIN_TLS_PIN_SHA256_NEXT is malformed or a placeholder") unless valid_tls_pin?(next_pin)
+    UI.user_error!("Current and next TLS pins must be distinct") if current.delete(":").casecmp?(next_pin.delete(":"))
+  end
+  [current, next_pin]
+end
+
+def release_api_base_url!
+  api_base_url = env_or_nil("WRFCOIN_API_BASE_URL")
+  UI.user_error!("WRFCOIN_API_BASE_URL is required for release builds") if api_base_url.nil?
+  sh("bash", "scripts/validate-release-api-host.sh", api_base_url)
+  api_base_url
+end
+
+# The backend compares chain IDs as JavaScript numbers (Number.isSafeInteger).
+MAX_SAFE_INTEGER = (2**53) - 1
+
+# One lowercase DNS label: alphanumerics and inner hyphens.
+WALLET_AUTH_HOST_LABEL = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+WALLET_AUTH_ORIGIN_PATTERN = %r{
+  \Ahttps://
+  (?:#{WALLET_AUTH_HOST_LABEL})(?:\.#{WALLET_AUTH_HOST_LABEL})*
+  (?::(?<port>[1-9]\d{0,4}))?
+  \z
+}x
+
+# True only for the canonical form the app and backend agree on. The app
+# refuses a login unless Uri.parse(origin).origin == origin (Dart lowercases the
+# host and drops the default :443 and leading zeros); the backend uses
+# new URL(raw).origin, which rejects ports above 65535.
+def canonical_wallet_auth_origin?(origin)
+  match = WALLET_AUTH_ORIGIN_PATTERN.match(origin)
+  return false if match.nil?
+
+  port = match[:port]
+  port.nil? || (port.to_i != 443 && port.to_i <= 65_535)
+end
+
+# Optional wallet-auth / signing-domain defines (ed25519 login, signed
+# transfers). Each is passed through only when its environment variable is
+# set; an unset optional variable emits no define, so the app keeps its built-in
+# behaviour (origin of API_BASE_URL; network testnet). Chain ID is required. A value that
+# is set but malformed fails the release instead of shipping a build whose
+# login would refuse every challenge.
+def optional_wallet_auth_defines!
+  defines = {}
+
+  origin = env_or_nil("WRFCOIN_WALLET_AUTH_ORIGIN")
+  if origin
+    unless canonical_wallet_auth_origin?(origin)
+      UI.user_error!(
+        "WRFCOIN_WALLET_AUTH_ORIGIN must be a canonical https origin: https://host[:port] with a " \
+        "lowercase host, no path or trailing slash, and a port 1-65535 without leading zeros that is " \
+        "not the default 443 (the app requires Uri.parse(origin).origin == origin)"
+      )
+    end
+    defines["WRFCOIN_WALLET_AUTH_ORIGIN"] = origin
+  end
+
+  chain_id = env_or_nil("WRFCOIN_CHAIN_ID")
+  UI.user_error!("WRFCOIN_CHAIN_ID is required for release builds") unless chain_id
+  if chain_id
+    unless chain_id.match?(/\A[1-9]\d*\z/) && chain_id.to_i <= MAX_SAFE_INTEGER
+      UI.user_error!("WRFCOIN_CHAIN_ID must be a positive integer no larger than 2^53-1 (backend Number.isSafeInteger)")
+    end
+    defines["WRFCOIN_CHAIN_ID"] = chain_id
+  end
+
+  network_id = env_or_nil("WRFCOIN_NETWORK_ID")
+  if network_id
+    UI.user_error!("WRFCOIN_NETWORK_ID must match [A-Za-z0-9._-]{1,64}") unless network_id.match?(/\A[A-Za-z0-9._-]{1,64}\z/)
+    defines["WRFCOIN_NETWORK_ID"] = network_id
+  end
+
+  defines
+end
+
+def truthy_env?(key, default: true)
+  value = env_or_nil(key)
+  return default if value.nil?
+
+  %w[1 true yes on].include?(value.downcase)
+end
+
+def pubspec_version
+  @pubspec_version ||= begin
+    contents = File.read("pubspec.yaml")
+    match = contents.match(/^version:\s*([^\s]+)\s*$/)
+    UI.user_error!("pubspec.yaml is missing a version entry") unless match
+    match[1]
+  end
+end
+
+def release_version
+  env_or_nil("RELEASE_VERSION") || pubspec_version.split("+").first
+end
+
+def release_build_number
+  env_or_nil("BUILD_NUMBER") || pubspec_version.split("+", 2)[1] || env_or_nil("GITHUB_RUN_NUMBER") || "1"
+end
+
+def release_notes_path
+  env_or_nil("RELEASE_NOTES_PATH") || "CHANGELOG.md"
+end
+
+def release_notes(version)
+  path = release_notes_path
+  UI.user_error!("Missing #{path}. Release notes are required before shipping #{version}.") unless File.exist?(path)
+
+  contents = File.read(path)
+  match = contents.match(/^##\s+\[?#{Regexp.escape(version)}\]?(?:\s+-.*)?\n(?<body>.*?)(?=\n##\s|\z)/m)
+  UI.user_error!("#{path} does not contain a release notes section for #{version}.") if match.nil?
+
+  body = match[:body].strip
+  UI.user_error!("#{path} contains an empty release notes section for #{version}.") if body.empty?
+
+  body
+end
+
+def validated_release_context
+  version = release_version
+  build_number = release_build_number
+  pubspec_semver = pubspec_version.split("+").first
+
+  UI.user_error!("release version must be semantic x.y.z, got #{version}") unless version.match?(/\A\d+\.\d+\.\d+\z/)
+  UI.user_error!("build number must be numeric, got #{build_number}") unless build_number.match?(/\A\d+\z/)
+  UI.user_error!("pubspec.yaml version #{pubspec_semver} does not match release version #{version}") if pubspec_semver != version
+  notes = release_notes(version)
+
+  {
+    version: version,
+    build_number: build_number,
+    notes: notes,
+  }
+end
+
+def write_release_manifest(platform:, artifact_paths:, version:, build_number:)
+  checksums = artifact_paths.each_with_object({}) do |path, memo|
+    next unless File.exist?(path)
+
+    memo[File.basename(path)] = Digest::SHA256.file(path).hexdigest
+  end
+
+  FileUtils.mkdir_p("build/release")
+  File.write(
+    "build/release/#{platform}-release-metadata.json",
+    JSON.pretty_generate(
+      {
+        platform: platform,
+        release_version: version,
+        build_number: build_number,
+        git_sha: ENV["GITHUB_SHA"] || `git rev-parse HEAD`.strip,
+        generated_at_utc: Time.now.utc.iso8601,
+        artifacts: checksums,
+      }
+    )
+  )
+end
+
+def flutter_pub_get
+  sh("flutter pub get")
+end
+
+def release_dart_defines
+  api_base_url = release_api_base_url!
+  current_pin, next_pin = release_tls_pins!
+  defines = [
+    "--dart-define=#{Shellwords.escape("API_BASE_URL=#{api_base_url}")}",
+    "--dart-define=#{Shellwords.escape("TLS_SECURITY_PROFILE=public-release")}",
+    "--dart-define=#{Shellwords.escape("TLS_PIN_SHA256_CURRENT=#{current_pin}")}",
+  ]
+  defines << "--dart-define=#{Shellwords.escape("TLS_PIN_SHA256_NEXT=#{next_pin}")}" if next_pin
+  optional_wallet_auth_defines!.each do |key, value|
+    defines << "--dart-define=#{Shellwords.escape("#{key}=#{value}")}"
+  end
+  defines.join(" ")
+end
+
+def flutter_build_ipa(version:, build_number:)
+  sh("flutter build ipa --release --build-name #{version} --build-number #{build_number} #{release_dart_defines}")
+  ipa = Dir["build/ios/ipa/*.ipa"].sort.last
+  UI.user_error!("No ipa produced by flutter build ipa") if ipa.nil?
+  ipa
+end
+
+def flutter_build_aab(version:, build_number:)
+  sh("flutter build appbundle --release --build-name #{version} --build-number #{build_number} #{release_dart_defines}")
+  aab = Dir["build/app/outputs/bundle/release/*.aab"].sort.last
+  UI.user_error!("No aab produced by flutter build appbundle") if aab.nil?
+  aab
+end
+
+def ios_signing_env!
+  required_env!("WRFCOIN_IOS_BUNDLE_IDENTIFIER")
+  required_env!("WRFCOIN_IOS_TEAM_ID")
+  required_env!("MATCH_GIT_URL")
+  required_env!("MATCH_PASSWORD")
+  required_env!("APP_STORE_CONNECT_KEY_ID")
+  required_env!("APP_STORE_CONNECT_ISSUER_ID")
+  required_env!("APP_STORE_CONNECT_KEY_PATH")
+end
+
+def android_signing_env!
+  required_env!("WRFCOIN_ANDROID_KEYSTORE_PATH")
+  required_env!("WRFCOIN_ANDROID_KEYSTORE_PASSWORD")
+  required_env!("WRFCOIN_ANDROID_KEY_ALIAS")
+  required_env!("WRFCOIN_ANDROID_KEY_PASSWORD")
+  required_env!("PLAY_SERVICE_ACCOUNT_JSON_PATH")
+end
+
+def app_store_connect_api_key!
+  app_store_connect_api_key(
+    key_id: required_env!("APP_STORE_CONNECT_KEY_ID"),
+    issuer_id: required_env!("APP_STORE_CONNECT_ISSUER_ID"),
+    key_filepath: required_env!("APP_STORE_CONNECT_KEY_PATH"),
+    duration: 1200,
+    in_house: false,
+  )
+end
+
+def release_notes_summary(version)
+  release_notes(version).lines.map(&:strip).reject(&:empty?).first(3).join(" ")
+end
+
+desc "Validate release inputs and release notes before any upload job starts"
+lane :validate_release_context do
+  context = validated_release_context
+  UI.success("Validated release #{context[:version]} build #{context[:build_number]}")
+end
+
+desc "Verify beta release pipeline secrets and platform routing before upload jobs start"
+lane :verify_release_pipeline do
+  context = validated_release_context
+  release_api_base_url!
+  release_tls_pins!
+  release_ios = truthy_env?("RELEASE_IOS")
+  release_android = truthy_env?("RELEASE_ANDROID")
+
+  UI.user_error!("At least one release platform must be selected") unless release_ios || release_android
+
+  if release_ios
+    required_envs!(
+      %w[
+        WRFCOIN_IOS_BUNDLE_IDENTIFIER
+        WRFCOIN_IOS_TEAM_ID
+        MATCH_GIT_URL
+        MATCH_PASSWORD
+        APP_STORE_CONNECT_KEY_ID
+        APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_BASE64
+      ]
+    )
+  end
+
+  if release_android
+    required_envs!(
+      %w[
+        WRFCOIN_ANDROID_KEYSTORE_BASE64
+        WRFCOIN_ANDROID_KEYSTORE_PASSWORD
+        WRFCOIN_ANDROID_KEY_ALIAS
+        WRFCOIN_ANDROID_KEY_PASSWORD
+        PLAY_SERVICE_ACCOUNT_JSON_BASE64
+      ]
+    )
+    track = env_or_nil("PLAY_TRACK") || "internal"
+    UI.user_error!("Android beta releases must target the internal track, got #{track}") unless track == "internal"
+  end
+
+  selected = [("iOS/TestFlight" if release_ios), ("Android/internal" if release_android)].compact.join(", ")
+  UI.success("Verified #{selected} release pipeline for #{context[:version]} build #{context[:build_number]}")
+end
+
+desc "Bump pubspec.yaml for a release cut"
+lane :bump_version do |options|
+  bump = (options[:bump] || env_or_nil("SEMVER_BUMP") || "patch").to_s
+  build_number = (options[:build_number] || env_or_nil("BUILD_NUMBER") || release_build_number).to_i
+  current = pubspec_version
+  current_version, current_build = current.split("+", 2)
+  major, minor, patch = current_version.split(".").map(&:to_i)
+
+  next_version =
+    case bump
+    when "major"
+      [major + 1, 0, 0].join(".")
+    when "minor"
+      [major, minor + 1, 0].join(".")
+    else
+      [major, minor, patch + 1].join(".")
+    end
+
+  next_build = options[:build_number].nil? && current_build ? current_build.to_i + 1 : build_number
+  updated = current.sub(/^version:\s*[^\s]+\s*$/, "version: #{next_version}+#{next_build}")
+
+  UI.user_error!("Unable to update pubspec.yaml version line") if updated == current
+
+  File.write("pubspec.yaml", updated)
+  UI.success("Bumped pubspec.yaml to #{next_version}+#{next_build}")
+end
+
+platform :ios do
+  desc "Build, sign, and upload the iOS release to TestFlight"
+  lane :release do
+    context = validated_release_context
+
+    ios_signing_env!
+    setup_ci
+    flutter_pub_get
+
+    match(
+      type: "appstore",
+      readonly: env_or_nil("MATCH_READONLY") != "false",
+      git_url: required_env!("MATCH_GIT_URL"),
+      app_identifier: required_env!("WRFCOIN_IOS_BUNDLE_IDENTIFIER"),
+      team_id: required_env!("WRFCOIN_IOS_TEAM_ID"),
+      api_key: app_store_connect_api_key!,
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "ios/Runner.xcodeproj",
+      team_id: required_env!("WRFCOIN_IOS_TEAM_ID"),
+      code_sign_identity: "Apple Distribution",
+    )
+
+    ipa = flutter_build_ipa(version: context[:version], build_number: context[:build_number])
+    write_release_manifest(
+      platform: "ios",
+      artifact_paths: [ipa],
+      version: context[:version],
+      build_number: context[:build_number],
+    )
+
+    pilot(
+      api_key: app_store_connect_api_key!,
+      ipa: ipa,
+      changelog: release_notes_summary(context[:version]),
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end
+
+platform :android do
+  desc "Build, sign, and upload the Android release to the Play Store internal track"
+  lane :release do
+    context = validated_release_context
+
+    android_signing_env!
+    flutter_pub_get
+
+    aab = flutter_build_aab(version: context[:version], build_number: context[:build_number])
+    write_release_manifest(
+      platform: "android",
+      artifact_paths: [aab],
+      version: context[:version],
+      build_number: context[:build_number],
+    )
+
+    supply(
+      aab: aab,
+      track: env_or_nil("PLAY_TRACK") || "internal",
+      json_key: required_env!("PLAY_SERVICE_ACCOUNT_JSON_PATH"),
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "completed",
+    )
+  end
+end

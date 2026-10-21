@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "metric": "earnings",
+  "period": "7d",
+  "earningsScope": "lifetime",
+  "amountUnits": {
+    "denomination": "WRF",
+    "baseUnitDecimals": 8,
+    "baseUnitsPerUnit": "100000000",
+    "available": true,
+    "fields": {
+      "entries[].earningsBaseUnits": "base_units",
+      "entries[].earningsWrf": "display_units"
+    }
+  },
+  "entries": [
+    {
+      "rank": 1,
+      "displayName": "Phone",
+      "walletAddress": "0xaaaa\u2026aaaa",
+      "isYou": false,
+      "earningsBaseUnits": "1524000000",
+      "earningsWrf": "15.24"
+    }
+  ]
+}
