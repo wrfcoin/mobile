@@ -55,6 +55,7 @@ void main() {
   late int delays;
   late String responseStation;
   late bool statusOffline;
+  late bool statusNotRegistered;
   late bool inactivePrepare;
   late SyntheticSigner signer;
 
@@ -94,6 +95,21 @@ void main() {
                     type: DioExceptionType.connectionError,
                   ),
                 );
+              } else if (statusNotRegistered) {
+                final response = Response<dynamic>(
+                  requestOptions: o,
+                  statusCode: 404,
+                  data: {
+                    'error': {'code': 'NOT_REGISTERED'},
+                  },
+                );
+                h.reject(
+                  DioException.badResponse(
+                    statusCode: 404,
+                    requestOptions: o,
+                    response: response,
+                  ),
+                );
               } else {
                 h.resolve(
                   Response<dynamic>(
@@ -104,6 +120,10 @@ void main() {
                 );
               }
               return;
+            }
+            if (o.method == 'POST' && o.path == '/weather/stations/mobile') {
+              // A completed registration is what the server answers from.
+              statusNotRegistered = false;
             }
             if (inactivePrepare && o.path == '/oracle/submit-data/prepare') {
               backend.requests.add(
@@ -159,7 +179,62 @@ void main() {
     delays = 0;
     responseStation = syntheticStationId;
     statusOffline = false;
+    statusNotRegistered = false;
     inactivePrepare = false;
+  });
+
+  group('a reset that forgot this phone', () {
+    // The backend (or the chain behind it) was reset: the server answers
+    // NOT_REGISTERED while this phone still carries its v2 marker.
+    test(
+      'a foreground run re-registers and then waits for activation',
+      () async {
+        statusNotRegistered = true;
+        phase = 'db_only';
+        await seed();
+        final result = await worker(foreground: true).syncPendingReadings();
+        expect(backend.count('/weather/stations/mobile/challenge'), 1);
+        expect(backend.count('/weather/stations/mobile'), 1);
+        expect(backend.count('/oracle/submit-data/prepare'), 0);
+        expect(result.message, awaiting);
+        expect(result.acceptedCount, 0);
+        expect(gets, 2);
+        final key = (await keys.load(syntheticAddress))!;
+        expect(
+          await StationRegistrationService(
+            apiClient: ApiClient(
+              dio: backend.buildDio(),
+              allowUnauthenticatedRequests: true,
+            ),
+            now: () => clock,
+          ).isRegistered(syntheticStationId, key.publicKeyHex),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'a background run cannot re-register: one check, no request',
+      () async {
+        statusNotRegistered = true;
+        await seed();
+        final result = await worker(foreground: false).syncPendingReadings();
+        expect(backend.count('/weather/stations/mobile/challenge'), 0);
+        expect(backend.count('/weather/stations/mobile'), 0);
+        expect(result.acceptedCount, 0);
+        expect(result.pendingCount, 1);
+        expect(gets, 1);
+      },
+    );
+
+    test('a registered phone still makes exactly one status check', () async {
+      phase = 'on_chain';
+      await seed();
+      await worker(foreground: true).syncPendingReadings();
+      expect(backend.count('/weather/stations/mobile'), 0);
+      expect(backend.count('/oracle/submit-data'), 1);
+      expect(gets, 1);
+    });
   });
   tearDown(() async => db.dispose());
   for (final pending in ['db_only', 'submitted']) {
