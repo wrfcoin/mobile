@@ -112,3 +112,10 @@ means uninstalling the current one first.
 - Do not commit signing keys, certificates, provisioning profiles, keystores, or Play service account files.
 - Do not hardcode Apple IDs or team IDs in the workflow.
 - Keep Match credentials private to the repository secrets store.
+
+## Required signing chain
+
+Set `WRFCOIN_CHAIN_ID=888` for the post-cut testnet release and verify the
+owner-published genesis hash `553a3758386d9631037d7469686acb4a121ced81dcf5cde256e2d05667c5f332` before distribution. Fastlane
+requires the chain value; direct release compilation also refuses an unset or
+empty chain define. Use `--dart-define=WRFCOIN_CHAIN_ID=888` for direct builds.
