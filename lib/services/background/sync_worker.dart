@@ -331,11 +331,13 @@ class SyncWorker {
         pendingNow = await db.getPendingSyncCount();
       }
 
-      Future<bool> checkActivation() async {
-        final status = await MobileStationStatusService(
-          apiClient: repository.apiClient,
-          db: db,
-        ).fetch(owner);
+      Future<bool> checkActivation({MobileStationStatus? known}) async {
+        final status =
+            known ??
+            await MobileStationStatusService(
+              apiClient: repository.apiClient,
+              db: db,
+            ).fetch(owner);
         final holdKey = 'mobile_station_activation_hold:$stationId';
         if (status.cached || status.phase != MobileStationPhase.onChain) {
           // Durable and station-bound: survives process/background restarts.
@@ -486,19 +488,42 @@ class SyncWorker {
       var proceed = true;
       final existing = collectKey;
       if (checkWhenIdle) proceed = await checkActivation();
+      var locallyRegistered =
+          existing != null &&
+          await repository.registration.isRegistered(
+            stationId,
+            existing.publicKeyHex,
+          );
+      MobileStationStatus? known;
       if (proceed &&
+          !checkWhenIdle &&
+          openSession != null &&
           pendingNow > 0 &&
-          (existing == null ||
-              !await repository.registration.isRegistered(
-                stationId,
-                existing.publicKeyHex,
-              ))) {
+          locallyRegistered) {
+        // A backend or chain reset forgets every registration while this
+        // phone's marker survives it. A fresh server "not registered" answer
+        // wins over the marker and the run re-registers (wallet, foreground);
+        // any other answer is reused by the activation check below, so this
+        // adds no request. A cached or failed check changes nothing.
+        known = await MobileStationStatusService(
+          apiClient: repository.apiClient,
+          db: db,
+        ).fetch(owner);
+        if (!known.cached && known.phase == MobileStationPhase.none) {
+          await repository.registration.forget();
+          locallyRegistered = false;
+          known = null;
+        }
+      }
+      if (proceed && pendingNow > 0 && !locallyRegistered) {
         // Unregistered (or registered only under M3's v1, without a collect
-        // key): needs the wallet, so foreground only.
+        // key, or forgotten by a reset): needs the wallet, so foreground only.
         proceed = await registerStation();
       }
 
-      if (proceed && !checkWhenIdle) proceed = await checkActivation();
+      if (proceed && !checkWhenIdle) {
+        proceed = await checkActivation(known: known);
+      }
 
       while (proceed && failures < maxRetries) {
         // Registration and retries can consume the remaining upload window.
