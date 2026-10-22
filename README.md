@@ -1,5 +1,7 @@
 # WRFCoin Mobile
 
+> **After the cut:** use chain ID `888`, network `testnet`; verify the owner-published genesis hash `553a3758386d9631037d7469686acb4a121ced81dcf5cde256e2d05667c5f332` before distribution. This placeholder is not a usable hash. Previous balances and activation heights do not carry over.
+
 WRFCoin Mobile is a Flutter app for testnet wallets and contributing weather observations from a phone.
 
 ## Public testnet

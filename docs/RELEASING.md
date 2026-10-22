@@ -1,5 +1,7 @@
 # Public testnet Android APK release preparation
 
+> **After the cut:** use chain ID `888`, network `testnet`; verify the owner-published genesis hash `553a3758386d9631037d7469686acb4a121ced81dcf5cde256e2d05667c5f332` before distribution. This placeholder is not a usable hash. Previous balances and activation heights do not carry over.
+
 This is a build and verification recipe for launch issue #443. It does not publish
 an artifact or establish device acceptance. Testnet WRF has no monetary value.
 
@@ -203,7 +205,7 @@ flutter pub get --enforce-lockfile
 flutter build apk --release --build-name 0.1.0 --build-number 1 \
   --dart-define=API_BASE_URL=https://api.example.invalid \
   --dart-define=WRFCOIN_WALLET_AUTH_ORIGIN=https://login.example.invalid \
-  --dart-define=WRFCOIN_CHAIN_ID=777 \
+  --dart-define=WRFCOIN_CHAIN_ID=888 \
   --dart-define=WRFCOIN_NETWORK_ID=testnet \
   --dart-define=TLS_SECURITY_PROFILE=public-release \
   --dart-define=TLS_PIN_SHA256_CURRENT=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
