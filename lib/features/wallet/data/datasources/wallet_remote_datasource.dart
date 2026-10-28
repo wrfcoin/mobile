@@ -90,11 +90,21 @@ class WalletRemoteDataSource {
         : const <String, dynamic>{};
 
     final version2 = meta['schemaVersion'] == 2;
+    // A reward row in `items` must pass the same paid-credit gate as
+    // `creditItems`, so an unpaid or malformed reward never renders; its
+    // eventId also claims the reward so `creditItems` cannot repeat it.
+    final itemRewardIds = <String>{};
     final items = list
         .whereType<Map>()
+        .map(Map<String, dynamic>.from)
+        .where((e) {
+          if (!version2 || !_isRewardKind(e['kind'])) return true;
+          if (!_paidCredit(e, address)) return false;
+          return itemRewardIds.add(e['eventId'] as String);
+        })
         .map(
           (e) => _normalizeTransaction(
-            Map<String, dynamic>.from(e),
+            e,
             address,
             version2: version2,
           ),
@@ -110,6 +120,7 @@ class WalletRemoteDataSource {
               .where(
                 (e) =>
                     _paidCredit(e, address) &&
+                    !itemRewardIds.contains(e['eventId']) &&
                     creditIds.add(e['eventId'] as String),
               )
               .map(
@@ -346,6 +357,9 @@ class WalletRemoteDataSource {
         ? value
         : null;
   }
+
+  static bool _isRewardKind(dynamic kind) =>
+      kind == 'weather_reward' || kind == 'forecast_reward';
 
   static bool _paidCredit(Map<String, dynamic> e, String address) {
     final amount = _historyAmount(e['amountBaseUnits']);

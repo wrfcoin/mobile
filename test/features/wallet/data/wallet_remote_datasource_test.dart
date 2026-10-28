@@ -38,6 +38,46 @@ void main() {
     expect(page.items.last.type, 'unknown');
   });
 
+  test('reward rows are gated and deduped across items and creditItems', () async {
+    const own = '0x1111111111111111111111111111111111111111';
+    Map<String, dynamic> reward(String id, {String settlement = 'paid'}) => {
+      'eventId': id,
+      'txId': null,
+      'from': null,
+      'to': own,
+      'amountBaseUnits': '100',
+      'direction': 'received',
+      'kind': 'weather_reward',
+      'type': 'weather_reward',
+      'settlement': settlement,
+    };
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) => handler.resolve(
+          Response(
+            requestOptions: options,
+            data: {
+              'schemaVersion': 2,
+              'items': [
+                reward('contribution:a'),
+                reward('contribution:a'),
+                reward('contribution:unpaid', settlement: 'pending'),
+              ],
+              'creditItems': [
+                reward('contribution:a'),
+                reward('contribution:b'),
+              ],
+            },
+          ),
+        ),
+      ),
+    );
+    final page = await WalletRemoteDataSource(dio).getTransactions(own);
+    expect(page.items.map((t) => t.eventId), ['contribution:a']);
+    expect(page.credits.map((t) => t.eventId), ['contribution:b']);
+  });
+
   group('WalletRemoteDataSource', () {
     late Dio dio;
     late WalletRemoteDataSource dataSource;
