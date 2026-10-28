@@ -9,6 +9,17 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../services/api/api_client.dart';
 import '../../../../services/location/location_service.dart';
 
+/// Shown when the node did not report a multiplier. Never replaced by a guess.
+const String kMultiplierUnavailable = 'unavailable';
+
+/// Formats the node-reported multiplier, or [kMultiplierUnavailable] when absent.
+String formatRewardMultiplier(double? value) {
+  if (value == null) return kMultiplierUnavailable;
+  return value == value.roundToDouble()
+      ? '${value.toInt()}×'
+      : '${value.toStringAsFixed(1)}×';
+}
+
 class DataDesertMapScreen extends ConsumerStatefulWidget {
   const DataDesertMapScreen({super.key});
 
@@ -211,10 +222,8 @@ class _ZoneDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final multiplier = zone.rewardMultiplier ?? _fallbackMultiplier(zone.type);
-    final multiplierText = multiplier == multiplier.roundToDouble()
-        ? '${multiplier.toInt()}×'
-        : '${multiplier.toStringAsFixed(1)}×';
+    // Only the node's value is shown. No tier multiplier is ever invented here.
+    final multiplierText = formatRewardMultiplier(zone.rewardMultiplier);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
@@ -260,7 +269,9 @@ class _ZoneDetailSheet extends StatelessWidget {
               label: Text(
                 zone.type == 'covered'
                     ? 'Browse nearby'
-                    : 'Deploy sensor here ($multiplierText WRF)',
+                    : multiplierText == kMultiplierUnavailable
+                        ? 'Deploy sensor here'
+                        : 'Deploy sensor here ($multiplierText WRF)',
               ),
             ),
           ),
@@ -268,12 +279,6 @@ class _ZoneDetailSheet extends StatelessWidget {
       ),
     );
   }
-
-  double _fallbackMultiplier(String type) => switch (type) {
-        'desert' => 2.0,
-        'sparse' => 1.5,
-        _ => 1.0,
-      };
 
   String _typeLabel(String type) => switch (type) {
         'desert' => 'Data Desert — highest rewards',
@@ -343,16 +348,18 @@ class _Legend extends StatelessWidget {
   const _Legend({required this.zones});
   final List<CoverageZone> zones;
 
-  String _multiplierText(String type, double fallback) {
+  String _multiplierText(String type) {
     final m = zones
         .where((z) => z.type == type)
         .map((z) => z.rewardMultiplier)
         .whereType<double>()
         .firstOrNull;
-    final value = m ?? fallback;
-    return value == value.roundToDouble()
-        ? '${value.toInt()}×'
-        : '${value.toStringAsFixed(1)}×';
+    return formatRewardMultiplier(m);
+  }
+
+  String _label(String name, String type) {
+    final text = _multiplierText(type);
+    return text == kMultiplierUnavailable ? '$name ($text)' : '$name ($text WRF)';
   }
 
   @override
@@ -370,17 +377,17 @@ class _Legend extends StatelessWidget {
         children: [
           _LegendItem(
             color: AppColors.error,
-            label: 'Data Desert (${_multiplierText('desert', 2)} WRF)',
+            label: _label('Data Desert', 'desert'),
           ),
           const SizedBox(height: 4),
           _LegendItem(
             color: AppColors.warning,
-            label: 'Sparse (${_multiplierText('sparse', 1.5)} WRF)',
+            label: _label('Sparse', 'sparse'),
           ),
           const SizedBox(height: 4),
           _LegendItem(
             color: AppColors.success,
-            label: 'Covered (${_multiplierText('covered', 1)} WRF)',
+            label: _label('Covered', 'covered'),
           ),
         ],
       ),
