@@ -297,7 +297,7 @@ class WalletScreen extends ConsumerWidget {
                             padding: EdgeInsets.only(bottom: 8),
                             child: Text('Checking earnings history…'),
                           ),
-                        if (txState.items.isEmpty && txState.credits.isEmpty)
+                        if (txState.items.isEmpty && _unrepeatedCredits(txState).isEmpty)
                           const Padding(
                             padding: EdgeInsets.all(24),
                             child: Text('No activity in this page'),
@@ -332,7 +332,7 @@ class WalletScreen extends ConsumerWidget {
                               tx,
                             ),
                           ),
-                        if (txState.credits.isNotEmpty) ...[
+                        if (_unrepeatedCredits(txState).isNotEmpty) ...[
                           const SizedBox(height: 16),
                           const Text(
                             'Paid rewards',
@@ -345,7 +345,7 @@ class WalletScreen extends ConsumerWidget {
                               fontSize: 12,
                             ),
                           ),
-                          for (final (index, tx) in txState.credits.indexed)
+                          for (final (index, tx) in _unrepeatedCredits(txState).indexed)
                             TransactionTile(
                               key: ValueKey(
                                 tx.eventId ??
@@ -656,4 +656,18 @@ class _NotSignedInView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Credit rows whose eventId is not already rendered in the main list, so
+/// one reward never shows twice, even when its two copies arrive on
+/// different pages.
+List<TransactionModel> _unrepeatedCredits(TransactionsState state) {
+  final shown = {
+    for (final tx in state.items)
+      if (tx.eventId != null) tx.eventId!,
+  };
+  return [
+    for (final tx in state.credits)
+      if (tx.eventId == null || !shown.contains(tx.eventId)) tx,
+  ];
 }

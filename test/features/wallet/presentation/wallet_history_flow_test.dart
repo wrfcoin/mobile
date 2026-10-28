@@ -419,6 +419,26 @@ void main() {
     expect(find.text('Reward payment dates are unavailable'), findsOneWidget);
   });
 
+  testWidgets('one reward in both items and creditItems renders once', (
+    tester,
+  ) async {
+    final dup = credit('contribution:dup', 'weather_reward', '150000000');
+    final backend = _Backend(
+      (o) => Response(
+        requestOptions: o,
+        data: {
+          ..._window([dup], offset: 0, total: 1),
+          'schemaVersion': 2,
+          'creditItems': [dup],
+          'creditNextCursor': null,
+        },
+      ),
+    );
+    await _pumpWallet(tester, backend);
+    expect(find.byKey(const ValueKey('contribution:dup')), findsOneWidget);
+    expect(find.text('+1.5 WRF'), findsOneWidget);
+  });
+
   testWidgets('empty credit pages advance and duplicate events render once', (
     tester,
   ) async {
