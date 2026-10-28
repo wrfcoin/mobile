@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../alerts/shadow_alerts_controller.dart';
+import '../../alerts/shadow_alerts_screen.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/formatting/app_formatters.dart';
@@ -52,7 +56,21 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
     final preferences = ref.watch(appPreferencesProvider).preferences;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Weather Alerts')),
+      appBar: AppBar(
+        title: const Text('Weather Alerts'),
+        actions: [
+          if (ref.watch(shadowAlertsEnabledProvider))
+            IconButton(
+              tooltip: 'Research alerts',
+              icon: const Icon(Icons.science_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ShadowAlertsScreen(),
+                ),
+              ),
+            ),
+        ],
+      ),
       // "All clear" only after a successful alerts response (#310's rule):
       // no location, a failed call, or no answer yet each say so instead.
       body: state.locationNeeded
