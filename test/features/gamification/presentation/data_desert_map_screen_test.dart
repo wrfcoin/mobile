@@ -96,6 +96,17 @@ void main() {
       expect(find.textContaining('1.5×'), findsWidgets);
     });
 
+    testWidgets('legend never invents a multiplier when the node reports none', (tester) async {
+      await tester.pumpWidget(_buildScreen(zones: []));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Data Desert (unavailable)'), findsOneWidget);
+      expect(find.text('Sparse (unavailable)'), findsOneWidget);
+      expect(find.text('Covered (unavailable)'), findsOneWidget);
+      expect(find.textContaining('2×'), findsNothing);
+      expect(find.textContaining('1.5×'), findsNothing);
+    });
+
     testWidgets('Start Collecting Here CTA button is present', (tester) async {
       await tester.pumpWidget(_buildScreen());
       await tester.pump(const Duration(milliseconds: 100));
@@ -177,6 +188,16 @@ void main() {
       expect(find.text('Could not load coverage data'), findsOneWidget);
       // Loading bar gone
       expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+  });
+
+  group('formatRewardMultiplier', () {
+    test('null is unavailable, never a number', () {
+      expect(formatRewardMultiplier(null), 'unavailable');
+    });
+    test('formats the node value', () {
+      expect(formatRewardMultiplier(1.5), '1.5×');
+      expect(formatRewardMultiplier(1.0), '1×');
     });
   });
 
