@@ -13,13 +13,21 @@ including the background `sync_worker` isolate. Changing which slot "the wallet"
 station id (`deriveMobileStationId(address)`) and the collect key (`collect_key_owner`). A half-built version could
 strand a wallet's phrase or sign with the wrong key, so it is not worth shipping unproven overnight.
 
-## Decisions needed from the owner
+## Owner rulings (2026-10-28)
 
-1. **Which wallet does the station earn to?** Today the station id is derived from the wallet address and the collect
-   key is registered to that owner. Proposal: the station stays bound to the wallet it was registered with (the
-   "station wallet"), shown in Settings, and switching the active wallet never re-registers or moves attribution.
-   Changing the station wallet is a separate, explicit action (the existing transfer flow).
-2. Whether removing a wallet that owns the station is blocked, or allowed after the transfer flow. Proposal: blocked.
+The two open decisions were ruled on 2026-10-28 and are settled:
+
+1. **The station stays bound to its registered wallet.** The station id is derived from the wallet the station was
+   registered with, and the collect key is registered to that owner. That wallet is the "station wallet", shown in
+   Settings. Switching the active wallet never re-registers the station or moves attribution, and the vault has no
+   API to rebind the station to another wallet.
+2. **The station wallet cannot be removed.** The vault's remove API refuses it, and fails closed when the index
+   cannot be read to check the binding. Other wallets can be removed (PR 3).
+
+How the vault records it: the migrated legacy wallet is the one the station was registered with, so the migration
+marks it `stationBound: true` in the same index write that commits the migration. There is no window in which
+wallets exist without a station binding. If the active-wallet pointer is missing or stale, the active wallet falls
+back to the station wallet.
 
 ## Proposed storage layout
 
@@ -28,7 +36,7 @@ address, so nothing sensitive is in a key name):
 
 `wrf_w:<id>:mnemonic | private_key | address | key_scheme | login_private_key | login_address | backup_confirmed | is_social`
 
-plus a non-secret index `wrf_wallets_index` (JSON list of `{id, label, address, createdAt}`) and `wrf_wallets_active`.
+plus a non-secret index `wrf_wallets_index` (JSON list of `{id, label, address, createdAt, stationBound}`) and `wrf_wallets_active`.
 The index holds addresses, never key material. The auth session stays a single slot, tagged with the wallet id it was
 minted for; switching wallets clears it and the next login mints a session for the new wallet (the existing
 `clearAuthSession` path).
@@ -62,7 +70,8 @@ confirmation plus a backup reminder, and Send shows the sending wallet. Emergenc
   a usable wallet; mismatch aborts without data loss; second run is a no-op.
 - Switching: active wallet changes balance, history and Send; auth session cleared on switch.
 - Send signs only with the selected wallet's key (assert the signer's public key matches the selected address).
-- Removal: confirmation required; station wallet cannot be removed; other wallets' slots untouched.
+- Removal: confirmation required; station wallet cannot be removed (the API refuses, per the 2026-10-28 ruling);
+  other wallets' slots untouched.
 - Station/collect key: switching does not touch `collect_key_*` or re-register; `sync_worker` still uses the station
   wallet.
 - Flag off: byte-identical behaviour to main (existing wallet tests unchanged).
