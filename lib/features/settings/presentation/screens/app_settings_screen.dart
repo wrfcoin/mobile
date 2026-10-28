@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/preferences/app_preferences.dart';
+import '../../../../services/crypto/station_signing.dart';
+import '../../../collector/presentation/screens/station_submit_token_screen.dart';
 import '../../../onboarding/presentation/providers/onboarding_controller.dart';
+import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../widgets/diagnostics_card.dart';
 
 class AppSettingsScreen extends ConsumerWidget {
@@ -149,6 +152,8 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           const DiagnosticsCard(),
           const SizedBox(height: 16),
+          const _CollectorStationSection(),
+          const SizedBox(height: 16),
           Card(
             child: ListTile(
               contentPadding: const EdgeInsets.all(16),
@@ -178,6 +183,110 @@ class AppSettingsScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Every collector and station setting, always visible. None of these
+/// entries depends on the station status: any screen that needs a live
+/// status shows its own checking or retry state after it opens.
+class _CollectorStationSection extends ConsumerWidget {
+  const _CollectorStationSection();
+
+  Future<void> _openSubmitCredential(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final address = (await ref.read(walletProvider.future))?.address;
+      if (address == null) throw StateError('Wallet unavailable.');
+      final stationId = deriveMobileStationId(address.trim().toLowerCase());
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => StationSubmitTokenScreen(stationId: stationId),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('This phone station is unavailable.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    Widget tile(
+      IconData icon,
+      String title,
+      String subtitle,
+      VoidCallback onTap,
+    ) => ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Collector and station',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            tile(
+              Icons.sensors,
+              'Sensor settings',
+              'Choose which sensors collect and how often.',
+              () => context.push('/collect/settings'),
+            ),
+            tile(
+              Icons.notifications_outlined,
+              'Alert settings',
+              'Choose which weather alerts you see.',
+              () => context.push('/weather/alert-settings'),
+            ),
+            tile(
+              Icons.security,
+              'Station security',
+              'Freeze, deactivate or recover your station.',
+              () => context.push('/collect/station-security'),
+            ),
+            tile(
+              Icons.key,
+              'Station submit credential',
+              'Import or view the credential your station submits with.',
+              () => _openSubmitCredential(context, ref),
+            ),
+            tile(
+              Icons.swap_horiz,
+              'Transfer or accept a station',
+              'Give your station away or accept one.',
+              () => context.push('/collect/station-transfer'),
+            ),
+            tile(
+              Icons.fact_check_outlined,
+              'Collector validation',
+              'Check that your readings pass validation.',
+              () => context.push('/collect/validation'),
+            ),
+            tile(
+              Icons.radar,
+              'Field mode',
+              'Field diagnostics for your sensors.',
+              () => context.push('/collect/field-mode'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -71,7 +71,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView), const Offset(0, -1200));
+    await tester.scrollUntilVisible(find.text('Diagnostics'), 300);
     await tester.pumpAndSettle();
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('0 crash reports on this device'), findsOneWidget);
