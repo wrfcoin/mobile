@@ -10,6 +10,7 @@ import 'bootstrap/app_overrides.dart';
 import 'core/constants/api_constants.dart';
 import 'services/observability/crash_reporter.dart';
 import 'services/background/sensor_worker.dart';
+import 'services/crypto/wallet_vault.dart';
 import 'services/referral/referral_service.dart';
 
 Future<void> main() async {
@@ -33,6 +34,8 @@ Future<void> main() async {
   // alerts are delivered while the app is open, so no remote push registration starts.
 
   final container = await createAppContainer();
+  // No-op unless enableMultiWallet is on (default off). Never throws.
+  await migrateWalletVaultIfEnabled(container);
   final referralService = container.read(referralServiceProvider);
   final initialRouteName =
       WidgetsBinding.instance.platformDispatcher.defaultRouteName;

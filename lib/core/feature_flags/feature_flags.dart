@@ -19,6 +19,7 @@ class FeatureFlags {
     this.enableFirstRunWelcome = false,
     this.enableNftPortfolio = false,
     this.enableCarbonLottery = false,
+    this.enableMultiWallet = false,
   });
 
   /// Weather station clusters, group challenges, and neighbourhood chat.
@@ -70,6 +71,11 @@ class FeatureFlags {
   /// so every request would fail. Flip on only for QA against a real backend.
   final bool enableCarbonLottery;
 
+  /// Multi-wallet vault (mobile#8, PR 1). With it on, startup copies the
+  /// single-slot wallet into the vault (copy-verify-then-commit) and keeps the
+  /// legacy slots; `KeyManager` still reads the legacy slots. No UI yet.
+  final bool enableMultiWallet;
+
   FeatureFlags copyWith({
     bool? enableLocalCommunities,
     bool? enableOnboardingTour,
@@ -82,6 +88,7 @@ class FeatureFlags {
     bool? enableFirstRunWelcome,
     bool? enableNftPortfolio,
     bool? enableCarbonLottery,
+    bool? enableMultiWallet,
   }) {
     return FeatureFlags(
       enableLocalCommunities:
@@ -100,6 +107,7 @@ class FeatureFlags {
           enableFirstRunWelcome ?? this.enableFirstRunWelcome,
       enableNftPortfolio: enableNftPortfolio ?? this.enableNftPortfolio,
       enableCarbonLottery: enableCarbonLottery ?? this.enableCarbonLottery,
+      enableMultiWallet: enableMultiWallet ?? this.enableMultiWallet,
     );
   }
 }
@@ -118,6 +126,7 @@ class FeatureFlagsNotifier extends Notifier<FeatureFlags> {
   static const _keyFirstRunWelcome = 'ff_enableFirstRunWelcome';
   static const _keyNftPortfolio = 'ff_enableNftPortfolio';
   static const _keyCarbonLottery = 'ff_enableCarbonLottery';
+  static const _keyMultiWallet = 'ff_enableMultiWallet';
 
   @override
   FeatureFlags build() {
@@ -139,6 +148,7 @@ class FeatureFlagsNotifier extends Notifier<FeatureFlags> {
       enableFirstRunWelcome: _prefs.getBool(_keyFirstRunWelcome) ?? false,
       enableNftPortfolio: _prefs.getBool(_keyNftPortfolio) ?? false,
       enableCarbonLottery: _prefs.getBool(_keyCarbonLottery) ?? false,
+      enableMultiWallet: _prefs.getBool(_keyMultiWallet) ?? false,
     );
   }
 
@@ -195,6 +205,11 @@ class FeatureFlagsNotifier extends Notifier<FeatureFlags> {
   Future<void> setCarbonLottery({required bool enabled}) async {
     await _prefs.setBool(_keyCarbonLottery, enabled);
     state = state.copyWith(enableCarbonLottery: enabled);
+  }
+
+  Future<void> setMultiWallet({required bool enabled}) async {
+    await _prefs.setBool(_keyMultiWallet, enabled);
+    state = state.copyWith(enableMultiWallet: enabled);
   }
 }
 
