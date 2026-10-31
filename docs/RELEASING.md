@@ -1,6 +1,6 @@
 # Public testnet Android APK release preparation
 
-> **After the cut:** use chain ID `888`, network `testnet`; verify the owner-published genesis hash `553a3758386d9631037d7469686acb4a121ced81dcf5cde256e2d05667c5f332` before distribution. This placeholder is not a usable hash. Previous balances and activation heights do not carry over.
+> **Chain 888 testnet:** use chain ID `888`, network `testnet`. The genesis hash, published at launch on 2026-10-22, is `553a3758386d9631037d7469686acb4a121ced81dcf5cde256e2d05667c5f332`; check that the target node reports it before distributing a build. Previous balances and activation heights do not carry over.
 
 This is a build and verification recipe for launch issue #443. It does not publish
 an artifact or establish device acceptance. Testnet WRF has no monetary value.
