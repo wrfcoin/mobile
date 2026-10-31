@@ -287,4 +287,11 @@ class ApiConstants {
   // WRF model forecast — real output from the IPFS pipeline.
   static String wrfForecast(String location) =>
       '/v1/weather/wrf-forecast/$location';
+
+  // Friend challenges (backend#249 challenge-routes.ts, mounted at /api/challenges;
+  // base URL already ends in /api). Every call needs the wallet login token the
+  // shared ApiClient attaches; counts come from chain readings on the server.
+  static const String challenges = '/challenges';
+  static const String challengesJoin = '/challenges/join';
+  static const String challengesSync = '/challenges/sync';
 }

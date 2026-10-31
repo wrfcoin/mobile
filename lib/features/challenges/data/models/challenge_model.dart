@@ -139,6 +139,91 @@ class ChallengeModel {
   }
 }
 
+/// Parsing of the backend `/api/challenges` answer (backend#249
+/// challenge-routes.ts `challengeView`). The server's counts are used as they
+/// are; a field it does not send falls back to an empty or zero value, never
+/// to an invented one.
+class ChallengeJson {
+  ChallengeJson._();
+
+  static ChallengeFormat _format(Object? value) =>
+      value == 'team' ? ChallengeFormat.team : ChallengeFormat.headToHead;
+
+  static ChallengeStatus _status(Object? value) => switch (value) {
+    'live' => ChallengeStatus.live,
+    'completed' => ChallengeStatus.completed,
+    _ => ChallengeStatus.pending,
+  };
+
+  static DateTime _time(Object? value) =>
+      DateTime.tryParse(value?.toString() ?? '')?.toLocal() ??
+      DateTime.fromMillisecondsSinceEpoch(0);
+
+  static int _int(Object? value) =>
+      value is num ? value.toInt() : int.tryParse(value?.toString() ?? '') ?? 0;
+
+  /// [currentUserId] is the signed-in wallet; matching is case-insensitive.
+  static ChallengeModel challenge(
+    Map<String, dynamic> json, {
+    required String currentUserId,
+  }) {
+    final you = currentUserId.toLowerCase();
+    final participants = (json['participants'] as List? ?? const [])
+        .whereType<Map>()
+        .map((raw) {
+          final p = Map<String, dynamic>.from(raw);
+          final id = p['id']?.toString() ?? '';
+          final stations = p['stations'];
+          final subtitle = p['subtitle']?.toString() ?? '';
+          return ChallengeParticipant(
+            id: id,
+            name: p['name']?.toString() ?? id,
+            score: _int(p['score']),
+            isCurrentUser: id.toLowerCase() == you,
+            teamName: p['teamName']?.toString() ?? '',
+            subtitle: stations == 0
+                ? '$subtitle · no station linked to this wallet'
+                : subtitle,
+          );
+        })
+        .toList(growable: false);
+    return ChallengeModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      format: _format(json['format']),
+      status: _status(json['status']),
+      inviteCode: json['inviteCode']?.toString() ?? '',
+      targetScore: _int(json['targetScore']),
+      startsAt: _time(json['startsAt']),
+      endsAt: _time(json['endsAt']),
+      lastUpdatedAt: _time(json['lastUpdatedAt']),
+      metricLabel: json['metricLabel']?.toString() ?? 'readings',
+      participants: participants,
+    );
+  }
+
+  static List<ChallengeModel> list(
+    Object? payload, {
+    required String currentUserId,
+  }) {
+    final map = payload is Map ? Map<String, dynamic>.from(payload) : null;
+    final items = map?['challenges'];
+    if (items is! List) {
+      throw const FormatException('Challenges response has no challenges');
+    }
+    return items
+        .whereType<Map>()
+        .map(
+          (raw) => challenge(
+            Map<String, dynamic>.from(raw),
+            currentUserId: currentUserId,
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
 class CreateChallengeInput {
   final String title;
   final String description;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/features/challenges/data/models/challenge_model.dart';
 import 'package:wrfcoin_mobile/features/challenges/data/repositories/challenge_repository.dart';
 import 'package:wrfcoin_mobile/features/challenges/presentation/providers/challenges_provider.dart';
@@ -13,7 +15,7 @@ import '../../test_helpers/fakes.dart';
 
 void main() {
   testWidgets(
-    'release route blocks Friend Challenges while capability is unavailable',
+    'release route blocks Friend Challenges while its flag is off (the default)',
     (tester) async {
       final router = GoRouter(
         initialLocation: '/collect/challenges',
@@ -26,8 +28,14 @@ void main() {
       );
       addTearDown(router.dispose);
 
+      // The release default: enableFriendChallenges is off.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
       await tester.pumpWidget(
-        ProviderScope(child: MaterialApp.router(routerConfig: router)),
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
       );
       await tester.pumpAndSettle();
 
