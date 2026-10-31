@@ -24,25 +24,50 @@ class _Transactions extends TransactionsNotifier {
 }
 
 void main() {
-  for (final amount in ['125000000', '0', null]) {
+  final cases = <String, (WalletModel, String, String)>{
+    'reported': (
+      const WalletModel(
+        address: 'wrf1testwallet0000000000',
+        balance: '150000000',
+        earnedBalanceTotal: '9007199254740993123456789',
+      ),
+      '1.5 WRF',
+      '90071992547409931.23456789 WRF',
+    ),
+    'earned not reported': (
+      const WalletModel(address: 'wrf1testwallet0000000000', balance: '0'),
+      '0 WRF',
+      'Unavailable',
+    ),
+    'public reads off (404)': (
+      const WalletModel(
+        address: 'wrf1testwallet0000000000',
+        balance: null,
+        balanceAvailability: BalanceAvailability.unavailable,
+      ),
+      'Unavailable',
+      'Unavailable',
+    ),
+    'rate limited (429)': (
+      const WalletModel(
+        address: 'wrf1testwallet0000000000',
+        balance: null,
+        balanceAvailability: BalanceAvailability.busy,
+      ),
+      'Busy',
+      'Busy',
+    ),
+  };
+  for (final entry in cases.entries) {
     testWidgets(
-      'Earnings wires chain totals and weather paid/pending ($amount)',
+      'wallet screen wires balance and earned in total (${entry.key})',
       (tester) async {
         tester.view.physicalSize = const Size(1200, 2000);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
         SharedPreferences.setMockInitialValues({});
         final prefs = await SharedPreferences.getInstance();
-        final wallet = WalletModel.fromJson({
-          'address': 'wrf1testwallet0000000000',
-          'balance': '150000000',
-          'earnedBalanceTotal': '9007199254740993123456789',
-          'weatherRewards': amount,
-          'weatherRewardsPending': amount == null ? null : '25000000',
-          'weatherRewardsUnavailable': amount == null
-              ? 'This node does not report contribution rewards.'
-              : 'STALE REASON MUST BE HIDDEN',
-        });
+        final (wallet, balance, earned) = entry.value;
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
@@ -57,28 +82,12 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Total earned'), findsOneWidget);
-        expect(find.text('1.5 WRF'), findsOneWidget);
+        Text text(String key) => tester.widget<Text>(find.byKey(Key(key)));
+        expect(text('balance-card-balance').data, balance);
+        expect(find.text('Earned in total'), findsOneWidget);
+        expect(text('balance-card-earned').data, earned);
         expect(find.textContaining('credits'), findsNothing);
-        expect(find.text('90071992547409931.23456789 WRF'), findsOneWidget);
         expect(find.text('Network Bonus'), findsNothing);
-        if (amount == null) {
-          expect(
-            find.textContaining(
-              'This node does not report contribution rewards.',
-            ),
-            findsOneWidget,
-          );
-          expect(find.textContaining('Not available'), findsWidgets);
-        } else {
-          expect(
-            find.text(amount == '0' ? '0 WRF' : '1.25 WRF'),
-            findsOneWidget,
-          );
-          expect(find.text('0.25 WRF'), findsOneWidget);
-          expect(find.textContaining('STALE REASON'), findsNothing);
-          expect(find.textContaining('Not available'), findsNothing);
-        }
         expect(tester.takeException(), isNull);
       },
     );

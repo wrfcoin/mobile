@@ -316,8 +316,8 @@ void main() {
       expect(publicLine('nonce=3', ['', 'ab']), 'nonce=3');
     });
 
-    test('the signing domain is explicitly 777 / testnet', () {
-      expect(liveChainId, '777');
+    test('the signing domain is explicitly 888 / testnet', () {
+      expect(liveChainId, '888');
       expect(liveNetworkId, 'testnet');
     });
   });

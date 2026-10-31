@@ -16,7 +16,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$WalletModel {
 
- String get address; String get balance; String? get stakingRewards; String? get weatherRewards;/// Chain amounts are integer base-unit strings; null means unreported.
+ String get address;/// Integer base-unit string (1 WRF = 10^8); null when not reported.
+ String? get balance; BalanceAvailability get balanceAvailability;/// Chain height the balance was read at; null when not reported.
+ int? get height; String? get stakingRewards; String? get weatherRewards;/// Chain amounts are integer base-unit strings; null means unreported.
  String? get earnedBalanceTotal; String? get weatherRewardsPending; String? get weatherRewardsUnavailable; int get transactions; int get nonce; double get reputationScore; int get pendingTransactions; int get dataSubmissions;
 /// Create a copy of WalletModel
 /// with the given fields replaced by the non-null parameter values.
@@ -30,16 +32,21 @@ $WalletModelCopyWith<WalletModel> get copyWith => _$WalletModelCopyWithImpl<Wall
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is WalletModel&&(identical(other.address, address) || other.address == address)&&(identical(other.balance, balance) || other.balance == balance)&&(identical(other.stakingRewards, stakingRewards) || other.stakingRewards == stakingRewards)&&(identical(other.weatherRewards, weatherRewards) || other.weatherRewards == weatherRewards)&&(identical(other.earnedBalanceTotal, earnedBalanceTotal) || other.earnedBalanceTotal == earnedBalanceTotal)&&(identical(other.weatherRewardsPending, weatherRewardsPending) || other.weatherRewardsPending == weatherRewardsPending)&&(identical(other.weatherRewardsUnavailable, weatherRewardsUnavailable) || other.weatherRewardsUnavailable == weatherRewardsUnavailable)&&(identical(other.transactions, transactions) || other.transactions == transactions)&&(identical(other.nonce, nonce) || other.nonce == nonce)&&(identical(other.reputationScore, reputationScore) || other.reputationScore == reputationScore)&&(identical(other.pendingTransactions, pendingTransactions) || other.pendingTransactions == pendingTransactions)&&(identical(other.dataSubmissions, dataSubmissions) || other.dataSubmissions == dataSubmissions));
+  final _this = this as WalletModel;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is WalletModel&&(identical(other.address, _this.address) || other.address == _this.address)&&(identical(other.balance, _this.balance) || other.balance == _this.balance)&&(identical(other.balanceAvailability, _this.balanceAvailability) || other.balanceAvailability == _this.balanceAvailability)&&(identical(other.height, _this.height) || other.height == _this.height)&&(identical(other.stakingRewards, _this.stakingRewards) || other.stakingRewards == _this.stakingRewards)&&(identical(other.weatherRewards, _this.weatherRewards) || other.weatherRewards == _this.weatherRewards)&&(identical(other.earnedBalanceTotal, _this.earnedBalanceTotal) || other.earnedBalanceTotal == _this.earnedBalanceTotal)&&(identical(other.weatherRewardsPending, _this.weatherRewardsPending) || other.weatherRewardsPending == _this.weatherRewardsPending)&&(identical(other.weatherRewardsUnavailable, _this.weatherRewardsUnavailable) || other.weatherRewardsUnavailable == _this.weatherRewardsUnavailable)&&(identical(other.transactions, _this.transactions) || other.transactions == _this.transactions)&&(identical(other.nonce, _this.nonce) || other.nonce == _this.nonce)&&(identical(other.reputationScore, _this.reputationScore) || other.reputationScore == _this.reputationScore)&&(identical(other.pendingTransactions, _this.pendingTransactions) || other.pendingTransactions == _this.pendingTransactions)&&(identical(other.dataSubmissions, _this.dataSubmissions) || other.dataSubmissions == _this.dataSubmissions));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,address,balance,stakingRewards,weatherRewards,earnedBalanceTotal,weatherRewardsPending,weatherRewardsUnavailable,transactions,nonce,reputationScore,pendingTransactions,dataSubmissions);
+int get hashCode {
+  final _this = this as WalletModel;
+  return Object.hash(runtimeType,_this.address,_this.balance,_this.balanceAvailability,_this.height,_this.stakingRewards,_this.weatherRewards,_this.earnedBalanceTotal,_this.weatherRewardsPending,_this.weatherRewardsUnavailable,_this.transactions,_this.nonce,_this.reputationScore,_this.pendingTransactions,_this.dataSubmissions);
+}
 
 @override
 String toString() {
-  return 'WalletModel(address: $address, balance: $balance, stakingRewards: $stakingRewards, weatherRewards: $weatherRewards, earnedBalanceTotal: $earnedBalanceTotal, weatherRewardsPending: $weatherRewardsPending, weatherRewardsUnavailable: $weatherRewardsUnavailable, transactions: $transactions, nonce: $nonce, reputationScore: $reputationScore, pendingTransactions: $pendingTransactions, dataSubmissions: $dataSubmissions)';
+  final _this = this as WalletModel;
+  return 'WalletModel(address: ${_this.address}, balance: ${_this.balance}, balanceAvailability: ${_this.balanceAvailability}, height: ${_this.height}, stakingRewards: ${_this.stakingRewards}, weatherRewards: ${_this.weatherRewards}, earnedBalanceTotal: ${_this.earnedBalanceTotal}, weatherRewardsPending: ${_this.weatherRewardsPending}, weatherRewardsUnavailable: ${_this.weatherRewardsUnavailable}, transactions: ${_this.transactions}, nonce: ${_this.nonce}, reputationScore: ${_this.reputationScore}, pendingTransactions: ${_this.pendingTransactions}, dataSubmissions: ${_this.dataSubmissions})';
 }
 
 
@@ -50,7 +57,7 @@ abstract mixin class $WalletModelCopyWith<$Res>  {
   factory $WalletModelCopyWith(WalletModel value, $Res Function(WalletModel) _then) = _$WalletModelCopyWithImpl;
 @useResult
 $Res call({
- String address, String balance, String? stakingRewards, String? weatherRewards, String? earnedBalanceTotal, String? weatherRewardsPending, String? weatherRewardsUnavailable, int transactions, int nonce, double reputationScore, int pendingTransactions, int dataSubmissions
+ String address, String? balance, BalanceAvailability balanceAvailability, int? height, String? stakingRewards, String? weatherRewards, String? earnedBalanceTotal, String? weatherRewardsPending, String? weatherRewardsUnavailable, int transactions, int nonce, double reputationScore, int pendingTransactions, int dataSubmissions
 });
 
 
@@ -67,11 +74,13 @@ class _$WalletModelCopyWithImpl<$Res>
 
 /// Create a copy of WalletModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? address = null,Object? balance = null,Object? stakingRewards = freezed,Object? weatherRewards = freezed,Object? earnedBalanceTotal = freezed,Object? weatherRewardsPending = freezed,Object? weatherRewardsUnavailable = freezed,Object? transactions = null,Object? nonce = null,Object? reputationScore = null,Object? pendingTransactions = null,Object? dataSubmissions = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? address = null,Object? balance = freezed,Object? balanceAvailability = null,Object? height = freezed,Object? stakingRewards = freezed,Object? weatherRewards = freezed,Object? earnedBalanceTotal = freezed,Object? weatherRewardsPending = freezed,Object? weatherRewardsUnavailable = freezed,Object? transactions = null,Object? nonce = null,Object? reputationScore = null,Object? pendingTransactions = null,Object? dataSubmissions = null,}) {
   return _then(WalletModel(
 address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
-as String,balance: null == balance ? _self.balance : balance // ignore: cast_nullable_to_non_nullable
-as String,stakingRewards: freezed == stakingRewards ? _self.stakingRewards : stakingRewards // ignore: cast_nullable_to_non_nullable
+as String,balance: freezed == balance ? _self.balance : balance // ignore: cast_nullable_to_non_nullable
+as String?,balanceAvailability: null == balanceAvailability ? _self.balanceAvailability : balanceAvailability // ignore: cast_nullable_to_non_nullable
+as BalanceAvailability,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
+as int?,stakingRewards: freezed == stakingRewards ? _self.stakingRewards : stakingRewards // ignore: cast_nullable_to_non_nullable
 as String?,weatherRewards: freezed == weatherRewards ? _self.weatherRewards : weatherRewards // ignore: cast_nullable_to_non_nullable
 as String?,earnedBalanceTotal: freezed == earnedBalanceTotal ? _self.earnedBalanceTotal : earnedBalanceTotal // ignore: cast_nullable_to_non_nullable
 as String?,weatherRewardsPending: freezed == weatherRewardsPending ? _self.weatherRewardsPending : weatherRewardsPending // ignore: cast_nullable_to_non_nullable
@@ -163,10 +172,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String address,  String balance,  String? stakingRewards,  String? weatherRewards,  String? earnedBalanceTotal,  String? weatherRewardsPending,  String? weatherRewardsUnavailable,  int transactions,  int nonce,  double reputationScore,  int pendingTransactions,  int dataSubmissions)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String address,  String? balance,  BalanceAvailability balanceAvailability,  int? height,  String? stakingRewards,  String? weatherRewards,  String? earnedBalanceTotal,  String? weatherRewardsPending,  String? weatherRewardsUnavailable,  int transactions,  int nonce,  double reputationScore,  int pendingTransactions,  int dataSubmissions)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _WalletModel() when $default != null:
-return $default(_that.address,_that.balance,_that.stakingRewards,_that.weatherRewards,_that.earnedBalanceTotal,_that.weatherRewardsPending,_that.weatherRewardsUnavailable,_that.transactions,_that.nonce,_that.reputationScore,_that.pendingTransactions,_that.dataSubmissions);case _:
+return $default(_that.address,_that.balance,_that.balanceAvailability,_that.height,_that.stakingRewards,_that.weatherRewards,_that.earnedBalanceTotal,_that.weatherRewardsPending,_that.weatherRewardsUnavailable,_that.transactions,_that.nonce,_that.reputationScore,_that.pendingTransactions,_that.dataSubmissions);case _:
   return orElse();
 
 }
@@ -184,10 +193,10 @@ return $default(_that.address,_that.balance,_that.stakingRewards,_that.weatherRe
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String address,  String balance,  String? stakingRewards,  String? weatherRewards,  String? earnedBalanceTotal,  String? weatherRewardsPending,  String? weatherRewardsUnavailable,  int transactions,  int nonce,  double reputationScore,  int pendingTransactions,  int dataSubmissions)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String address,  String? balance,  BalanceAvailability balanceAvailability,  int? height,  String? stakingRewards,  String? weatherRewards,  String? earnedBalanceTotal,  String? weatherRewardsPending,  String? weatherRewardsUnavailable,  int transactions,  int nonce,  double reputationScore,  int pendingTransactions,  int dataSubmissions)  $default,) {final _that = this;
 switch (_that) {
 case _WalletModel():
-return $default(_that.address,_that.balance,_that.stakingRewards,_that.weatherRewards,_that.earnedBalanceTotal,_that.weatherRewardsPending,_that.weatherRewardsUnavailable,_that.transactions,_that.nonce,_that.reputationScore,_that.pendingTransactions,_that.dataSubmissions);}
+return $default(_that.address,_that.balance,_that.balanceAvailability,_that.height,_that.stakingRewards,_that.weatherRewards,_that.earnedBalanceTotal,_that.weatherRewardsPending,_that.weatherRewardsUnavailable,_that.transactions,_that.nonce,_that.reputationScore,_that.pendingTransactions,_that.dataSubmissions);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -201,10 +210,10 @@ return $default(_that.address,_that.balance,_that.stakingRewards,_that.weatherRe
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String address,  String balance,  String? stakingRewards,  String? weatherRewards,  String? earnedBalanceTotal,  String? weatherRewardsPending,  String? weatherRewardsUnavailable,  int transactions,  int nonce,  double reputationScore,  int pendingTransactions,  int dataSubmissions)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String address,  String? balance,  BalanceAvailability balanceAvailability,  int? height,  String? stakingRewards,  String? weatherRewards,  String? earnedBalanceTotal,  String? weatherRewardsPending,  String? weatherRewardsUnavailable,  int transactions,  int nonce,  double reputationScore,  int pendingTransactions,  int dataSubmissions)?  $default,) {final _that = this;
 switch (_that) {
 case _WalletModel() when $default != null:
-return $default(_that.address,_that.balance,_that.stakingRewards,_that.weatherRewards,_that.earnedBalanceTotal,_that.weatherRewardsPending,_that.weatherRewardsUnavailable,_that.transactions,_that.nonce,_that.reputationScore,_that.pendingTransactions,_that.dataSubmissions);case _:
+return $default(_that.address,_that.balance,_that.balanceAvailability,_that.height,_that.stakingRewards,_that.weatherRewards,_that.earnedBalanceTotal,_that.weatherRewardsPending,_that.weatherRewardsUnavailable,_that.transactions,_that.nonce,_that.reputationScore,_that.pendingTransactions,_that.dataSubmissions);case _:
   return null;
 
 }
@@ -216,11 +225,15 @@ return $default(_that.address,_that.balance,_that.stakingRewards,_that.weatherRe
 @JsonSerializable()
 
 class _WalletModel implements WalletModel {
-  const _WalletModel({required this.address, required this.balance, this.stakingRewards, this.weatherRewards, this.earnedBalanceTotal, this.weatherRewardsPending, this.weatherRewardsUnavailable, this.transactions = 0, this.nonce = 0, this.reputationScore = 0.0, this.pendingTransactions = 0, this.dataSubmissions = 0});
+  const _WalletModel({required this.address, required this.balance, this.balanceAvailability = BalanceAvailability.reported, this.height, this.stakingRewards, this.weatherRewards, this.earnedBalanceTotal, this.weatherRewardsPending, this.weatherRewardsUnavailable, this.transactions = 0, this.nonce = 0, this.reputationScore = 0.0, this.pendingTransactions = 0, this.dataSubmissions = 0});
   factory _WalletModel.fromJson(Map<String, dynamic> json) => _$WalletModelFromJson(json);
 
 @override final  String address;
-@override final  String balance;
+/// Integer base-unit string (1 WRF = 10^8); null when not reported.
+@override final  String? balance;
+@override@JsonKey() final  BalanceAvailability balanceAvailability;
+/// Chain height the balance was read at; null when not reported.
+@override final  int? height;
 @override final  String? stakingRewards;
 @override final  String? weatherRewards;
 /// Chain amounts are integer base-unit strings; null means unreported.
@@ -246,16 +259,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _WalletModel&&(identical(other.address, address) || other.address == address)&&(identical(other.balance, balance) || other.balance == balance)&&(identical(other.stakingRewards, stakingRewards) || other.stakingRewards == stakingRewards)&&(identical(other.weatherRewards, weatherRewards) || other.weatherRewards == weatherRewards)&&(identical(other.earnedBalanceTotal, earnedBalanceTotal) || other.earnedBalanceTotal == earnedBalanceTotal)&&(identical(other.weatherRewardsPending, weatherRewardsPending) || other.weatherRewardsPending == weatherRewardsPending)&&(identical(other.weatherRewardsUnavailable, weatherRewardsUnavailable) || other.weatherRewardsUnavailable == weatherRewardsUnavailable)&&(identical(other.transactions, transactions) || other.transactions == transactions)&&(identical(other.nonce, nonce) || other.nonce == nonce)&&(identical(other.reputationScore, reputationScore) || other.reputationScore == reputationScore)&&(identical(other.pendingTransactions, pendingTransactions) || other.pendingTransactions == pendingTransactions)&&(identical(other.dataSubmissions, dataSubmissions) || other.dataSubmissions == dataSubmissions));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _WalletModel&&(identical(other.address, address) || other.address == address)&&(identical(other.balance, balance) || other.balance == balance)&&(identical(other.balanceAvailability, balanceAvailability) || other.balanceAvailability == balanceAvailability)&&(identical(other.height, height) || other.height == height)&&(identical(other.stakingRewards, stakingRewards) || other.stakingRewards == stakingRewards)&&(identical(other.weatherRewards, weatherRewards) || other.weatherRewards == weatherRewards)&&(identical(other.earnedBalanceTotal, earnedBalanceTotal) || other.earnedBalanceTotal == earnedBalanceTotal)&&(identical(other.weatherRewardsPending, weatherRewardsPending) || other.weatherRewardsPending == weatherRewardsPending)&&(identical(other.weatherRewardsUnavailable, weatherRewardsUnavailable) || other.weatherRewardsUnavailable == weatherRewardsUnavailable)&&(identical(other.transactions, transactions) || other.transactions == transactions)&&(identical(other.nonce, nonce) || other.nonce == nonce)&&(identical(other.reputationScore, reputationScore) || other.reputationScore == reputationScore)&&(identical(other.pendingTransactions, pendingTransactions) || other.pendingTransactions == pendingTransactions)&&(identical(other.dataSubmissions, dataSubmissions) || other.dataSubmissions == dataSubmissions));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,address,balance,stakingRewards,weatherRewards,earnedBalanceTotal,weatherRewardsPending,weatherRewardsUnavailable,transactions,nonce,reputationScore,pendingTransactions,dataSubmissions);
+int get hashCode {
+    return Object.hash(runtimeType,address,balance,balanceAvailability,height,stakingRewards,weatherRewards,earnedBalanceTotal,weatherRewardsPending,weatherRewardsUnavailable,transactions,nonce,reputationScore,pendingTransactions,dataSubmissions);
+}
 
 @override
 String toString() {
-  return 'WalletModel(address: $address, balance: $balance, stakingRewards: $stakingRewards, weatherRewards: $weatherRewards, earnedBalanceTotal: $earnedBalanceTotal, weatherRewardsPending: $weatherRewardsPending, weatherRewardsUnavailable: $weatherRewardsUnavailable, transactions: $transactions, nonce: $nonce, reputationScore: $reputationScore, pendingTransactions: $pendingTransactions, dataSubmissions: $dataSubmissions)';
+    return 'WalletModel(address: $address, balance: $balance, balanceAvailability: $balanceAvailability, height: $height, stakingRewards: $stakingRewards, weatherRewards: $weatherRewards, earnedBalanceTotal: $earnedBalanceTotal, weatherRewardsPending: $weatherRewardsPending, weatherRewardsUnavailable: $weatherRewardsUnavailable, transactions: $transactions, nonce: $nonce, reputationScore: $reputationScore, pendingTransactions: $pendingTransactions, dataSubmissions: $dataSubmissions)';
 }
 
 
@@ -266,7 +281,7 @@ abstract mixin class _$WalletModelCopyWith<$Res> implements $WalletModelCopyWith
   factory _$WalletModelCopyWith(_WalletModel value, $Res Function(_WalletModel) _then) = __$WalletModelCopyWithImpl;
 @override @useResult
 $Res call({
- String address, String balance, String? stakingRewards, String? weatherRewards, String? earnedBalanceTotal, String? weatherRewardsPending, String? weatherRewardsUnavailable, int transactions, int nonce, double reputationScore, int pendingTransactions, int dataSubmissions
+ String address, String? balance, BalanceAvailability balanceAvailability, int? height, String? stakingRewards, String? weatherRewards, String? earnedBalanceTotal, String? weatherRewardsPending, String? weatherRewardsUnavailable, int transactions, int nonce, double reputationScore, int pendingTransactions, int dataSubmissions
 });
 
 
@@ -283,11 +298,13 @@ class __$WalletModelCopyWithImpl<$Res>
 
 /// Create a copy of WalletModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? address = null,Object? balance = null,Object? stakingRewards = freezed,Object? weatherRewards = freezed,Object? earnedBalanceTotal = freezed,Object? weatherRewardsPending = freezed,Object? weatherRewardsUnavailable = freezed,Object? transactions = null,Object? nonce = null,Object? reputationScore = null,Object? pendingTransactions = null,Object? dataSubmissions = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? address = null,Object? balance = freezed,Object? balanceAvailability = null,Object? height = freezed,Object? stakingRewards = freezed,Object? weatherRewards = freezed,Object? earnedBalanceTotal = freezed,Object? weatherRewardsPending = freezed,Object? weatherRewardsUnavailable = freezed,Object? transactions = null,Object? nonce = null,Object? reputationScore = null,Object? pendingTransactions = null,Object? dataSubmissions = null,}) {
   return _then(_WalletModel(
 address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
-as String,balance: null == balance ? _self.balance : balance // ignore: cast_nullable_to_non_nullable
-as String,stakingRewards: freezed == stakingRewards ? _self.stakingRewards : stakingRewards // ignore: cast_nullable_to_non_nullable
+as String,balance: freezed == balance ? _self.balance : balance // ignore: cast_nullable_to_non_nullable
+as String?,balanceAvailability: null == balanceAvailability ? _self.balanceAvailability : balanceAvailability // ignore: cast_nullable_to_non_nullable
+as BalanceAvailability,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
+as int?,stakingRewards: freezed == stakingRewards ? _self.stakingRewards : stakingRewards // ignore: cast_nullable_to_non_nullable
 as String?,weatherRewards: freezed == weatherRewards ? _self.weatherRewards : weatherRewards // ignore: cast_nullable_to_non_nullable
 as String?,earnedBalanceTotal: freezed == earnedBalanceTotal ? _self.earnedBalanceTotal : earnedBalanceTotal // ignore: cast_nullable_to_non_nullable
 as String?,weatherRewardsPending: freezed == weatherRewardsPending ? _self.weatherRewardsPending : weatherRewardsPending // ignore: cast_nullable_to_non_nullable

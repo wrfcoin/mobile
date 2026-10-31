@@ -8,7 +8,14 @@ part of 'wallet_model.dart';
 
 _WalletModel _$WalletModelFromJson(Map<String, dynamic> json) => _WalletModel(
   address: json['address'] as String,
-  balance: json['balance'] as String,
+  balance: json['balance'] as String?,
+  balanceAvailability:
+      $enumDecodeNullable(
+        _$BalanceAvailabilityEnumMap,
+        json['balanceAvailability'],
+      ) ??
+      BalanceAvailability.reported,
+  height: (json['height'] as num?)?.toInt(),
   stakingRewards: json['stakingRewards'] as String?,
   weatherRewards: json['weatherRewards'] as String?,
   earnedBalanceTotal: json['earnedBalanceTotal'] as String?,
@@ -25,6 +32,9 @@ Map<String, dynamic> _$WalletModelToJson(_WalletModel instance) =>
     <String, dynamic>{
       'address': instance.address,
       'balance': instance.balance,
+      'balanceAvailability':
+          _$BalanceAvailabilityEnumMap[instance.balanceAvailability]!,
+      'height': instance.height,
       'stakingRewards': instance.stakingRewards,
       'weatherRewards': instance.weatherRewards,
       'earnedBalanceTotal': instance.earnedBalanceTotal,
@@ -36,3 +46,9 @@ Map<String, dynamic> _$WalletModelToJson(_WalletModel instance) =>
       'pendingTransactions': instance.pendingTransactions,
       'dataSubmissions': instance.dataSubmissions,
     };
+
+const _$BalanceAvailabilityEnumMap = {
+  BalanceAvailability.reported: 'reported',
+  BalanceAvailability.unavailable: 'unavailable',
+  BalanceAvailability.busy: 'busy',
+};

@@ -63,8 +63,8 @@ void main() {
     }
   });
 
-  test('testnet signing domain defaults to 777/testnet', () {
-    expect(TransferSigningDomain.configured.chainId, '777');
+  test('debug signing domain defaults to chain 888 / testnet', () {
+    expect(TransferSigningDomain.configured.chainId, '888');
     expect(TransferSigningDomain.configured.networkId, 'testnet');
   });
 }

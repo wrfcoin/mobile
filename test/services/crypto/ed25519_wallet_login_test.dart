@@ -291,7 +291,7 @@ void main() {
         'http://localhost:4001',
       );
       final configured = Ed25519LoginExpectation.configured();
-      expect(configured.chainId, '777');
+      expect(configured.chainId, '888');
       expect(configured.network, 'testnet');
     },
   );

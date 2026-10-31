@@ -173,10 +173,8 @@ class WalletScreen extends ConsumerWidget {
                 BalanceCard(
                   address: wallet.address,
                   balance: wallet.balance,
+                  balanceAvailability: wallet.balanceAvailability,
                   earnedBalanceTotal: wallet.earnedBalanceTotal,
-                  weatherRewardsPending: wallet.weatherRewardsPending,
-                  weatherRewardsUnavailable: wallet.weatherRewardsUnavailable,
-                  weatherRewards: wallet.weatherRewards,
                   pendingTransactions: wallet.pendingTransactions,
                 ),
                 const SizedBox(height: 12),
@@ -297,7 +295,8 @@ class WalletScreen extends ConsumerWidget {
                             padding: EdgeInsets.only(bottom: 8),
                             child: Text('Checking earnings history…'),
                           ),
-                        if (txState.items.isEmpty && _unrepeatedCredits(txState).isEmpty)
+                        if (txState.items.isEmpty &&
+                            _unrepeatedCredits(txState).isEmpty)
                           const Padding(
                             padding: EdgeInsets.all(24),
                             child: Text('No activity in this page'),
@@ -345,7 +344,9 @@ class WalletScreen extends ConsumerWidget {
                               fontSize: 12,
                             ),
                           ),
-                          for (final (index, tx) in _unrepeatedCredits(txState).indexed)
+                          for (final (index, tx) in _unrepeatedCredits(
+                            txState,
+                          ).indexed)
                             TransactionTile(
                               key: ValueKey(
                                 tx.eventId ??

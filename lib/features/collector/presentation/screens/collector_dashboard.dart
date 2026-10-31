@@ -11,7 +11,7 @@ import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/preferences/app_preferences.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/wrf_units.dart';
+import '../../../wallet/data/models/wallet_model.dart';
 import '../../../challenges/data/models/challenge_model.dart';
 import '../../../challenges/data/repositories/challenge_repository.dart';
 import '../../../challenges/presentation/providers/challenges_provider.dart';
@@ -553,8 +553,7 @@ class CollectorDashboard extends ConsumerWidget {
                           _ReadingRow(
                             icon: Icons.account_balance_wallet,
                             label: 'Live balance',
-                            value:
-                                '${wrfBaseUnitsToDisplay(wallet.balance) ?? wallet.balance} WRF',
+                            value: wallet.balanceText,
                           ),
                         ],
                       );

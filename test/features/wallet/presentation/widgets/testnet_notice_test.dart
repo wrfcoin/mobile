@@ -19,7 +19,7 @@ void main() {
     );
     expect(
       find.text(
-        'https://wrfcoin-testnet.taila1c049.ts.net/testnet-disclaimer.html',
+        'https://wrfcoin.com/testnet-disclaimer.html',
       ),
       findsOneWidget,
     );

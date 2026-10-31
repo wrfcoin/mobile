@@ -77,6 +77,13 @@ class _CountingStorage extends InMemoryKeyValueStorage {
   }
 }
 
+/// The core4/backend golden vectors here were produced for chain 777; replay
+/// them at that domain, not the build's configured (888) default.
+const _vectorDomain = TransferSigningDomain(
+  chainId: '777',
+  networkId: 'testnet',
+);
+
 void main() {
   group('deriveMobileStationId (M1)', () {
     test('matches the backend golden vector', () {
@@ -336,7 +343,7 @@ void main() {
         final km = await walletWith(_seedHex, _ownerAddress);
         final service = StationSigningService(
           keyManager: km,
-          domain: TransferSigningDomain.configured,
+          domain: _vectorDomain,
           isForeground: () => true,
         );
         final session = await service.openSession();
@@ -398,7 +405,7 @@ void main() {
         await walletWith(_seedHex, _ownerAddress);
         final refused = StationSigningService(
           keyManager: manager(auth: false),
-          domain: TransferSigningDomain.configured,
+          domain: _vectorDomain,
           isForeground: () => true,
         );
         // storage is shared, so the refusing manager still sees the wallet.
@@ -417,7 +424,7 @@ void main() {
 
         final background = StationSigningService(
           keyManager: km,
-          domain: TransferSigningDomain.configured,
+          domain: _vectorDomain,
           isForeground: () => false,
         );
         await expectLater(
@@ -429,7 +436,7 @@ void main() {
         // Positive control: the counter does see the foreground read.
         final foreground = StationSigningService(
           keyManager: km,
-          domain: TransferSigningDomain.configured,
+          domain: _vectorDomain,
           isForeground: () => true,
         );
         expect(await foreground.openSession(), isNotNull);
@@ -441,7 +448,7 @@ void main() {
       await storage.write(key: 'wrf_address', value: _ownerAddress);
       final service = StationSigningService(
         keyManager: manager(),
-        domain: TransferSigningDomain.configured,
+        domain: _vectorDomain,
         isForeground: () => true,
       );
       await expectLater(
@@ -456,7 +463,7 @@ void main() {
         final km = await walletWith(_seedHex, '0x${'1' * 40}');
         final service = StationSigningService(
           keyManager: km,
-          domain: TransferSigningDomain.configured,
+          domain: _vectorDomain,
           isForeground: () => true,
         );
         await expectLater(
@@ -470,7 +477,7 @@ void main() {
       final km = await walletWith(_seedHex, _ownerAddress);
       final session = (await StationSigningService(
         keyManager: km,
-        domain: TransferSigningDomain.configured,
+        domain: _vectorDomain,
         isForeground: () => true,
       ).openSession())!;
       session.close();
@@ -487,7 +494,7 @@ void main() {
           final km = await walletWith(_seedHex, _ownerAddress);
           final session = (await StationSigningService(
             keyManager: km,
-            domain: TransferSigningDomain.configured,
+            domain: _vectorDomain,
             isForeground: () => true,
           ).openSession())!;
           final sigs = [(await session.signOwnership()).signatureHex];

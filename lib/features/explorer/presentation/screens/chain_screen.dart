@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/wrf_units.dart';
+import '../../../wallet/data/models/wallet_model.dart';
 import '../../../../services/crypto/key_manager.dart';
 import '../../../wallet/presentation/providers/transactions_provider.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
@@ -378,7 +378,6 @@ class _MyAccountCard extends ConsumerWidget {
     final recent = (activity == null || activity.historyUnavailable)
         ? const []
         : activity.items.take(3).toList();
-    final balance = wrfBaseUnitsToDisplay(wallet.balance) ?? wallet.balance;
     return Card(
       key: const Key('chain-my-account'),
       child: Padding(
@@ -392,7 +391,7 @@ class _MyAccountCard extends ConsumerWidget {
               label: 'Address',
               value: KeyManager.maskAddress(wallet.address),
             ),
-            _Stat(label: 'Balance', value: '$balance WRF'),
+            _Stat(label: 'Balance', value: wallet.balanceText),
             if (recent.isNotEmpty) ...[
               const SizedBox(height: 8),
               const Text(

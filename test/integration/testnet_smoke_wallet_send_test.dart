@@ -151,7 +151,7 @@ void main() {
         _hexBytes(body['auth_pubkey'] as String),
         orderedEquals(transport.publicKey),
       );
-      // Independently frame the expected chain-777/testnet preimage, rather than
+      // Independently frame the expected chain-888/testnet preimage, rather than
       // calling the production preimage builder and masking a domain mutation.
       expect(
         await Ed25519().verify(
@@ -211,7 +211,7 @@ List<int> _hexBytes(String value) => [
 
 List<int> _expectedMessage(String sender) {
   final bytes = <int>[...utf8.encode('wrfcoin_transparent_transfer_auth_v2')];
-  for (final field in ['777', 'testnet', sender, _recipient]) {
+  for (final field in ['888', 'testnet', sender, _recipient]) {
     final text = utf8.encode(field);
     bytes.addAll(
       (ByteData(
@@ -269,14 +269,12 @@ class _Transport {
               path == ApiConstants.walletEstimateGas) {
             payload = {'feeBaseUnits': '0', 'authoritative': true};
           } else if (options.method == 'GET' &&
-              path == ApiConstants.walletInfo(sender)) {
+              path == ApiConstants.publicBalance(sender.substring(2))) {
             payload = {
-              'data': {
-                'address': sender,
-                'balance': '1000000000', // 10 WRF in integer base units.
-                'nonce': 42,
-                'transactions': 0,
-              },
+              'address': sender,
+              'balance': '1000000000', // 10 WRF in integer base units.
+              'height': 10262,
+              'earned': '0',
             };
           } else if (options.method == 'GET' &&
               path.startsWith('/wallet/$sender/transactions?')) {

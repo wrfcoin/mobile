@@ -109,7 +109,7 @@ class _FakeBackend implements HttpClientAdapter {
         return _json(403, {'error': 'key does not own from'});
       }
       final preimage = transparentTransferAuthorizationMessage(
-        chainId: '777',
+        chainId: TransferSigningDomain.configured.chainId,
         networkId: 'testnet',
         from: body['from'] as String,
         to: body['to'] as String,

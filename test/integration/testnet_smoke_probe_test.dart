@@ -36,21 +36,23 @@ void main() {
     test('wallet balance fetch returns shape-valid JSON', () async {
       final payload = await _getMap(
         dio,
-        ApiConstants.walletInfo(_walletAddress),
+        ApiConstants.publicBalance(_walletAddress.substring(2)),
         scenario: 'wallet-balance',
       );
-      final wallet = _unwrapDataMap(payload);
-
       expect(
-        wallet['address']?.toString(),
-        isNotEmpty,
-        reason: 'RESPONSE_SHAPE_REGRESSION: wallet response lacks address',
+        payload['address'],
+        _walletAddress,
+        reason: 'RESPONSE_SHAPE_REGRESSION: balance response lacks address',
       );
       expect(
-        wallet.containsKey('balance') || wallet.containsKey('tokens'),
+        payload['balance'],
+        matches(RegExp(r'^(0|[1-9][0-9]*)$')),
+        reason: 'RESPONSE_SHAPE_REGRESSION: balance is not a base-unit string',
+      );
+      expect(
+        payload.containsKey('earned') && payload['height'] is int,
         isTrue,
-        reason:
-            'RESPONSE_SHAPE_REGRESSION: wallet response lacks balance/tokens',
+        reason: 'RESPONSE_SHAPE_REGRESSION: balance lacks earned/height',
       );
     });
 
@@ -187,13 +189,13 @@ Future<void> _handleStubRequest(HttpRequest request) async {
   final path = request.uri.path;
   request.response.headers.contentType = ContentType.json;
 
-  if (request.method == 'GET' && path.endsWith('/wallet/$_walletAddress')) {
+  if (request.method == 'GET' &&
+      path.endsWith('/public/balance/$_walletAddress')) {
     await _writeJson(request, <String, Object?>{
-      'data': <String, Object?>{
-        'address': _walletAddress,
-        'balance': '1.000',
-        'transactions': 0,
-      },
+      'address': _walletAddress,
+      'balance': '100000000',
+      'height': 10262,
+      'earned': null,
     });
     return;
   }

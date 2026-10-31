@@ -1,6 +1,8 @@
 const String tlsPublicReleaseProfile = 'public-release';
 const String tlsDeveloperProfile = 'developer';
 
+/// Release TLS pins: SPKI SHA-256 pins of CA certificates in the API's chain
+/// (see certificate_pin_validator.dart and docs/RELEASING.md#tls-pins).
 class TlsPinConfiguration {
   const TlsPinConfiguration({
     required this.profile,

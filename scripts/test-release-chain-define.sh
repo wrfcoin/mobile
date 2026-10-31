@@ -24,5 +24,5 @@ for mode in release profile; do
   done
 done
 dart compile kernel -Ddart.vm.product=false -Ddart.vm.profile=false "$task_dir/probe.dart" -o "$task_dir/probe.dill" > "$task_dir/build.log" 2>&1
-[[ $(dart "$task_dir/probe.dill") == 777 ]]
-echo 'PASS: release/profile unset/blank rejected; explicit 777/888 preserved in both modes; debug default 777'
+[[ $(dart "$task_dir/probe.dill") == 888 ]]
+echo 'PASS: release/profile unset/blank rejected; explicit 777/888 preserved in both modes; debug default 888'

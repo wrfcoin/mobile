@@ -4,6 +4,12 @@ All notable changes to `wrfcoin_mobile` are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- The wallet reads its balance from the public route `GET /api/public/balance/0x<address>` and shows "Earned in total" beside it. A switched-off read (404) shows "Unavailable", a rate-limited one (429) "Busy"; a missing total is never shown as zero.
+- Release TLS pinning now pins a CA public key (SPKI SHA-256 of the issuing intermediate or its root) instead of the leaf certificate, so Cloudflare's 90-day leaf renewals no longer lock out installed apps. See docs/RELEASING.md#tls-pins.
+- Debug builds default to chain 888; the testnet notice links to https://wrfcoin.com/testnet-disclaimer.html.
+
 ## 2026-10-22 public testnet launch
 
 ### Added

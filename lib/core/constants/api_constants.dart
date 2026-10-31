@@ -174,8 +174,11 @@ class ApiConstants {
   }
 
   // Wallet
-  // Backend serves GET /wallet/:address (no /balance/ segment).
-  static String walletInfo(String address) => '/wallet/$address';
+  /// Public balance read (backend#30, #34): `GET /api/public/balance/0x<40
+  /// hex>`, relative to [baseUrl] (which already ends in `/api`). Answers
+  /// `{ address, balance, height, earned }`. [rawHex] is the 40 lowercase hex
+  /// digits of the address with no prefix.
+  static String publicBalance(String rawHex) => '/public/balance/0x$rawHex';
 
   /// Chain account nonce for signing a transfer (backend#1199: owner-bound,
   /// the JWT `sub` must equal [address]). Not the auth challenge at

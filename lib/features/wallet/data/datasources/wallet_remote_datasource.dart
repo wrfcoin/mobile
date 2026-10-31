@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/api_constants.dart';
+import '../../../collector/data/models/station_owner_models.dart'
+    show addressRawHex;
 import '../../../../services/api/api_client.dart';
 import '../../../../services/crypto/signed_transfer.dart';
 import '../../../../services/crypto/wallet_setup_service.dart';
@@ -25,45 +27,55 @@ class WalletRemoteDataSource {
     this._signingDomain = TransferSigningDomain.configured,
   });
 
+  /// Balance and total earned from the public read
+  /// `GET /public/balance/0x<40 hex>` (backend#30, #34).
+  ///
+  /// The answer is `{ address, balance, height, earned }`: balance and earned
+  /// are integer base-unit strings, `earned` may be null. A 404 means public
+  /// reads are switched off and a 429 means the API is busy; both return a
+  /// wallet with no balance rather than a stand-in zero. Any other failure is
+  /// thrown for the repository to map.
   Future<WalletModel> getWallet(String address) async {
-    final response = await _dio.get(ApiConstants.walletInfo(address));
-    final payload = _unwrapMap(response.data);
-    final wrfToken = _extractList(payload['tokens'])
-        .whereType<Map>()
-        .map(Map<String, dynamic>.from)
-        .firstWhere((token) {
-          final symbol =
-              token['symbol']?.toString() ?? token['token']?.toString();
-          return symbol?.toUpperCase() == 'WRF';
-        }, orElse: () => <String, dynamic>{});
+    final rawHex = addressRawHex(address);
+    final chainAddress = '0x$rawHex';
+    WalletModel withoutBalance(BalanceAvailability availability) => WalletModel(
+      address: address,
+      balance: null,
+      balanceAvailability: availability,
+    );
 
+    final Response<dynamic> response;
+    try {
+      response = await _dio.get(ApiConstants.publicBalance(rawHex));
+    } on DioException catch (e) {
+      switch (e.response?.statusCode) {
+        case 404:
+          return withoutBalance(BalanceAvailability.unavailable);
+        case 429:
+          return withoutBalance(BalanceAvailability.busy);
+      }
+      rethrow;
+    }
+
+    final payload = response.data;
+    if (payload is! Map) {
+      return withoutBalance(BalanceAvailability.unavailable);
+    }
+    final reported = payload['address'];
+    final balance = _chainRewardAmount(payload['balance']);
+    // An answer for a different address, or with no usable balance, is
+    // not this wallet's balance.
+    if (reported is! String ||
+        reported.toLowerCase() != chainAddress ||
+        balance == null) {
+      return withoutBalance(BalanceAvailability.unavailable);
+    }
+    final height = payload['height'];
     return WalletModel(
-      address: payload['address']?.toString() ?? address,
-      balance: _normalizeAmount(payload['balance'] ?? wrfToken['balance']),
-      stakingRewards: _normalizeRewardAmount(payload['stakingRewards']),
-      weatherRewards: _normalizeRewardAmount(payload['weatherRewards']),
-      earnedBalanceTotal: _chainRewardAmount(
-        payload.containsKey('earned_balance_total')
-            ? payload['earned_balance_total']
-            : payload['earnedBalanceTotal'],
-      ),
-      weatherRewardsPending: _chainRewardAmount(
-        payload['weatherRewardsPending'],
-      ),
-      weatherRewardsUnavailable: _nonEmpty(
-        payload['weatherRewardsUnavailable'],
-      ),
-      transactions: _readInt(
-        payload['transactions'] ??
-            payload['transactionCount'] ??
-            payload['txCount'],
-      ),
-      nonce: _readInt(payload['nonce']),
-      reputationScore: _readDouble(payload['reputationScore']),
-      pendingTransactions: _readInt(payload['pendingTransactions']),
-      dataSubmissions: _readInt(
-        payload['dataSubmissions'] ?? payload['submissionCount'],
-      ),
+      address: address,
+      balance: balance,
+      height: height is int && height >= 0 ? height : null,
+      earnedBalanceTotal: _chainRewardAmount(payload['earned']),
     );
   }
 
@@ -102,13 +114,7 @@ class WalletRemoteDataSource {
           if (!_paidCredit(e, address)) return false;
           return itemRewardIds.add(e['eventId'] as String);
         })
-        .map(
-          (e) => _normalizeTransaction(
-            e,
-            address,
-            version2: version2,
-          ),
-        )
+        .map((e) => _normalizeTransaction(e, address, version2: version2))
         .map(TransactionModel.fromJson)
         .toList();
 
@@ -423,13 +429,6 @@ class WalletRemoteDataSource {
     return match?.group(0) ?? '0';
   }
 
-  String? _normalizeRewardAmount(dynamic value) {
-    if (value is! String && value is! num) return null;
-    final raw = value.toString().trim().replaceAll(',', '');
-    // Missing or unusable totals are unavailable; an explicit zero is real.
-    return RegExp(r'-?\d+(?:\.\d+)?').firstMatch(raw)?.group(0);
-  }
-
   String? _chainRewardAmount(dynamic value) {
     if (value is! String && value is! int) return null;
     final raw = value.toString();
@@ -440,11 +439,5 @@ class WalletRemoteDataSource {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(_normalizeAmount(value)) ?? 0;
-  }
-
-  double _readDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is num) return value.toDouble();
-    return double.tryParse(_normalizeAmount(value)) ?? 0;
   }
 }
