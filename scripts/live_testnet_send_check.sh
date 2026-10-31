@@ -28,7 +28,7 @@
 # Base URL: the default is the tailnet :5000 /api. For the owner run prefer the edge,
 # WRFCOIN_LIVE_BASE_URL=https://wrfcoin-testnet.taila1c049.ts.net:9444/api (see docs/testing/live-send-smoke-owner.md).
 #
-# What it does and does not do: signs with chain 777 / testnet (pinned in the Dart
+# What it does and does not do: signs with chain 888 / testnet (pinned in the Dart
 # test, not a build-time override); prints only addresses, nonces, tx ids and
 # balances, never the mnemonic, a key, a JWT or a token; makes one faucet claim,
 # one send (never retried) and at most 30 nonce reads after it; never mines and
@@ -37,7 +37,7 @@
 # OWNER NOTE, if you send with the core4 CLI instead of this script:
 #   * `wrfcoin wallet send` signs with WRFCOIN_CHAIN_ID / WRFCOIN_NETWORK_ID from ITS OWN
 #     environment and otherwise with wrfcoin-main / mainnet. Run it with
-#       WRFCOIN_CHAIN_ID=777 WRFCOIN_NETWORK_ID=testnet
+#       WRFCOIN_CHAIN_ID=888 WRFCOIN_NETWORK_ID=testnet
 #     or core4 answers 400 AUTHORIZATION_INVALID (the preimage folds the chain domain in).
 #   * The CLI's bearer is WRFCOIN_OPERATOR_TOKEN, then WRFCOIN_READER_TOKEN. A Reader-only
 #     token can read but cannot submit (core4 needs the Contributor role), so the send is refused.
