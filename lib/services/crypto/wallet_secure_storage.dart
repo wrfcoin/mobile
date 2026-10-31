@@ -4,11 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../features/wallet/data/models/address_book_entry.dart';
+import '../../features/wallet/domain/send_allowlist.dart';
 
 final walletSecureStorageProvider = Provider<WalletSecureStorage>((ref) {
   return const WalletSecureStorage();
 });
 
+/// Wallet metadata kept only on this device. The address book and the send
+/// allowlist live here and are never sent to a server.
 class WalletSecureStorage {
   const WalletSecureStorage();
 
@@ -18,6 +21,7 @@ class WalletSecureStorage {
   static const backupConfirmedKey = 'wrf_backup_confirmed';
   static const isSocialKey = 'wrf_is_social';
   static const addressBookKey = 'wrf_address_book';
+  static const sendAllowlistKey = 'wrf_send_allowlist';
 
   Future<String?> getWalletAddress() => _storage.read(key: addressKey);
 
@@ -60,12 +64,32 @@ class WalletSecureStorage {
     return _storage.write(key: addressBookKey, value: payload);
   }
 
+  Future<SendAllowlistSettings> getSendAllowlist() async {
+    final raw = await _storage.read(key: sendAllowlistKey);
+    if (raw == null || raw.isEmpty) return SendAllowlistSettings.off;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return SendAllowlistSettings.off;
+      return SendAllowlistSettings.fromJson(Map<String, dynamic>.from(decoded));
+    } catch (_) {
+      return SendAllowlistSettings.off;
+    }
+  }
+
+  Future<void> saveSendAllowlist(SendAllowlistSettings settings) {
+    return _storage.write(
+      key: sendAllowlistKey,
+      value: jsonEncode(settings.toJson()),
+    );
+  }
+
   Future<void> clearWalletData() async {
     await Future.wait([
       _storage.delete(key: addressKey),
       _storage.delete(key: backupConfirmedKey),
       _storage.delete(key: isSocialKey),
       _storage.delete(key: addressBookKey),
+      _storage.delete(key: sendAllowlistKey),
     ]);
   }
 

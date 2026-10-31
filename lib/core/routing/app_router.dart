@@ -29,6 +29,9 @@ import '../../features/wallet/presentation/screens/send_screen.dart';
 import '../../features/wallet/presentation/screens/receive_screen.dart';
 import '../../features/wallet/presentation/screens/create_wallet_screen.dart';
 import '../../features/wallet/presentation/screens/import_wallet_screen.dart';
+import '../../features/wallet/presentation/screens/address_book_screen.dart';
+import '../../features/wallet/presentation/screens/recovery_phrase_screen.dart';
+import '../../features/wallet/presentation/screens/send_allowlist_screen.dart';
 import '../../features/carbon_lottery/presentation/screens/carbon_lottery_dashboard_screen.dart';
 import '../../features/faucet/presentation/screens/faucet_screen.dart';
 import '../../features/explorer/presentation/screens/chain_screen.dart';
@@ -125,6 +128,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/wallet/import',
         // Public chain data; needs no session.
         '/wallet/chain',
+        // Device-only: contacts, allowlist and the phrase backup never need
+        // a session (the phrase is never part of sign-in).
+        '/wallet/contacts',
+        '/wallet/allowlist',
+        '/wallet/recovery-phrase',
       };
 
       if (walletConnectPaths.contains(state.matchedLocation)) {
@@ -330,6 +338,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 pageBuilder: (context, state) => _fadePage(
                   key: state.pageKey,
                   child: const CreateWalletScreen(),
+                ),
+              ),
+              GoRoute(
+                path: 'contacts',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const AddressBookScreen(),
+                ),
+              ),
+              GoRoute(
+                path: 'allowlist',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const SendAllowlistScreen(),
+                ),
+              ),
+              GoRoute(
+                path: 'recovery-phrase',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const RecoveryPhraseScreen(),
                 ),
               ),
               GoRoute(

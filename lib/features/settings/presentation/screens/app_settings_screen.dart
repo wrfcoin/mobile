@@ -152,6 +152,8 @@ class AppSettingsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           const DiagnosticsCard(),
           const SizedBox(height: 16),
+          const _WalletSafetySection(),
+          const SizedBox(height: 16),
           const _CollectorStationSection(),
           const SizedBox(height: 16),
           Card(
@@ -183,6 +185,68 @@ class AppSettingsScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Wallet safety: contacts, the send allowlist and the phrase backup. All
+/// device-only; none needs a session.
+class _WalletSafetySection extends StatelessWidget {
+  const _WalletSafetySection();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tile(
+      Key key,
+      IconData icon,
+      String title,
+      String subtitle,
+      String path,
+    ) => ListTile(
+      key: key,
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.push(path),
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Wallet',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            tile(
+              const Key('settings-contacts'),
+              Icons.contacts_outlined,
+              'Contacts',
+              'Named addresses, saved on this phone only.',
+              '/wallet/contacts',
+            ),
+            tile(
+              const Key('settings-allowlist'),
+              Icons.verified_user_outlined,
+              'Send allowlist',
+              'Only send to contacts you allowed.',
+              '/wallet/allowlist',
+            ),
+            tile(
+              const Key('settings-recovery-phrase'),
+              Icons.inventory_2_outlined,
+              'Back up recovery phrase',
+              'Only needed to restore on a new phone.',
+              '/wallet/recovery-phrase',
+            ),
+          ],
+        ),
       ),
     );
   }
