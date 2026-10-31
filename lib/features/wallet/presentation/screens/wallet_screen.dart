@@ -23,6 +23,7 @@ import '../providers/transactions_provider.dart';
 import '../widgets/transaction_history_unavailable_card.dart';
 import '../providers/wallet_provider.dart';
 import '../providers/wallet_security_provider.dart';
+import '../widgets/safety_notice.dart';
 import '../widgets/auth_handoff_banner.dart';
 import '../widgets/balance_card.dart';
 import '../widgets/testnet_notice.dart';
@@ -64,6 +65,15 @@ class WalletScreen extends ConsumerWidget {
               tooltip: 'Chain',
               icon: const Icon(Icons.link),
               onPressed: () => context.push('/wallet/chain'),
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: 'Open contacts',
+            child: IconButton(
+              tooltip: 'Contacts',
+              icon: const Icon(Icons.contacts_outlined),
+              onPressed: () => context.push('/wallet/contacts'),
             ),
           ),
           Semantics(
@@ -581,6 +591,7 @@ class WalletScreen extends ConsumerWidget {
     ref.invalidate(transactionsProvider);
     ref.invalidate(backupConfirmedProvider);
     ref.invalidate(addressBookProvider);
+    ref.invalidate(sendAllowlistProvider);
     ref.invalidate(socialWalletProvider);
     ref.read(authHandoffControllerProvider).clear();
 
@@ -590,6 +601,8 @@ class WalletScreen extends ConsumerWidget {
   }
 }
 
+/// A calm, one-time nudge. The phrase is a cold backup: nothing in normal
+/// use asks for it.
 class _BackupReminderCard extends StatelessWidget {
   final VoidCallback onConfirm;
 
@@ -597,44 +610,27 @@ class _BackupReminderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.45)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.warning_amber, color: AppColors.warning),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Backup reminder',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Confirm your recovery phrase is safely backed up.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: onConfirm,
-                  child: const Text('I backed it up'),
-                ),
-              ],
+    return SafetyNotice(
+      key: const Key('wallet-backup-reminder'),
+      icon: Icons.inventory_2_outlined,
+      title: 'Back up your wallet',
+      body:
+          'Write your recovery phrase on paper once and keep it somewhere '
+          'safe. You only need it if you lose this phone, never to sign in.',
+      children: [
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton(
+              key: const Key('wallet-backup-now'),
+              onPressed: () => context.push('/wallet/recovery-phrase'),
+              child: const Text('Back up now'),
             ),
-          ),
-        ],
-      ),
+            TextButton(onPressed: onConfirm, child: const Text('Already done')),
+          ],
+        ),
+      ],
     );
   }
 }

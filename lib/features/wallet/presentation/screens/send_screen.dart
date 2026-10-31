@@ -14,10 +14,13 @@ import '../../../../services/crypto/signed_transfer.dart';
 import '../../data/models/address_book_entry.dart';
 import '../../data/models/wallet_model.dart';
 import '../../domain/recipient_safety.dart';
+import '../../domain/send_allowlist.dart';
+import '../../../../services/crypto/wallet_secure_storage.dart';
 import '../../data/repositories/wallet_repository_impl.dart';
 import '../providers/transactions_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../providers/wallet_security_provider.dart';
+import '../widgets/safety_notice.dart';
 
 /// Launch gate for the shielded-send privacy tiers.
 ///
@@ -57,6 +60,32 @@ Map<String, dynamic> buildSponsoredUserOperation({
     'amount': amount,
     if (memo != null && memo.isNotEmpty) 'memo': memo,
     'callData': '0x',
+  };
+}
+
+/// Title and detail for a Send the allowlist refuses.
+@visibleForTesting
+({String title, String body}) allowlistRefusal(AllowlistVerdict verdict) {
+  final name = verdict.contact?.label;
+  return switch (verdict.kind) {
+    AllowlistVerdictKind.pending => (
+      title: 'Not allowed yet',
+      body:
+          '"$name" can be used from '
+          '${formatAllowlistTime(verdict.allowedFrom!)}.',
+    ),
+    AllowlistVerdictKind.notAllowed => (
+      title: 'Not on your allowlist',
+      body:
+          '"$name" is saved but not allowed. Allowing a contact takes 24 '
+          'hours while the allowlist is on.',
+    ),
+    _ => (
+      title: 'Not on your allowlist',
+      body:
+          'Your send allowlist is on, and this address is not one of your '
+          'contacts. Save it and allow it; it can be used 24 hours later.',
+    ),
   };
 }
 
@@ -231,8 +260,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   /// Signed transfers and fee estimates accept only core4 hex addresses
   /// (backend `isLaunchAddress`).
-  bool _isValidAddress(String value) =>
-      RegExp(r'^0x[a-fA-F0-9]{40}$').hasMatch(value.trim());
+  bool _isValidAddress(String value) => isSendableAddress(value);
 
   void _scheduleFeeEstimate() {
     _feeDebounce?.cancel();
@@ -367,6 +395,69 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     return true;
   }
 
+  /// Legacy and allowlist checks against fresh local knowledge.
+  Future<bool> _blocked(KeyManager keyManager, String to) async {
+    if (await _blockedAsLegacy(keyManager, to)) return true;
+    return _blockedByAllowlist(to);
+  }
+
+  /// Reads the allowlist and contacts from storage (not cached state), so a
+  /// change made elsewhere is honoured. Returns true, after telling the
+  /// user, when the send must stop.
+  Future<bool> _blockedByAllowlist(String to) async {
+    final settings = await ref.read(sendAllowlistProvider.notifier).current();
+    final book = await ref.read(walletSecureStorageProvider).getAddressBook();
+    final verdict = ref
+        .read(sendAllowlistPolicyProvider)
+        .check(to: to, book: book, settings: settings);
+    if (!verdict.blocksSend) return false;
+    if (mounted) {
+      final refusal = allowlistRefusal(verdict);
+      AppSnackbars.error(
+        context,
+        ValidationFailure('${refusal.title}. ${refusal.body}'),
+      );
+    }
+    return true;
+  }
+
+  Future<void> _pickContact() async {
+    final entries = ref.read(addressBookProvider).value ?? const [];
+    final picked = await showModalBottomSheet<AddressBookEntry>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: entries.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No contacts yet. Add them in Contacts.'),
+              )
+            : ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final entry in entries)
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: Text(entry.label),
+                      subtitle: Text(
+                        entry.address,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                        ),
+                      ),
+                      onTap: () => Navigator.of(context).pop(entry),
+                    ),
+                ],
+              ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    _addressController.text = picked.address;
+    setState(() {});
+    _scheduleFeeEstimate();
+  }
+
   Future<void> _send() async {
     if (_attemptInFlight) return;
     // Freeze the destination field for the whole attempt.
@@ -390,7 +481,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     final to = _addressController.text.trim();
 
     // A positively known legacy receive-only destination is never sent to.
-    if (await _blockedAsLegacy(keyManager, to)) return;
+    if (await _blocked(keyManager, to)) return;
     if (!await keyManager.canSignTransactions()) {
       if (mounted) {
         AppSnackbars.error(
@@ -448,7 +539,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     if (!mounted) return;
 
     // Fresh knowledge about the captured destination, right before confirming.
-    if (await _blockedAsLegacy(keyManager, to)) return;
+    if (await _blocked(keyManager, to)) return;
     if (!mounted) return;
     final amount = wrfBaseUnitsToDisplay(amountBaseUnits)!;
     final memo = _memoController.text.trim().isEmpty
@@ -469,7 +560,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     if (confirmed != true || !mounted) return;
     // Knowledge may have changed while the user reviewed the dialog; recheck
     // the exact confirmed destination before anything is submitted.
-    if (await _blockedAsLegacy(keyManager, to)) return;
+    if (await _blocked(keyManager, to)) return;
     if (!mounted) return;
     // Wallet or fee may have changed while the user reviewed the dialog.
     final balanceProblem = _balanceProblem(
@@ -641,6 +732,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     final socialAsync = ref.watch(socialWalletProvider);
     ref.watch(walletProvider);
     final addressBookAsync = ref.watch(addressBookProvider);
+    final allowlistSettings =
+        ref.watch(sendAllowlistProvider).value ?? SendAllowlistSettings.off;
+    final allowlistPolicy = ref.watch(sendAllowlistPolicyProvider);
 
     final entries = addressBookAsync.value ?? const <AddressBookEntry>[];
     final input = _addressController.text.trim().toLowerCase();
@@ -649,6 +743,14 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       addressBook: entries,
       ownLegacyAlias: _ownLegacyAlias,
     );
+    final allowlistOn = allowlistPolicy.isOn(allowlistSettings);
+    final allowlistVerdict = allowlistOn && _isValidAddress(input)
+        ? allowlistPolicy.check(
+            to: input,
+            book: entries,
+            settings: allowlistSettings,
+          )
+        : null;
     final suggestions = entries
         .where((entry) {
           if (input.isEmpty) return true;
@@ -693,9 +795,20 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               TextFormField(
                 controller: _addressController,
                 readOnly: _attemptInFlight || _sending,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Send to',
                   hintText: '0x...',
+                  helperText: allowlistOn
+                      ? 'Allowlist on: only allowed contacts'
+                      : null,
+                  suffixIcon: IconButton(
+                    key: const Key('send-pick-contact'),
+                    tooltip: 'Choose a contact',
+                    icon: const Icon(Icons.contacts_outlined),
+                    onPressed: _attemptInFlight || _sending
+                        ? null
+                        : _pickContact,
+                  ),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Address required';
@@ -705,65 +818,82 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                   return null;
                 },
               ),
-              if (assessment.blocksSend) ...[
-                const SizedBox(height: 8),
-                Container(
-                  key: const Key('legacy-recipient-blocked'),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.error),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Send blocked: legacy receive-only address',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+              // One slot for everything under the address field, so the
+              // fields below keep their place (and state) as notices and
+              // suggestions come and go.
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (assessment.blocksSend) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      key: const Key('legacy-recipient-blocked'),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.error),
                       ),
-                      const SizedBox(height: 4),
-                      Text(assessment.reason ?? ''),
-                      if (assessment.replacement != null) ...[
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          key: const Key('use-replacement-address'),
-                          onPressed: () {
-                            _addressController.text = assessment.replacement!;
-                            setState(() {});
-                          },
-                          child: Text(
-                            'Use verified address ${assessment.replacement}',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Send blocked: legacy receive-only address',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-              if (suggestions.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                for (final entry in suggestions)
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(entry.label),
-                    subtitle: Text(
-                      entry.address,
-                      style: const TextStyle(fontFamily: 'monospace'),
+                          const SizedBox(height: 4),
+                          Text(assessment.reason ?? ''),
+                          if (assessment.replacement != null) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton(
+                              key: const Key('use-replacement-address'),
+                              onPressed: () {
+                                _addressController.text =
+                                    assessment.replacement!;
+                                setState(() {});
+                              },
+                              child: Text(
+                                'Use verified address ${assessment.replacement}',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    trailing: Text(switch (entry.status) {
-                      AddressStatus.knownLegacy => 'legacy',
-                      AddressStatus.verifiedCurrent => 'current',
-                      AddressStatus.unverified => 'unverified',
-                    }),
-                    onTap: () {
-                      _addressController.text = entry.address;
-                      setState(() {});
-                      _scheduleFeeEstimate();
-                    },
+                  ],
+                  _AllowlistNotice(
+                    verdict:
+                        allowlistVerdict != null &&
+                            allowlistVerdict.blocksSend &&
+                            !assessment.blocksSend
+                        ? allowlistVerdict
+                        : null,
                   ),
-              ],
+                  if (suggestions.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    for (final entry in suggestions)
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(entry.label),
+                        subtitle: Text(
+                          entry.address,
+                          style: const TextStyle(fontFamily: 'monospace'),
+                        ),
+                        trailing: Text(switch (entry.status) {
+                          AddressStatus.knownLegacy => 'legacy',
+                          AddressStatus.verifiedCurrent => 'current',
+                          AddressStatus.unverified => 'unverified',
+                        }),
+                        onTap: () {
+                          _addressController.text = entry.address;
+                          setState(() {});
+                          _scheduleFeeEstimate();
+                        },
+                      ),
+                  ],
+                ],
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _amountController,
@@ -891,6 +1021,38 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AllowlistNotice extends StatelessWidget {
+  const _AllowlistNotice({required this.verdict});
+
+  final AllowlistVerdict? verdict;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = verdict;
+    if (v == null) return const SizedBox.shrink();
+    final refusal = allowlistRefusal(v);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SafetyNotice(
+        key: const Key('allowlist-recipient-blocked'),
+        tone: SafetyTone.blocked,
+        title: refusal.title,
+        body: refusal.body,
+        children: [
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => context.push('/wallet/allowlist'),
+              child: const Text('Open allowlist'),
+            ),
+          ),
+        ],
       ),
     );
   }

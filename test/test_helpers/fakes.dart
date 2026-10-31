@@ -26,6 +26,7 @@ import 'package:wrfcoin_mobile/features/weather/data/repositories/weather_reposi
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
 import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/address_book_entry.dart';
+import 'package:wrfcoin_mobile/features/wallet/domain/send_allowlist.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_page.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
@@ -266,9 +267,11 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
     this.backupConfirmed = true,
     this.isSocial = false,
     List<AddressBookEntry>? addressBook,
+    this.sendAllowlist = SendAllowlistSettings.off,
   }) : _addressBook = addressBook ?? <AddressBookEntry>[];
 
   final List<AddressBookEntry> _addressBook;
+  SendAllowlistSettings sendAllowlist;
   bool backupConfirmed;
   bool isSocial;
   int clearWalletDataCalls = 0;
@@ -279,7 +282,23 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
   }
 
   @override
-  Future<List<AddressBookEntry>> getAddressBook() async => _addressBook;
+  Future<List<AddressBookEntry>> getAddressBook() async =>
+      List.unmodifiable(_addressBook);
+
+  @override
+  Future<void> saveAddressBook(List<AddressBookEntry> entries) async {
+    _addressBook
+      ..clear()
+      ..addAll(entries);
+  }
+
+  @override
+  Future<SendAllowlistSettings> getSendAllowlist() async => sendAllowlist;
+
+  @override
+  Future<void> saveSendAllowlist(SendAllowlistSettings settings) async {
+    sendAllowlist = settings;
+  }
 
   @override
   Future<void> clearWalletData() async {
@@ -287,6 +306,7 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
     backupConfirmed = false;
     isSocial = false;
     _addressBook.clear();
+    sendAllowlist = SendAllowlistSettings.off;
   }
 
   @override
