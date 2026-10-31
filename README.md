@@ -69,14 +69,28 @@ Release builds are produced by the Fastlane lanes (`fastlane/Fastfile`, `release
 | Variable | Required | Dart define | When unset |
 |---|---|---|---|
 | `WRFCOIN_API_BASE_URL` | yes | `API_BASE_URL` | the release fails (see below) |
-| `WRFCOIN_TLS_PIN_SHA256_CURRENT` / `_NEXT` | current: yes; next: no | `TLS_PIN_SHA256_CURRENT` / `_NEXT` | the release fails (current) / no next pin |
+| `WRFCOIN_TLS_PIN_SHA256_CURRENT` / `_NEXT` | current: yes; next: no | `TLS_PIN_SHA256_CURRENT` / `_NEXT` | the release fails (current) / no backup pin |
 | `WRFCOIN_WALLET_AUTH_ORIGIN` | no | `WRFCOIN_WALLET_AUTH_ORIGIN` | no define: ed25519 login expects the origin of `API_BASE_URL` |
 | `WRFCOIN_CHAIN_ID` | yes | `WRFCOIN_CHAIN_ID` | release/profile compilation fails |
 | `WRFCOIN_NETWORK_ID` | no | `WRFCOIN_NETWORK_ID` | no define: `testnet` |
 
 These wallet-auth variables must equal the backend's wallet-auth origin, chain ID and network, or ed25519 login refuses the challenge. `WRFCOIN_WALLET_AUTH_ORIGIN` must be the **canonical** origin, the exact string `Uri.parse(origin).origin` (and the backend's `new URL(origin).origin`) returns: `https://host[:port]`, lowercase host, no path or trailing slash, and no port unless it is non-default. So `https://Auth.Example.test`, `https://host:443` and `https://host:0443` are refused; use `https://auth.example.test`. A port must be 1–65535 without leading zeros. `WRFCOIN_CHAIN_ID` is a positive integer no larger than 2^53−1 (the backend compares it as a JavaScript safe integer). `WRFCOIN_NETWORK_ID` matches `[A-Za-z0-9._-]{1,64}`. Fastlane rejects malformed values and requires the chain ID. Direct release and profile builds also fail compilation when the chain define is unset or empty.
 
-The public testnet API hostname is an **open owner decision**; this repository does not choose or imply one. Release builds fail closed until `WRFCOIN_API_BASE_URL` is explicitly set to a resolvable, non-placeholder HTTPS endpoint. Debug builds with no define use `http://localhost:4001/api`; developers may supply another explicit local URL with `--dart-define=API_BASE_URL=...`.
+The public testnet API host is **https://wrfcoin.com** (owner decision, 2026-10-31; served through a Cloudflare tunnel). For a testnet release set:
+
+- `WRFCOIN_API_BASE_URL=https://wrfcoin.com/api`. The app joins its request paths to this URL, so it ends in `/api` (the wallet balance, for example, is read from `https://wrfcoin.com/api/public/balance/0x<40 hex>`).
+- `WRFCOIN_WALLET_AUTH_ORIGIN=https://wrfcoin.com`. That is also the value the app derives from the API URL when the variable is unset; set it explicitly so the build record names it. It must equal the backend's `WRFCOIN_WALLET_AUTH_ORIGIN` (see below).
+
+Release builds still fail closed until `WRFCOIN_API_BASE_URL` is explicitly set to a resolvable, non-placeholder HTTPS endpoint. Debug builds with no define use `http://localhost:4001/api`; developers may supply another explicit local URL with `--dart-define=API_BASE_URL=...`.
+
+### TLS pinning (release builds)
+
+Release builds pin the **public key (SPKI) of a CA in the server's chain**, not the leaf certificate. wrfcoin.com's leaf certificate is managed by Cloudflare and replaced about every 90 days without notice; a leaf pin would lock installed apps out at each renewal.
+
+- A pin is the SHA-256 of a certificate's DER SubjectPublicKeyInfo, as 64 hex digits (colons optional). `TLS_PIN_SHA256_CURRENT` is required; `TLS_PIN_SHA256_NEXT` is an optional, distinct backup.
+- The connection is accepted when the chain the server presents runs, with valid signatures, dates and host name, from the leaf to a certificate whose key matches a pin: the issuing intermediate or a root. The platform trust store is not used.
+- dart:io shows the app only the leaf certificate, so each pin selects a CA certificate bundled in `lib/services/api/pinnable_ca_certificates.dart`, and that certificate becomes the only trust anchor. A pin with no bundled certificate stops the app at start-up (fail closed). To pin another CA, add its certificate there.
+- For wrfcoin.com today, pin the Google Trust Services **WE1** intermediate as current and **GTS Root R4** as the backup. The values and the openssl commands that compute them from the live chain are in [docs/RELEASING.md](docs/RELEASING.md#tls-pins).
 
 ### ed25519 wallet login configuration
 

@@ -18,10 +18,10 @@ import 'package:dio/dio.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/datasources/wallet_remote_datasource.dart';
 import 'package:wrfcoin_mobile/services/crypto/signed_transfer.dart';
 
-/// Deployed signing domain of the testnet (infra docker-compose
-/// WRFCOIN_CHAIN_ID "777", WRFCOIN_NETWORK_ID testnet). Explicit on purpose:
+/// Deployed signing domain of the public testnet (chain 888, network
+/// testnet). Explicit on purpose:
 /// the live check never reads a build-time override.
-const String liveChainId = '777';
+const String liveChainId = '888';
 const String liveNetworkId = 'testnet';
 
 /// Fee reserve (0.01 WRF) the sender must hold on top of the amount; override with

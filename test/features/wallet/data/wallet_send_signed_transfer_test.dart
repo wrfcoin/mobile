@@ -127,9 +127,9 @@ void main() {
       );
 
       // The signature verifies over the canonical preimage for exactly the
-      // posted strings, at the configured 777/testnet domain.
+      // posted strings, at the configured 888/testnet domain.
       final message = transparentTransferAuthorizationMessage(
-        chainId: '777',
+        chainId: '888',
         networkId: 'testnet',
         from: from,
         to: to,

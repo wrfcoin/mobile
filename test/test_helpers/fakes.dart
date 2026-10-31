@@ -201,7 +201,7 @@ class FakeWalletRepository implements WalletRepository {
       wallet ??
           const WalletModel(
             address: 'wrf1testwallet0000000000',
-            balance: '42.00',
+            balance: '4200000000', // 42 WRF in base units
             transactions: 2,
           ),
     );

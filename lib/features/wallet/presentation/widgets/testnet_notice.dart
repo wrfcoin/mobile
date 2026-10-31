@@ -17,7 +17,7 @@ class TestnetNotice extends StatelessWidget {
           ),
           SizedBox(height: 4),
           Text(
-            'https://wrfcoin-testnet.taila1c049.ts.net/testnet-disclaimer.html',
+            'https://wrfcoin.com/testnet-disclaimer.html',
             style: TextStyle(fontSize: 12),
           ),
         ],

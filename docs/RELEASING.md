@@ -14,9 +14,10 @@ is not established by source inspection. The existing tester profile build is
 configured for a private API route, so it is not the public launch artifact.
 No GitHub Release was present when this guide was prepared (2026-10-19).
 
-The launch APK must use the public API, initially proposed as
-`https://wrfcoin.com/api`. The website being reachable does not establish that all
-mobile endpoints work there. The release owner must verify wallet login, faucet,
+The launch APK uses the public API at `https://wrfcoin.com/api` (owner decision,
+2026-10-31: the API host is https://wrfcoin.com, served through a Cloudflare
+tunnel), with `WRFCOIN_WALLET_AUTH_ORIGIN=https://wrfcoin.com`. The website
+being reachable does not establish that all mobile endpoints work there. The release owner must verify wallet login, faucet,
 balances and transfers from outside the private network before selecting that
 URL. A publicly reachable funnel origin is also allowed, provided the complete
 API and the backend's wallet-login origin match the configuration. Do not use a
@@ -54,10 +55,71 @@ See [release chain controls](SIGNING_CHAIN_BUILD.md).
 - The owner supplies the release version/build number, changelog entry, and all
   signing inputs through the worker's secret injection. Gradle falls back to
   debug signing if any signing input is absent: the checks below must run.
-- The owner supplies the current TLS **leaf certificate DER SHA-256** fingerprint
-  for the API endpoint (not an SPKI pin), and optionally a distinct next pin for
-  certificate rollover. Validate them through the deployment's trusted process.
-  Do not copy a sample pin or treat format validation as proof of server identity.
+- The owner supplies the current TLS **SPKI pin** of a CA in the API's chain
+  (the issuing intermediate) and, optionally, a distinct backup pin (its root).
+  See [TLS pins](#tls-pins). Validate them through the deployment's trusted
+  process. Do not copy a sample pin or treat format validation as proof of
+  server identity.
+
+## TLS pins
+
+Release builds pin a **CA public key**, never the leaf certificate. wrfcoin.com's
+leaf is a Cloudflare-managed Google Trust Services certificate (issuer `CN=WE1`)
+that is replaced about every 90 days without notice; pinning it would lock out
+installed apps at each renewal.
+
+A pin is the SHA-256 of the certificate's DER SubjectPublicKeyInfo, written as
+64 hex digits (colons optional, any case). The app accepts a connection only
+when the chain the server presents runs, with valid signatures, dates and host
+name, from the leaf to a certificate whose key matches `TLS_PIN_SHA256_CURRENT`
+or `TLS_PIN_SHA256_NEXT`. The platform trust store is not used.
+
+dart:io exposes only the leaf certificate to the app, so the app cannot hash
+the intermediates itself. Each pin instead selects a CA certificate bundled in
+`lib/services/api/pinnable_ca_certificates.dart`, and the selected certificates
+become the TLS context's only trust anchors (BoringSSL accepts an intermediate
+as an anchor). A pin that matches no bundled certificate stops the app at
+start-up, before any request (fail closed). To pin a CA that is not bundled,
+add its certificate to that file in the same release.
+
+Bundled today:
+
+| Certificate | SPKI SHA-256 pin |
+|---|---|
+| GTS WE1 (intermediate, issued by GTS Root R4, expires 2029-02-20) | `908769e8d34477cc2cba0632c88605b22d7294c0840f78596d247c645b1afc0e` |
+| GTS WR1 (intermediate, issued by GTS Root R1, expires 2029-02-20) | `c83bbda20db9e4d3791847fe0706bdad3aea150d04c9d674af514287d4dd016e` |
+| GTS Root R4 (root, expires 2036-06-22) | `9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347` |
+| GTS Root R1 (root, expires 2036-06-22) | `871a9194f4eed5b312ff40c84c1d524aed2f778bbff25f138cf81f680a7adc67` |
+
+For wrfcoin.com on 2026-10-31 (chain: leaf, WE1, GTS Root R4 cross-signed by
+GlobalSign), configure:
+
+```bash
+WRFCOIN_TLS_PIN_SHA256_CURRENT=908769e8d34477cc2cba0632c88605b22d7294c0840f78596d247c645b1afc0e  # GTS WE1
+WRFCOIN_TLS_PIN_SHA256_NEXT=9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347     # GTS Root R4
+```
+
+If Cloudflare moves the zone to another CA (for example an RSA chain through
+WR1 and GTS Root R1, or a different issuer), these pins stop matching and the
+app refuses to connect until a release with new pins ships. Check the chain
+before every release. To compute the pins from the live chain:
+
+```bash
+# Save each certificate the server sends as cert1.pem (leaf), cert2.pem, ...
+openssl s_client -connect wrfcoin.com:443 -servername wrfcoin.com -showcerts </dev/null 2>/dev/null \
+  | awk '/BEGIN CERTIFICATE/{n++} n{print > ("cert" n ".pem")} /END CERTIFICATE/{n=n}'
+for f in cert*.pem; do
+  openssl x509 -in "$f" -noout -subject -issuer -enddate
+  openssl x509 -in "$f" -pubkey -noout \
+    | openssl pkey -pubin -outform der \
+    | openssl dgst -sha256 | awk '{print "SPKI SHA-256 pin:", $NF}'
+done
+```
+
+Pin the certificate whose subject is `CN=WE1` as current, and the root (`GTS
+Root R4`) as next. The cross-signed `GTS Root R4` the server sends has the same
+key, and so the same pin, as the self-signed root. The pin format is hex; the
+base64 form (`openssl dgst -sha256 -binary | base64`) is not accepted.
 
 ## Reproducible build recipe
 
@@ -77,7 +139,7 @@ set +x
 : "${RELEASE_BUILD_NUMBER:?new build number required}"
 : "${WRFCOIN_API_BASE_URL:?verified public API URL required}"
 : "${WRFCOIN_WALLET_AUTH_ORIGIN:?backend login origin required}"
-: "${WRFCOIN_TLS_PIN_SHA256_CURRENT:?verified leaf certificate pin required}"
+: "${WRFCOIN_TLS_PIN_SHA256_CURRENT:?verified CA SPKI pin required}"
 : "${WRFCOIN_ANDROID_KEYSTORE_PATH:?private absolute keystore path required}"
 : "${WRFCOIN_ANDROID_KEYSTORE_PASSWORD:?injected signing password required}"
 : "${WRFCOIN_ANDROID_KEY_ALIAS:?injected signing alias required}"
@@ -184,7 +246,8 @@ can be checked before release inputs are available. Use a disposable worktree;
 this is not a distributable APK and does not establish API or device acceptance.
 Keep the signed-release checks above for the eventual release.
 
-The dry run uses reserved `.invalid` origins, a synthetic TLS pin, the current
+The dry run uses reserved `.invalid` origins, a synthetic TLS pin (the build
+succeeds; the app would refuse it at start-up, since it matches no bundled CA), the current
 source version/build number, and provisional testnet chain/network values. It
 unsets all four signing variables. Main otherwise falls back to debug signing,
 so temporarily replace the release `signingConfig` assignment in
@@ -224,7 +287,8 @@ Before a real release the owner must supply or confirm:
 
 - Approved source and Flutter revisions, version/build number and changelog.
 - Public API base URL and backend wallet-login origin, with endpoint acceptance.
-- Current API TLS leaf-certificate SHA-256 pin and optional next rollover pin.
+- Current API TLS CA SPKI pin (issuing intermediate) and optional backup pin
+  (root); see [TLS pins](#tls-pins).
 - Chain ID and network ID for the selected deployment.
 - Signing keystore, alias, injected passwords and trusted signer fingerprint.
 - Physical-device acceptance, including clean install and upgrade with wallet

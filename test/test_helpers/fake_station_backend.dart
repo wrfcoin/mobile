@@ -244,7 +244,7 @@ class FakeStationBackend {
           'expiresAt': nowSeconds + (challengeExpiresIn ?? 300),
           'stationId': challengeStationId ?? syntheticStationId,
           'ownerAddress': syntheticAddress,
-          'chainId': challengeChainId ?? '777',
+          'chainId': challengeChainId ?? '888',
           'networkId': 'testnet',
         });
       case '/weather/stations/mobile':
@@ -286,7 +286,7 @@ class FakeStationBackend {
     final collect = (body['collectPubkey'] as String).toLowerCase();
     final cell = body['cell'] as Map;
     final message = mobileStationRegistrationMessage(
-      chainId: '777',
+      chainId: '888',
       networkId: 'testnet',
       stationId: syntheticStationId,
       ownerAddress: syntheticAddress,
@@ -359,7 +359,7 @@ class FakeStationBackend {
         'stationId': stationId,
         'commitId': prepareAuthorizationCommitId ?? commitId,
         'contributionType': 'contribution',
-        'chainId': '777',
+        'chainId': '888',
         'networkId': 'testnet',
         'messageHex': prepareMessageHex,
       },
@@ -377,7 +377,7 @@ class FakeStationBackend {
     }
     final commitId = _localCommitId(body, body['nonce'] as String);
     final message = commitAuthorizationMessage(
-      chainId: '777',
+      chainId: '888',
       networkId: 'testnet',
       stationId: body['stationId'] as String,
       commitId: commitId,

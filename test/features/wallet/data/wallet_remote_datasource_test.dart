@@ -38,45 +38,48 @@ void main() {
     expect(page.items.last.type, 'unknown');
   });
 
-  test('reward rows are gated and deduped across items and creditItems', () async {
-    const own = '0x1111111111111111111111111111111111111111';
-    Map<String, dynamic> reward(String id, {String settlement = 'paid'}) => {
-      'eventId': id,
-      'txId': null,
-      'from': null,
-      'to': own,
-      'amountBaseUnits': '100',
-      'direction': 'received',
-      'kind': 'weather_reward',
-      'type': 'weather_reward',
-      'settlement': settlement,
-    };
-    final dio = Dio();
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) => handler.resolve(
-          Response(
-            requestOptions: options,
-            data: {
-              'schemaVersion': 2,
-              'items': [
-                reward('contribution:a'),
-                reward('contribution:a'),
-                reward('contribution:unpaid', settlement: 'pending'),
-              ],
-              'creditItems': [
-                reward('contribution:a'),
-                reward('contribution:b'),
-              ],
-            },
+  test(
+    'reward rows are gated and deduped across items and creditItems',
+    () async {
+      const own = '0x1111111111111111111111111111111111111111';
+      Map<String, dynamic> reward(String id, {String settlement = 'paid'}) => {
+        'eventId': id,
+        'txId': null,
+        'from': null,
+        'to': own,
+        'amountBaseUnits': '100',
+        'direction': 'received',
+        'kind': 'weather_reward',
+        'type': 'weather_reward',
+        'settlement': settlement,
+      };
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) => handler.resolve(
+            Response(
+              requestOptions: options,
+              data: {
+                'schemaVersion': 2,
+                'items': [
+                  reward('contribution:a'),
+                  reward('contribution:a'),
+                  reward('contribution:unpaid', settlement: 'pending'),
+                ],
+                'creditItems': [
+                  reward('contribution:a'),
+                  reward('contribution:b'),
+                ],
+              },
+            ),
           ),
         ),
-      ),
-    );
-    final page = await WalletRemoteDataSource(dio).getTransactions(own);
-    expect(page.items.map((t) => t.eventId), ['contribution:a']);
-    expect(page.credits.map((t) => t.eventId), ['contribution:b']);
-  });
+      );
+      final page = await WalletRemoteDataSource(dio).getTransactions(own);
+      expect(page.items.map((t) => t.eventId), ['contribution:a']);
+      expect(page.credits.map((t) => t.eventId), ['contribution:b']);
+    },
+  );
 
   group('WalletRemoteDataSource', () {
     late Dio dio;
@@ -87,220 +90,175 @@ void main() {
       dataSource = WalletRemoteDataSource(dio);
     });
 
-    for (final missing in [null, '', '   ', 'unavailable']) {
-      test(
-        'missing/invalid reward value $missing stays unavailable while balance zero is real',
-        () async {
-          dio.interceptors.add(
-            InterceptorsWrapper(
-              onRequest: (options, handler) {
-                handler.resolve(
-                  Response(
-                    requestOptions: options,
-                    data: {
-                      'success': true,
-                      'data': {
-                        'balance': '0',
-                        'nonce': 0,
-                        'transactions': 0,
-                        'weatherRewards': ?missing,
-                        'stakingRewards': ?missing,
-                      },
-                    },
-                  ),
-                );
-              },
-            ),
-          );
-          final wallet = await dataSource.getWallet('wrf1wallet');
-          expect(wallet.balance, '0');
-          expect(wallet.weatherRewards, isNull);
-          expect(wallet.stakingRewards, isNull);
-        },
+    const hex = 'ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12';
+    const chainAddress = '0x$hex';
+
+    void answer(Object? data, {int status = 200, List<String>? paths}) {
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            paths?.add(options.path);
+            final response = Response<dynamic>(
+              requestOptions: options,
+              statusCode: status,
+              data: data,
+            );
+            if (status >= 400) {
+              handler.reject(
+                DioException.badResponse(
+                  statusCode: status,
+                  requestOptions: options,
+                  response: response,
+                ),
+              );
+            } else {
+              handler.resolve(response);
+            }
+          },
+        ),
       );
     }
 
-    test('explicit zero rewards remain reported values', () async {
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            handler.resolve(
-              Response(
-                requestOptions: options,
-                data: {
-                  'data': {
-                    'balance': 0,
-                    'weatherRewards': 0,
-                    'stakingRewards': '0 WRF',
-                  },
-                },
-              ),
-            );
-          },
-        ),
-      );
-      final wallet = await dataSource.getWallet('wrf1wallet');
-      expect(wallet.weatherRewards, '0');
-      expect(wallet.stakingRewards, '0');
-    });
-
-    test('model JSON and copyWith preserve unavailable reward values', () {
-      final missing = WalletModel.fromJson({
-        'address': 'wrf1wallet',
-        'balance': '0',
+    for (final held in [
+      chainAddress,
+      '0X${hex.toUpperCase()}',
+      'wrf$hex',
+      'WRF${hex.toUpperCase()}',
+    ]) {
+      test('reads the public balance route for $held', () async {
+        final paths = <String>[];
+        answer({
+          'address': chainAddress,
+          'balance': '150000000',
+          'height': 10262,
+          'earned': '250000000',
+        }, paths: paths);
+        final wallet = await dataSource.getWallet(held);
+        expect(paths, ['/public/balance/$chainAddress']);
+        expect(wallet.address, held, reason: 'the held address is kept');
+        expect(wallet.balance, '150000000');
+        expect(wallet.earnedBalanceTotal, '250000000');
+        expect(wallet.height, 10262);
+        expect(wallet.balanceAvailability, BalanceAvailability.reported);
+        expect(wallet.balanceText, '1.5 WRF');
       });
-      expect(missing.weatherRewards, isNull);
-      expect(missing.stakingRewards, isNull);
-      expect(WalletModel.fromJson(missing.toJson()).weatherRewards, isNull);
-      final reported = missing.copyWith(
-        weatherRewards: '2',
-        stakingRewards: '0',
+    }
+
+    test('reported zeros are real, a null earned stays unavailable', () async {
+      answer({
+        'address': chainAddress,
+        'balance': '0',
+        'height': 1,
+        'earned': null,
+      });
+      final wallet = await dataSource.getWallet(chainAddress);
+      expect(wallet.balance, '0');
+      expect(wallet.balanceText, '0 WRF');
+      expect(wallet.earnedBalanceTotal, isNull);
+    });
+
+    test('large base-unit strings survive without floating point', () async {
+      answer({
+        'address': chainAddress,
+        'balance': '9007199254740993123456789',
+        'height': 5,
+        'earned': '9007199254740993123456789',
+      });
+      final wallet = await dataSource.getWallet(chainAddress);
+      final json = WalletModel.fromJson(wallet.toJson()).toJson();
+      expect(json['balance'], '9007199254740993123456789');
+      expect(json['earnedBalanceTotal'], '9007199254740993123456789');
+    });
+
+    test('404 (public reads off) is Unavailable, never zero', () async {
+      answer({'error': 'Not found'}, status: 404);
+      final wallet = await dataSource.getWallet(chainAddress);
+      expect(wallet.balance, isNull);
+      expect(wallet.earnedBalanceTotal, isNull);
+      expect(wallet.balanceAvailability, BalanceAvailability.unavailable);
+      expect(wallet.balanceText, 'Unavailable');
+    });
+
+    test('429 (rate limited) is Busy', () async {
+      answer({'error': 'Too many requests'}, status: 429);
+      final wallet = await dataSource.getWallet(chainAddress);
+      expect(wallet.balance, isNull);
+      expect(wallet.balanceAvailability, BalanceAvailability.busy);
+      expect(wallet.balanceText, 'Busy');
+    });
+
+    test('other failures are thrown for the repository to map', () async {
+      answer({'error': 'boom'}, status: 503);
+      await expectLater(
+        dataSource.getWallet(chainAddress),
+        throwsA(isA<DioException>()),
       );
-      final cleared = (reported.copyWith as dynamic)(
-        weatherRewards: null,
-        stakingRewards: null,
-      ) as WalletModel;
-      expect(cleared.weatherRewards, isNull);
-      expect(cleared.stakingRewards, isNull);
+    });
+
+    for (final entry in {
+      'another address': {
+        'address': '0x${'1' * 40}',
+        'balance': '5',
+        'height': 1,
+        'earned': '5',
+      },
+      'a display amount': {
+        'address': chainAddress,
+        'balance': '1.5 WRF',
+        'height': 1,
+        'earned': '0',
+      },
+      'a negative balance': {
+        'address': chainAddress,
+        'balance': '-1',
+        'height': 1,
+        'earned': '0',
+      },
+      'no balance': {'address': chainAddress, 'height': 1, 'earned': '0'},
+      'an HTML page': '<html>Not found</html>',
+    }.entries) {
+      test('an answer with ${entry.key} is Unavailable', () async {
+        answer(entry.value);
+        final wallet = await dataSource.getWallet(chainAddress);
+        expect(wallet.balance, isNull);
+        expect(wallet.balanceAvailability, BalanceAvailability.unavailable);
+      });
+    }
+
+    test('a malformed earned total is unavailable, not zero', () async {
+      answer({
+        'address': chainAddress,
+        'balance': '7',
+        'height': 1,
+        'earned': '1.0',
+      });
+      final wallet = await dataSource.getWallet(chainAddress);
+      expect(wallet.balance, '7');
+      expect(wallet.earnedBalanceTotal, isNull);
     });
 
     test(
-      'unwraps wallet balance payloads and normalizes reward values',
+      'an address that is not 20 bytes is refused before any request',
       () async {
-        dio.interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) {
-              handler.resolve(
-                Response(
-                  requestOptions: options,
-                  data: const <String, dynamic>{
-                    'success': true,
-                    'data': {
-                      'address': 'wrf1wallet',
-                      'balance': '125.4589 WRF',
-                      'stakingRewards': '12.45 WRF',
-                      'weatherRewards': '8.92 WRF',
-                      'transactionCount': 7,
-                      'pendingTransactions': 2,
-                    },
-                  },
-                ),
-              );
-            },
-          ),
+        final paths = <String>[];
+        answer(const {}, paths: paths);
+        await expectLater(
+          dataSource.getWallet('wrf1wallet'),
+          throwsArgumentError,
         );
-
-        final wallet = await dataSource.getWallet('wrf1wallet');
-
-        expect(wallet.address, 'wrf1wallet');
-        expect(wallet.balance, '125.4589');
-        expect(wallet.stakingRewards, '12.45');
-        expect(wallet.weatherRewards, '8.92');
-        expect(wallet.transactions, 7);
-        expect(wallet.pendingTransactions, 2);
+        expect(paths, isEmpty);
       },
     );
 
-    test(
-      'backend1364 chain totals survive datasource and model roundtrip',
-      () async {
-        dio.interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) {
-              expect(options.path, '/wallet/wrf1wallet');
-              handler.resolve(
-                Response(
-                  requestOptions: options,
-                  data: {
-                    'success': true,
-                    'data': {
-                      'balance': '99900000000',
-                      'earned_balance_total': '9007199254740993123456789',
-                      'earnedBalanceTotal': '9007199254740993123456789',
-                      'weatherRewards': '125000000',
-                      'weatherRewardsPending': '25000000',
-                      'weatherRewardsUnavailable': null,
-                    },
-                  },
-                ),
-              );
-            },
-          ),
-        );
-        final wallet = await dataSource.getWallet('wrf1wallet');
-        final json = WalletModel.fromJson(wallet.toJson()).toJson();
-        expect(json['earnedBalanceTotal'], '9007199254740993123456789');
-        expect(json['weatherRewards'], '125000000');
-        expect(json['weatherRewardsPending'], '25000000');
-        expect(json['weatherRewardsUnavailable'], isNull);
-        expect(
-          wallet.stakingRewards,
-          isNull,
-          reason: 'no fabricated bonus split',
-        );
-      },
-    );
-
-    test(
-      'camel total alias and older-node unavailable reason are preserved',
-      () async {
-        dio.interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) {
-              handler.resolve(
-                Response(
-                  requestOptions: options,
-                  data: {
-                    'data': {
-                      'balance': '0',
-                      'earnedBalanceTotal': '700000000',
-                      'weatherRewards': null,
-                      'weatherRewardsPending': null,
-                      'weatherRewardsUnavailable':
-                          'This node does not report contribution rewards.',
-                    },
-                  },
-                ),
-              );
-            },
-          ),
-        );
-        final json = (await dataSource.getWallet('wrf1wallet')).toJson();
-        expect(json['earnedBalanceTotal'], '700000000');
-        expect(json['weatherRewards'], isNull);
-        expect(json['weatherRewardsPending'], isNull);
-        expect(
-          json['weatherRewardsUnavailable'],
-          'This node does not report contribution rewards.',
-        );
-      },
-    );
-
-    test('new-wallet reported zeros remain real chain reward values', () async {
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            handler.resolve(
-              Response(
-                requestOptions: options,
-                data: {
-                  'data': {
-                    'exists': false,
-                    'balance': '0',
-                    'earned_balance_total': '0',
-                    'weatherRewards': '0',
-                    'weatherRewardsPending': '0',
-                    'weatherRewardsUnavailable': null,
-                  },
-                },
-              ),
-            );
-          },
-        ),
+    test('model JSON and copyWith preserve unavailable values', () {
+      final missing = WalletModel.fromJson({'address': chainAddress});
+      expect(missing.balance, isNull);
+      expect(missing.balanceAvailability, BalanceAvailability.reported);
+      expect(missing.balanceText, 'Unavailable');
+      final busy = missing.copyWith(
+        balanceAvailability: BalanceAvailability.busy,
       );
-      final json = (await dataSource.getWallet('wrf1wallet')).toJson();
-      expect(json['earnedBalanceTotal'], '0');
-      expect(json['weatherRewardsPending'], '0');
+      expect(WalletModel.fromJson(busy.toJson()), busy);
     });
 
     test('unwraps transaction lists from paginated API responses', () async {

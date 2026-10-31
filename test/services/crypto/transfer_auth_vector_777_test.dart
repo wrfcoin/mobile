@@ -30,11 +30,17 @@ void main() {
     expect(vector['amount_unit'], 'integer base units (1 WRF = 100000000)');
   });
 
-  test('the shipped signing domain is the vector chain 777 / testnet', () {
+  // The vector stays pinned to chain 777, the chain core4 produced it for.
+  // The app's debug default moved to chain 888 (signed_transfer_test), so the
+  // vector is replayed at its own domain rather than the configured one.
+  final vectorDomain = TransferSigningDomain(
+    chainId: fixture['chain_id'] as String,
+    networkId: fixture['network_id'] as String,
+  );
+
+  test('the vector is for chain 777 / testnet', () {
     expect(fixture['chain_id'], '777');
     expect(fixture['network_id'], 'testnet');
-    expect(TransferSigningDomain.configured.chainId, fixture['chain_id']);
-    expect(TransferSigningDomain.configured.networkId, fixture['network_id']);
   });
 
   test('mobile rebuilds the preimage and reproduces the signature', () async {
@@ -55,7 +61,7 @@ void main() {
 
     final body = await buildSignedTransferBody(
       signer: await Ed25519TransferSigner.fromSeedHex(credentials.privateKey),
-      domain: TransferSigningDomain.configured,
+      domain: vectorDomain,
       from: credentials.address,
       to: fixture['to'] as String,
       amountBaseUnits: '${fixture['amount']}',

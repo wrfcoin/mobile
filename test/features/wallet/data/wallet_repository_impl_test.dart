@@ -59,7 +59,7 @@ void main() {
     expect((calls.last.data as Map)['amount'], '150000000');
   });
   test(
-    'WalletRepositoryImpl maps unwrap StateError into ServerFailure',
+    'WalletRepositoryImpl maps a non-20-byte address into ServerFailure',
     () async {
       final dio = Dio();
       dio.interceptors.add(
@@ -83,11 +83,11 @@ void main() {
           expect(failure, isA<ServerFailure>());
           expect(
             failure.message,
-            'Expected wallet API response to be an object.',
+            contains('address must be exactly 40 hex digits'),
           );
         },
         (_) {
-          fail('Expected wallet failure for invalid payload');
+          fail('Expected wallet failure for an invalid address');
         },
       );
     },

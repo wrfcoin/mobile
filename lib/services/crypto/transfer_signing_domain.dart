@@ -17,7 +17,7 @@ class TransferSigningDomain {
       defaultValue: (bool.fromEnvironment('dart.vm.product') ||
               bool.fromEnvironment('dart.vm.profile'))
           ? ''
-          : '777',
+          : '888',
     ),
     networkId: String.fromEnvironment('WRFCOIN_NETWORK_ID', defaultValue: 'testnet'),
   );
