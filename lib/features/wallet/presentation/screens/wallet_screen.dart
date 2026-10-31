@@ -591,6 +591,7 @@ class WalletScreen extends ConsumerWidget {
     ref.invalidate(transactionsProvider);
     ref.invalidate(backupConfirmedProvider);
     ref.invalidate(addressBookProvider);
+    ref.invalidate(sendAllowlistProvider);
     ref.invalidate(socialWalletProvider);
     ref.read(authHandoffControllerProvider).clear();
 
