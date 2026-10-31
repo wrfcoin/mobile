@@ -93,6 +93,7 @@ void main() {
       expect(result.rewardWrfTotal, 0);
       expect(result.rewardTotalsAvailable, isFalse);
       expect(result.lastSubmissionId, isNull);
+      expect(result.lastCommitId, isNull);
     });
 
     test('marks readings synced and captures submission metadata', () async {
@@ -117,6 +118,8 @@ void main() {
       expect(result.acceptedCount, 2);
       expect(result.failedCount, 0);
       expect(result.lastSubmissionId, 'sub-2');
+      // The phone's own commit id for the last accepted reading (proof card link).
+      expect(result.lastCommitId, matches(RegExp(r'^[0-9a-f]{64}$')));
       expect(result.lastSubmissionStatus, 'pending');
       expect(result.rewardTotalsAvailable, isFalse);
       expect(store.syncedIds, [1, 2]);

@@ -50,6 +50,7 @@ class CollectorState {
   final DateTime? lastSyncAttemptAt;
   final String? syncMessage;
   final String? lastSubmissionId;
+  final String? lastCommitId;
   final String? lastSubmissionStatus;
 
   const CollectorState({
@@ -69,6 +70,7 @@ class CollectorState {
     this.lastSyncAttemptAt,
     this.syncMessage,
     this.lastSubmissionId,
+    this.lastCommitId,
     this.lastSubmissionStatus,
   });
 
@@ -89,6 +91,7 @@ class CollectorState {
     Object? lastSyncAttemptAt = _noChange,
     Object? syncMessage = _noChange,
     Object? lastSubmissionId = _noChange,
+    Object? lastCommitId = _noChange,
     Object? lastSubmissionStatus = _noChange,
   }) {
     return CollectorState(
@@ -118,6 +121,9 @@ class CollectorState {
       lastSubmissionId: identical(lastSubmissionId, _noChange)
           ? this.lastSubmissionId
           : lastSubmissionId as String?,
+      lastCommitId: identical(lastCommitId, _noChange)
+          ? this.lastCommitId
+          : lastCommitId as String?,
       lastSubmissionStatus: identical(lastSubmissionStatus, _noChange)
           ? this.lastSubmissionStatus
           : lastSubmissionStatus as String?,
@@ -334,6 +340,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
         lastSyncAttemptAt: result.lastSyncAttemptAt,
         syncMessage: result.message,
         lastSubmissionId: result.lastSubmissionId,
+        lastCommitId: result.lastCommitId ?? state.lastCommitId,
         lastSubmissionStatus: result.lastSubmissionStatus,
       );
       _logger.info(
@@ -445,6 +452,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
       rewardTotalsAvailable: preferences.rewardTotalsAvailable,
       earnedRewardWrf: preferences.earnedRewardWrf,
       lastSubmissionId: preferences.lastSubmissionId,
+      lastCommitId: preferences.lastCommitId,
       lastSubmissionStatus: preferences.lastSubmissionStatus,
       // Lane 2: mark settings as loaded so settings-gated UI can render
       settingsLoaded: true,
@@ -475,6 +483,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
         rewardTotalsAvailable: state.rewardTotalsAvailable,
         earnedRewardWrf: state.earnedRewardWrf,
         lastSubmissionId: state.lastSubmissionId,
+        lastCommitId: state.lastCommitId,
         lastSubmissionStatus: state.lastSubmissionStatus,
       ),
     );

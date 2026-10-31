@@ -183,6 +183,7 @@ class CollectorRepository {
     var expiredCount = 0;
     String? lastErrorMessage;
     String? lastSubmissionId;
+    String? lastCommitId;
     String? lastSubmissionStatus;
     SubmitFailure? failure;
     SubmitRefusal? refusal;
@@ -296,6 +297,7 @@ class CollectorRepository {
           );
           acceptedIds.add(r.id);
           lastSubmissionId = _asString(payload['submissionId']);
+          lastCommitId = localCommitId;
           lastSubmissionStatus = _asString(payload['status']);
 
           final rewardAmount = _extractRewardWrf(payload);
@@ -341,6 +343,7 @@ class CollectorRepository {
       failedCount: readings.length - completedIds.length - expiredCount,
       errorMessage: lastErrorMessage,
       lastSubmissionId: lastSubmissionId,
+      lastCommitId: lastCommitId,
       lastSubmissionStatus: lastSubmissionStatus,
       rewardWrfTotal: rewardWrfTotal,
       rewardTotalsAvailable: rewardTotalsAvailable,
@@ -443,6 +446,9 @@ class BatchSubmissionResult {
   final int expiredCount;
   final String? errorMessage;
   final String? lastSubmissionId;
+
+  /// core4 commit id (64 lowercase hex) of the last reading the server accepted, computed on the phone.
+  final String? lastCommitId;
   final String? lastSubmissionStatus;
   final double rewardWrfTotal;
   final bool rewardTotalsAvailable;
@@ -460,6 +466,7 @@ class BatchSubmissionResult {
     this.expiredCount = 0,
     this.errorMessage,
     this.lastSubmissionId,
+    this.lastCommitId,
     this.lastSubmissionStatus,
     this.rewardWrfTotal = 0,
     this.rewardTotalsAvailable = false,

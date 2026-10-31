@@ -180,6 +180,11 @@ class ApiConstants {
   /// digits of the address with no prefix.
   static String publicBalance(String rawHex) => '/public/balance/0x$rawHex';
 
+  // Proof cards
+  /// Public proof card read (backend#229): `GET /api/proofs/<commit id>`,
+  /// relative to [baseUrl]. [commitId] is core4's 64 lowercase hex commit id.
+  static String proofCard(String commitId) => '/proofs/$commitId';
+
   /// Chain account nonce for signing a transfer (backend#1199: owner-bound,
   /// the JWT `sub` must equal [address]). Not the auth challenge at
   /// [walletNonce].

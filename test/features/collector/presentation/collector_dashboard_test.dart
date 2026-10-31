@@ -133,6 +133,45 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   }
 
+  testWidgets('offers Share proof card only for a real commit id', (
+    tester,
+  ) async {
+    await pumpDashboard(
+      tester,
+      preferencesState: const CollectorPreferencesState(
+        isCollecting: false,
+        intervalMinutes: 15,
+        batteryThreshold: 15,
+        lastSubmissionId: 'submission-42',
+        lastCommitId:
+            'c0ffee000000000000000000000000000000000000000000000000004d2a91e7',
+      ),
+      pendingCount: 0,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('collector-share-proof-card')),
+      300,
+    );
+    expect(find.text('Share proof card'), findsOneWidget);
+  });
+
+  testWidgets('no Share proof card without an accepted reading', (
+    tester,
+  ) async {
+    await pumpDashboard(
+      tester,
+      preferencesState: const CollectorPreferencesState(
+        isCollecting: false,
+        intervalMinutes: 15,
+        batteryThreshold: 15,
+        lastSubmissionId: 'submission-42',
+      ),
+      pendingCount: 0,
+    );
+    await tester.scrollUntilVisible(find.text('Rewards Breakdown'), 300);
+    expect(find.text('Share proof card'), findsNothing);
+  });
+
   testWidgets('shows reward unavailable copy when backend returns no totals', (
     tester,
   ) async {
