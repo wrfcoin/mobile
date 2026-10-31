@@ -316,6 +316,7 @@ class SyncWorker {
       String? lastError;
       var failures = 0;
       String? lastSubmissionId;
+      String? lastCommitId;
       String? lastSubmissionStatus;
       var rewardWrfTotal = 0.0;
       var rewardTotalsAvailable = false;
@@ -560,6 +561,7 @@ class SyncWorker {
         acceptedCount += result.acceptedCount;
         failedCount += result.failedCount;
         lastSubmissionId = result.lastSubmissionId ?? lastSubmissionId;
+        lastCommitId = result.lastCommitId ?? lastCommitId;
         lastSubmissionStatus =
             result.lastSubmissionStatus ?? lastSubmissionStatus;
         rewardWrfTotal += result.rewardWrfTotal;
@@ -666,6 +668,7 @@ class SyncWorker {
             ? SyncRunReason.success
             : reason,
         lastSubmissionId: lastSubmissionId,
+        lastCommitId: lastCommitId,
         lastSubmissionStatus: lastSubmissionStatus,
         rewardWrfTotal: rewardWrfTotal,
         rewardTotalsAvailable: rewardTotalsAvailable,
@@ -743,6 +746,7 @@ class SyncWorker {
     required String? message,
     required SyncRunReason reason,
     String? lastSubmissionId,
+    String? lastCommitId,
     String? lastSubmissionStatus,
     double rewardWrfTotal = 0,
     bool rewardTotalsAvailable = false,
@@ -762,6 +766,7 @@ class SyncWorker {
       message: message ?? metadata?.lastSyncError,
       reason: reason,
       lastSubmissionId: lastSubmissionId,
+      lastCommitId: lastCommitId,
       lastSubmissionStatus: lastSubmissionStatus,
       rewardWrfTotal: rewardWrfTotal,
       rewardTotalsAvailable: rewardTotalsAvailable,
@@ -818,6 +823,7 @@ class SyncRunResult {
   final String? message;
   final SyncRunReason reason;
   final String? lastSubmissionId;
+  final String? lastCommitId;
   final String? lastSubmissionStatus;
   final double rewardWrfTotal;
   final bool rewardTotalsAvailable;
@@ -843,6 +849,7 @@ class SyncRunResult {
     this.lastSyncAttemptAt,
     this.message,
     this.lastSubmissionId,
+    this.lastCommitId,
     this.lastSubmissionStatus,
     this.rewardWrfTotal = 0,
     this.rewardTotalsAvailable = false,

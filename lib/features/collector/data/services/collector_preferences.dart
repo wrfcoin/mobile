@@ -17,6 +17,7 @@ class CollectorPreferences {
   static const _rewardTotalsAvailableKey = 'collector.rewardTotalsAvailable';
   static const _earnedRewardWrfKey = 'collector.earnedRewardWrf';
   static const _lastSubmissionIdKey = 'collector.lastSubmissionId';
+  static const _lastCommitIdKey = 'collector.lastCommitId';
   static const _lastSubmissionStatusKey = 'collector.lastSubmissionStatus';
   static const _validationEventsKey = 'collector.validationEvents';
   static const _maxValidationEvents = 40;
@@ -31,6 +32,7 @@ class CollectorPreferences {
       rewardTotalsAvailable: prefs.getBool(_rewardTotalsAvailableKey) ?? false,
       earnedRewardWrf: prefs.getDouble(_earnedRewardWrfKey) ?? 0,
       lastSubmissionId: prefs.getString(_lastSubmissionIdKey),
+      lastCommitId: prefs.getString(_lastCommitIdKey),
       lastSubmissionStatus: prefs.getString(_lastSubmissionStatusKey),
     );
   }
@@ -48,6 +50,11 @@ class CollectorPreferences {
         prefs,
         key: _lastSubmissionIdKey,
         value: state.lastSubmissionId,
+      ),
+      _setNullableString(
+        prefs,
+        key: _lastCommitIdKey,
+        value: state.lastCommitId,
       ),
       _setNullableString(
         prefs,
@@ -111,6 +118,9 @@ class CollectorPreferencesState {
   final bool rewardTotalsAvailable;
   final double earnedRewardWrf;
   final String? lastSubmissionId;
+
+  /// core4 commit id of the newest accepted reading; the proof card link is built from it.
+  final String? lastCommitId;
   final String? lastSubmissionStatus;
 
   const CollectorPreferencesState({
@@ -121,6 +131,7 @@ class CollectorPreferencesState {
     this.rewardTotalsAvailable = false,
     this.earnedRewardWrf = 0,
     this.lastSubmissionId,
+    this.lastCommitId,
     this.lastSubmissionStatus,
   });
 }

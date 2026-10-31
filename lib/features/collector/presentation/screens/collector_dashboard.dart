@@ -24,6 +24,7 @@ import '../widgets/station_ownership_card.dart';
 import '../../data/services/mobile_station_status_service.dart';
 import '../../../../services/background/sync_worker.dart';
 import '../widgets/sync_status.dart';
+import '../../../social/proof_card_link.dart';
 
 class CollectorDashboard extends ConsumerWidget {
   const CollectorDashboard({super.key});
@@ -600,6 +601,22 @@ class CollectorDashboard extends ConsumerWidget {
                         label: 'Last Attempt',
                         value: _formatDateTime(state.lastSyncAttemptAt!),
                       ),
+                  ],
+                  if (proofCardPageUri(state.lastCommitId) != null) ...[
+                    const SizedBox(height: 12),
+                    // backend#229: the newest accepted reading opens as a
+                    // public proof card showing the block it landed in.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const Key('collector-share-proof-card'),
+                        onPressed: () => ref
+                            .read(proofCardLinkServiceProvider)
+                            .share(state.lastCommitId!),
+                        icon: const Icon(Icons.ios_share),
+                        label: const Text('Share proof card'),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 12),
                   Align(

@@ -23,6 +23,7 @@ void main() {
           rewardTotalsAvailable: true,
           earnedRewardWrf: 3.75,
           lastSubmissionId: 'submission-123',
+          lastCommitId: 'c0ffee000000000000000000000000000000000000000000000000004d2a91e7',
           lastSubmissionStatus: 'pending',
         ),
       );
@@ -36,6 +37,10 @@ void main() {
       expect(restored.rewardTotalsAvailable, isTrue);
       expect(restored.earnedRewardWrf, 3.75);
       expect(restored.lastSubmissionId, 'submission-123');
+      expect(
+        restored.lastCommitId,
+        'c0ffee000000000000000000000000000000000000000000000000004d2a91e7',
+      );
       expect(restored.lastSubmissionStatus, 'pending');
     });
 
