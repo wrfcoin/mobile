@@ -16,17 +16,17 @@
 #   WRFCOIN_LIVE_READER_TOKEN    core4 READER token (reads addresses; cannot submit)
 #   WRFCOIN_LIVE_FAUCET_ADDRESS  the faucet's chain address (public)
 # Optional:
-#   WRFCOIN_LIVE_BASE_URL        backend API base (default: the tailnet :5000 /api)
-#   WRFCOIN_LIVE_AUTH_ORIGIN     the backend's WRFCOIN_WALLET_AUTH_ORIGIN
-#   WRFCOIN_LIVE_PUBLIC_URL      public edge for the faucet claim (default: the tailnet edge on :9444)
+#   WRFCOIN_LIVE_BASE_URL        backend API base (default: https://wrfcoin.com/api, the public edge)
+#   WRFCOIN_LIVE_AUTH_ORIGIN     the backend's WRFCOIN_WALLET_AUTH_ORIGIN (default: https://wrfcoin.com)
+#   WRFCOIN_LIVE_PUBLIC_URL      public edge for the faucet claim (default: https://wrfcoin.com)
 #   WRFCOIN_LIVE_MNEMONIC_FILE   throwaway mnemonic (mode 600), default ~/.wrfcoin-live-send-check/mnemonic
 #   WRFCOIN_LIVE_AMOUNT          display WRF to send (default 1)
 #   WRFCOIN_LIVE_RECIPIENT       0x chain address to send TO; REQUIRED for `send`
 #   WRFCOIN_LIVE_SELF_TEST_RECIPIENT=1  explicit opt-in to a random throwaway recipient instead
 #   WRFCOIN_LIVE_FEE_BASE_UNITS  fee reserve the sender must hold above the amount (default 1000000 = 0.01 WRF)
 # `send` STOPs if the sender's spendable balance is below amount + fee reserve.
-# Base URL: the default is the tailnet :5000 /api. For the owner run prefer the edge,
-# WRFCOIN_LIVE_BASE_URL=https://wrfcoin-testnet.taila1c049.ts.net:9444/api (see docs/testing/live-send-smoke-owner.md).
+# Base URL: the default is the public edge, the same API host the release app uses
+# (docs/RELEASING.md). Set the WRFCOIN_LIVE_* variables above to point it elsewhere.
 #
 # What it does and does not do: signs with chain 888 / testnet (pinned in the Dart
 # test, not a build-time override); prints only addresses, nonces, tx ids and
@@ -47,12 +47,11 @@ STEP=${1:-}
 cd "$(dirname "$0")/.."
 
 export WRFCOIN_LIVE_SEND_CHECK=1
-export WRFCOIN_LIVE_BASE_URL=${WRFCOIN_LIVE_BASE_URL:-http://wrfcoin-testnet.taila1c049.ts.net:5000/api}
-export WRFCOIN_LIVE_AUTH_ORIGIN=${WRFCOIN_LIVE_AUTH_ORIGIN:-https://wrfcoin-testnet.taila1c049.ts.net}
+export WRFCOIN_LIVE_BASE_URL=${WRFCOIN_LIVE_BASE_URL:-https://wrfcoin.com/api}
+export WRFCOIN_LIVE_AUTH_ORIGIN=${WRFCOIN_LIVE_AUTH_ORIGIN:-https://wrfcoin.com}
 export WRFCOIN_LIVE_MNEMONIC_FILE=${WRFCOIN_LIVE_MNEMONIC_FILE:-$HOME/.wrfcoin-live-send-check/mnemonic}
 export WRFCOIN_LIVE_AMOUNT=${WRFCOIN_LIVE_AMOUNT:-1}
-# The edge serves invitees on :9444; the bare host has no listener there, so the default carries the port.
-PUBLIC=${WRFCOIN_LIVE_PUBLIC_URL:-https://wrfcoin-testnet.taila1c049.ts.net:9444}
+PUBLIC=${WRFCOIN_LIVE_PUBLIC_URL:-https://wrfcoin.com}
 TEST=test/integration/live_testnet_send_check_test.dart
 
 usage() { echo "usage: $0 check|claim|send" >&2; exit 2; }

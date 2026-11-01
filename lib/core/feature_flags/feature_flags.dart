@@ -20,7 +20,7 @@ class FeatureFlags {
     this.enableNftPortfolio = false,
     this.enableCarbonLottery = false,
     this.enableMultiWallet = false,
-    this.enableFriendChallenges = false,
+    this.enableFriendChallenges = true,
   });
 
   /// Weather station clusters, group challenges, and neighbourhood chat.
@@ -79,9 +79,9 @@ class FeatureFlags {
 
   /// Friend Challenges (mobile#260, backend#249): the screen talks to the
   /// backend `/api/challenges` service (create, join by invite code, counts
-  /// from chain readings, points only). Default off until the backend's
-  /// FRIEND_CHALLENGES_ENABLED is on for the network; with it off the screen
-  /// shows the honest "unavailable" state and makes no request.
+  /// from chain readings, points only). Default on: the service is live on
+  /// the public testnet. Turned off, the screen shows the honest
+  /// "unavailable" state and makes no request.
   final bool enableFriendChallenges;
 
   FeatureFlags copyWith({
@@ -161,7 +161,7 @@ class FeatureFlagsNotifier extends Notifier<FeatureFlags> {
       enableNftPortfolio: _prefs.getBool(_keyNftPortfolio) ?? false,
       enableCarbonLottery: _prefs.getBool(_keyCarbonLottery) ?? false,
       enableMultiWallet: _prefs.getBool(_keyMultiWallet) ?? false,
-      enableFriendChallenges: _prefs.getBool(_keyFriendChallenges) ?? false,
+      enableFriendChallenges: _prefs.getBool(_keyFriendChallenges) ?? true,
     );
   }
 

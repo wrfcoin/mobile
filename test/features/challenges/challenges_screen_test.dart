@@ -15,7 +15,7 @@ import '../../test_helpers/fakes.dart';
 
 void main() {
   testWidgets(
-    'release route blocks Friend Challenges while its flag is off (the default)',
+    'release route blocks Friend Challenges when its flag is turned off',
     (tester) async {
       final router = GoRouter(
         initialLocation: '/collect/challenges',
@@ -28,8 +28,10 @@ void main() {
       );
       addTearDown(router.dispose);
 
-      // The release default: enableFriendChallenges is off.
-      SharedPreferences.setMockInitialValues({});
+      // The flag is on by default; this checks the turned-off state.
+      SharedPreferences.setMockInitialValues({
+        'ff_enableFriendChallenges': false,
+      });
       final prefs = await SharedPreferences.getInstance();
       await tester.pumpWidget(
         ProviderScope(

@@ -14,7 +14,7 @@
 //
 //   WRFCOIN_LIVE_SEND_CHECK=1   required; anything else skips this file
 //   WRFCOIN_LIVE_STEP           wallet | check | send
-//   WRFCOIN_LIVE_BASE_URL       backend API base, e.g. http://wrfcoin-testnet.taila1c049.ts.net:5000/api
+//   WRFCOIN_LIVE_BASE_URL       backend API base, e.g. https://wrfcoin.com/api
 //   WRFCOIN_LIVE_AUTH_ORIGIN    the backend's WRFCOIN_WALLET_AUTH_ORIGIN
 //   WRFCOIN_LIVE_MNEMONIC_FILE  0600 file holding the throwaway mnemonic (created if absent)
 //   WRFCOIN_LIVE_NODE_URL       core4 launch_api reachable from this machine (Reader reads)

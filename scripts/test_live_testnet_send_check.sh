@@ -120,12 +120,12 @@ for variant in 'doubled space:legal  winner thank year wave sausage worth useful
   done
 done
 rm -f "$STUB/mnemonic"
-# --- owner-run gaps: progress lines, curl time limits, :9444 default, timeout outcomes
+# --- owner-run gaps: progress lines, curl time limits, public edge default, timeout outcomes
 run_claim2 "$GOODCH" '{}'; rc=$?
 grep -q 'running flutter step: check' "$STUB/out" && grep -q 'requesting faucet challenge' "$STUB/out" && ok "progress lines before flutter and the challenge request" || bad "progress lines"
 grep -q -- '--max-time 20' <(grep '/challenge' "$STUB/argv") && ok "challenge curl has --max-time 20" || bad "challenge --max-time"
 grep -q -- '--max-time 30' <(grep '/claim' "$STUB/argv") && ok "claim curl has --max-time 30" || bad "claim --max-time"
-grep -q ':9444/api/onboarding/faucet/challenge' "$STUB/urls" && ok "default public URL includes :9444" || bad "default public URL lacks :9444"
+grep -q '^https://wrfcoin.com/api/onboarding/faucet/challenge' "$STUB/urls" && ok "default public URL is the public edge" || bad "default public URL is not https://wrfcoin.com"
 STUB_CH_RC=28 run_claim2 "$GOODCH" '{}'; rc=$?
 [[ $rc -eq 1 ]] && grep -q 'STOP' "$STUB/out" && grep -q 'no claim was made' "$STUB/out" && ! grep -q '/claim' "$STUB/urls" && ok "challenge timeout: STOP, no claim" || bad "challenge timeout (rc=$rc)"
 STUB_CLAIM_RC=28 run_claim2 "$GOODCH" '{}'; rc=$?
