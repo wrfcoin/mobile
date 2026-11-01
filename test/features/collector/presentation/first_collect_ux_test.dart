@@ -20,8 +20,10 @@ import 'package:wrfcoin_mobile/features/collector/presentation/screens/collector
 import 'package:wrfcoin_mobile/features/settings/presentation/screens/privacy_center_screen.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_provider.dart';
+import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
 import 'package:wrfcoin_mobile/services/api/api_client.dart';
 import 'package:wrfcoin_mobile/services/background/sync_worker.dart';
+import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
 import 'package:wrfcoin_mobile/services/location/location_service.dart';
 import 'package:wrfcoin_mobile/services/observability/app_logger.dart';
 import 'package:wrfcoin_mobile/services/storage/local_db.dart';
@@ -146,6 +148,14 @@ void main() {
           ),
           challengeRepositoryProvider.overrideWithValue(
             FakeChallengeRepository(),
+          ),
+          // Friend Challenges is on by default, so the dashboard reads the
+          // wallet address; keep it off the platform secure storage.
+          keyManagerProvider.overrideWithValue(
+            KeyManager(
+              biometric: BiometricService(client: FakeLocalAuthClient()),
+              storage: InMemoryKeyValueStorage(),
+            ),
           ),
         ],
         child: MaterialApp(

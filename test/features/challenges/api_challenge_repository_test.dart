@@ -195,7 +195,9 @@ void main() {
   test(
     'the flag picks the service: off is the unavailable repository',
     () async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        'ff_enableFriendChallenges': false,
+      });
       final prefs = await SharedPreferences.getInstance();
       final container = ProviderContainer(
         overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
@@ -210,7 +212,18 @@ void main() {
           .read(featureFlagsProvider.notifier)
           .setFriendChallenges(enabled: true);
       expect(container.read(challengeCapabilityProvider).available, isTrue);
-      expect(const FeatureFlags().enableFriendChallenges, isFalse);
     },
   );
+
+  test('the flag is on by default: the backend service is used', () async {
+    expect(const FeatureFlags().enableFriendChallenges, isTrue);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final container = ProviderContainer(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+    );
+    addTearDown(container.dispose);
+    expect(container.read(featureFlagsProvider).enableFriendChallenges, isTrue);
+    expect(container.read(challengeCapabilityProvider).available, isTrue);
+  });
 }
