@@ -341,8 +341,14 @@ class SyncWorker {
             ).fetch(owner);
         final holdKey = 'mobile_station_activation_hold:$stationId';
         if (status.cached || status.phase != MobileStationPhase.onChain) {
-          // Durable and station-bound: survives process/background restarts.
-          await db.upsertOfflineData(holdKey, 'awaiting');
+          // A hold means the server said this station is not active yet. It
+          // is durable and station-bound, surviving process/background
+          // restarts. A failed check (cached or unknown) says nothing about
+          // the station, so it stops this run but sets no hold: the hold's
+          // release deletes the queue.
+          if (!status.cached && status.phase != MobileStationPhase.unknown) {
+            await db.upsertOfflineData(holdKey, 'awaiting');
+          }
           if (!status.cached &&
               (status.phase == MobileStationPhase.dbOnly ||
                   status.phase == MobileStationPhase.submitted)) {

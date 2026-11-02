@@ -60,6 +60,8 @@ class ApiClient {
     // Test seams for the login guard's clock and jitter source.
     DateTime Function()? loginGuardClock,
     double Function()? loginGuardRandom,
+    // Test seam: the wait before a refresh 401 is believed.
+    Future<void> Function()? refreshSettle,
   }) : _authSession = keyManager == null
            ? null
            : _AuthSessionCoordinator(
@@ -76,6 +78,7 @@ class ApiClient {
                  random: loginGuardRandom,
                ),
                canStartLogin: canStartLogin,
+               refreshSettle: refreshSettle ?? _defaultRefreshSettle,
              ) {
     if (dio != null) {
       this.dio = dio;
@@ -114,6 +117,9 @@ class ApiClient {
       ),
     );
   }
+
+  static Future<void> _defaultRefreshSettle() =>
+      Future.delayed(const Duration(seconds: 2));
 
   /// Ensures a session for automatic callers (sync, wallet screen). It may
   /// renew a session with its refresh token, but it never starts a wallet
@@ -235,6 +241,7 @@ class _AuthSessionCoordinator {
   final Ed25519LoginExpectation _ed25519LoginExpectation;
   final LoginAttemptGuard _loginGuard;
   final bool _canStartLogin;
+  final Future<void> Function() _refreshSettle;
 
   /// One token request at a time per isolate, shared by every coordinator:
   /// the foreground holds several ApiClients (the provider's and each
@@ -248,6 +255,7 @@ class _AuthSessionCoordinator {
     required this._ed25519LoginExpectation,
     required this._loginGuard,
     required this._canStartLogin,
+    required this._refreshSettle,
   });
 
   Future<bool> ensureAuthenticated() async {
@@ -526,6 +534,19 @@ class _AuthSessionCoordinator {
       // may also come back as 403. Connection errors, timeouts, 429 and 5xx
       // keep the refresh token for a later retry.
       if (status == 401 || status == 403) {
+        // Refreshing rotates the token, and the guard above is per isolate:
+        // the app, the sync worker and the collection service can all send
+        // the same one. The loser's 401 says nothing about the session, so
+        // give the winner a moment to save its answer before believing it.
+        if (await _keyManager.getRefreshToken() == refreshToken) {
+          await _refreshSettle();
+        }
+        if (await _keyManager.getRefreshToken() != refreshToken) {
+          final jwt = await _keyManager.getAuthToken();
+          return jwt == null
+              ? const _RefreshResult(_RefreshKind.transient)
+              : _RefreshResult(_RefreshKind.renewed, jwt);
+        }
         await _keyManager.clearAuthSession();
         return const _RefreshResult(_RefreshKind.rejected);
       }
