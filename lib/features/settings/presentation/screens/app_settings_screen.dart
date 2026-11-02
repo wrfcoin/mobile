@@ -11,6 +11,7 @@ import '../../../onboarding/presentation/providers/onboarding_controller.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../wallet/presentation/emergency_wipe.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
+import '../../../wallet/presentation/widgets/testnet_notice.dart';
 import '../widgets/diagnostics_card.dart';
 
 class AppSettingsScreen extends ConsumerWidget {
@@ -264,13 +265,14 @@ class AppSettingsScreen extends ConsumerWidget {
                 leading: const Icon(Icons.info_outline),
                 title: const Text('About'),
                 subtitle: const Text(
-                  'App name, licence and open-source notices.',
+                  'App name, licence, testnet notice and open-source notices.',
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => showAboutDialog(
                   context: context,
                   applicationName: 'WRFCoin',
                   applicationLegalese: 'Licensed under MIT OR Apache-2.0.',
+                  children: const [SizedBox(height: 16), TestnetNoticeText()],
                 ),
               ),
             ],
