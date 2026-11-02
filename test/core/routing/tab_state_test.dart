@@ -22,6 +22,7 @@ import 'package:wrfcoin_mobile/features/wallet/domain/repositories/wallet_reposi
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/create_wallet_screen.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/forecast_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
+import 'package:wrfcoin_mobile/features/wallet/presentation/screens/recovery_phrase_screen.dart';
 import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.dart';
 import 'package:wrfcoin_mobile/features/weather/presentation/providers/weather_provider.dart';
 import 'package:wrfcoin_mobile/features/weather/presentation/screens/forecast_dashboard.dart';
@@ -424,6 +425,45 @@ void main() {
     );
     await tapTab(tester, 'Wallet');
     expect(router.state.uri.path, '/wallet');
+  });
+
+  group('the guarded phrase backup', () {
+    Finder phrase() => find.byType(RecoveryPhraseScreen, skipOffstage: false);
+
+    for (final size in const [Size(390, 500), Size(1280, 800)]) {
+      testWidgets('opens over the shell at ${size.width.toInt()} px, with no '
+          'tab to leave it for', (tester) async {
+        final router = await pumpApp(tester, size: size);
+        router.push('/profile/settings');
+        await pumpFrames(tester);
+        router.push('/wallet/recovery-phrase');
+        await pumpFrames(tester);
+        expect(find.byType(RecoveryPhraseScreen), findsOneWidget);
+        expect(find.byType(BottomNavigationBar), findsNothing);
+        expect(find.byType(NavigationRail), findsNothing);
+
+        router.pop();
+        await pumpFrames(tester);
+        expect(find.byType(AppSettingsScreen), findsOneWidget);
+        expect(phrase(), findsNothing, reason: 'closed, not kept');
+      });
+    }
+
+    testWidgets('closes when something else takes the app to a tab', (
+      tester,
+    ) async {
+      final router = await pumpApp(tester);
+      router.push('/wallet/recovery-phrase');
+      await pumpFrames(tester);
+      expect(find.byType(RecoveryPhraseScreen), findsOneWidget);
+
+      router.go('/collect');
+      await pumpFrames(tester);
+      expect(selectedTab(tester), 1);
+      expect(phrase(), findsNothing, reason: 'not kept behind a tab');
+      await tapTab(tester, 'Wallet');
+      expect(phrase(), findsNothing);
+    });
   });
 
   testWidgets('Earnings keeps its list, and refetches after a minute away', (

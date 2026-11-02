@@ -12,8 +12,11 @@ import 'package:wrfcoin_mobile/core/localization/app_localizations.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/station_registration_service.dart';
 import 'package:wrfcoin_mobile/features/settings/presentation/screens/app_settings_screen.dart';
+import 'package:wrfcoin_mobile/features/wallet/data/models/address_book_entry.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/wallet/domain/send_allowlist.dart';
+import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_security_provider.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/wallet_screen.dart';
 import 'package:wrfcoin_mobile/services/api/api_client.dart';
 import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
@@ -86,6 +89,7 @@ void main() {
     bool metadataFails = false,
     bool keysFail = false,
     bool markerFails = false,
+    void Function(_WalletData)? seed,
   }) async {
     events = [];
     collectGate = Completer<void>();
@@ -96,6 +100,7 @@ void main() {
     );
     await walletKeys.write(key: 'wrf_address', value: _address);
     walletData = _WalletData(events, fail: metadataFails);
+    seed?.call(walletData);
     SharedPreferences.setMockInitialValues({
       StationRegistrationService.registeredStationKey: 'synthetic marker',
     });
@@ -194,6 +199,40 @@ void main() {
     expect(
       prefs.getString(StationRegistrationService.registeredStationKey),
       isNull,
+    );
+  });
+
+  testWidgets('the wipe says, and does, erase contacts and the allowlist', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      seed: (data) {
+        data.saveAddressBook(const [
+          AddressBookEntry(label: 'Mom', address: _address),
+        ]);
+        data.sendAllowlist = const SendAllowlistSettings(enabled: true);
+      },
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppSettingsScreen)),
+    );
+    expect(await container.read(addressBookProvider.future), hasLength(1));
+    expect(
+      (await container.read(sendAllowlistProvider.future)).enabled,
+      isTrue,
+    );
+
+    collectGate.complete();
+    await frames(tester);
+
+    expect(await walletData.getAddressBook(), isEmpty);
+    expect(walletData.sendAllowlist.enabled, isFalse);
+    // What is on screen must not keep the old answer either.
+    expect(await container.read(addressBookProvider.future), isEmpty);
+    expect(
+      (await container.read(sendAllowlistProvider.future)).enabled,
+      isFalse,
     );
   });
 

@@ -30,6 +30,9 @@ const _destinations = <String, String>{
   'Recover a station': '/collect/station-recovery',
   'Collector validation': '/collect/validation',
   'Field mode': '/collect/field-mode',
+  'Contacts': '/wallet/contacts',
+  'Send allowlist': '/wallet/allowlist',
+  'Back up recovery phrase': '/wallet/recovery-phrase',
 };
 
 Widget _app({
@@ -140,6 +143,10 @@ void main() {
       'Transfer a station',
       'Accept a station',
       'Calibration certificates',
+      'Wallet',
+      'Contacts',
+      'Send allowlist',
+      'Back up recovery phrase',
       'Alerts & notifications',
       'Weather alerts',
       'Payout notifications',

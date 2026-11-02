@@ -36,7 +36,7 @@ Future<void> confirmEmergencyWipe(BuildContext context, WidgetRef ref) async {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'This will erase the collect key, weather-station registration, wallet, recovery metadata, address book, and active session data from this device.',
+                      'This will erase the collect key, weather-station registration, wallet, recovery metadata, contacts, send allowlist, and active session data from this device.',
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -112,6 +112,7 @@ Future<void> confirmEmergencyWipe(BuildContext context, WidgetRef ref) async {
   ref.invalidate(transactionsProvider);
   ref.invalidate(backupConfirmedProvider);
   ref.invalidate(addressBookProvider);
+  ref.invalidate(sendAllowlistProvider);
   ref.invalidate(socialWalletProvider);
   ref.invalidate(pendingSendProvider);
   ref.read(authHandoffControllerProvider).clear();

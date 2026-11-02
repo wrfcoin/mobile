@@ -35,6 +35,9 @@ import '../../features/gamification/presentation/providers/role_earnings_provide
 import '../../features/wallet/presentation/providers/transactions_provider.dart';
 import '../../features/wallet/presentation/screens/wallet_screen.dart';
 import '../../features/analytics/presentation/screens/analytics_dashboard_screen.dart';
+import '../../features/wallet/presentation/screens/address_book_screen.dart';
+import '../../features/wallet/presentation/screens/recovery_phrase_screen.dart';
+import '../../features/wallet/presentation/screens/send_allowlist_screen.dart';
 import '../../features/wallet/presentation/screens/send_screen.dart';
 import '../../features/wallet/presentation/screens/receive_screen.dart';
 import '../../features/wallet/presentation/screens/create_wallet_screen.dart';
@@ -138,6 +141,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // Public chain data; needs no session.
         '/wallet/chain',
         '/wallet/nodes',
+        // Device-only: contacts, allowlist and the phrase backup never need
+        // a session (the phrase is never part of sign-in).
+        '/wallet/contacts',
+        '/wallet/allowlist',
+        '/wallet/recovery-phrase',
       };
 
       if (walletConnectPaths.contains(state.matchedLocation)) {
@@ -162,6 +170,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/weather/ar',
         pageBuilder: (context, state) =>
             _fadePage(key: state.pageKey, child: const ArViewerScreen()),
+      ),
+      // Outside the shell: with no navigation bar there is no tab to leave it
+      // for, so the phrase and the screenshot block can't stay on behind one.
+      GoRoute(
+        path: '/wallet/recovery-phrase',
+        pageBuilder: (context, state) =>
+            _fadePage(key: state.pageKey, child: const RecoveryPhraseScreen()),
       ),
       // An indexed stack: every tab keeps its screen, its data and its scroll
       // position while another tab is showing. A branch is built on its first
@@ -415,6 +430,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (context, state) => _fadePage(
                       key: state.pageKey,
                       child: const CreateWalletScreen(),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'contacts',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: const AddressBookScreen(),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'allowlist',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: const SendAllowlistScreen(),
                     ),
                   ),
                   GoRoute(

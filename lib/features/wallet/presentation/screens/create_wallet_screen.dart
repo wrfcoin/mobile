@@ -297,6 +297,14 @@ class _CreateWalletScreenState extends ConsumerState<CreateWalletScreen>
                 'Recovery phrase (12 words)',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
+              const SizedBox(height: 4),
+              const Text(
+                'Write these words on paper and keep them safe. This is the '
+                'only time the app shows them unasked. You will not need '
+                'them to sign in or send; only to restore this wallet on a '
+                'new phone.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
               const SizedBox(height: 8),
               if (_obscuredByLifecycle)
                 const _PhrasePlaceholder(
