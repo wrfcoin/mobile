@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -517,6 +519,65 @@ void main() {
       await tester.pumpAndSettle();
       expect(await storage.getAddressBook(), isEmpty);
     });
+
+    testWidgets(
+      'at 390 px the address is one short line; a tap shows it whole',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const address = '0x1747c0169753965c854230c59c876be0f9b5a275';
+        String? copied;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied = (call.arguments as Map)['text'] as String;
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        await _pump(
+          tester,
+          const AddressBookScreen(),
+          storage: FakeWalletSecureStorage(
+            addressBook: [
+              const AddressBookEntry(label: 'Mom', address: address),
+            ],
+          ),
+          keyManager: await _keyManager(),
+        );
+
+        final line = find.text('0x1747…a275');
+        expect(line, findsOneWidget);
+        expect(find.text(address), findsNothing);
+        expect(tester.widget<Text>(line).maxLines, 1);
+        final paragraph = tester.renderObject<RenderParagraph>(line);
+        expect(
+          paragraph.didExceedMaxLines,
+          isFalse,
+          reason: 'the short form fits on its line at 390 px',
+        );
+
+        await tester.tap(find.text('Mom'));
+        await tester.pumpAndSettle();
+        final field = tester.widget<TextFormField>(
+          find.byKey(const Key('contact-address')),
+        );
+        expect(field.controller!.text, address);
+        await tester.tap(find.byKey(const Key('contact-copy-address')));
+        await tester.pumpAndSettle();
+        expect(copied, address);
+        expect(find.text('Address copied.'), findsOneWidget);
+      },
+    );
 
     testWidgets('import adds valid contacts, none allowed', (tester) async {
       final storage = FakeWalletSecureStorage(
