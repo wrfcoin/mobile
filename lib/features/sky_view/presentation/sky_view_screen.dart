@@ -62,6 +62,10 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
   final _pose = ValueNotifier<SkyPose?>(null);
   final _labels = SkyLabelCache();
   AttitudeSmoother _smoother = AttitudeSmoother(tau: _fusedTau);
+
+  /// Real time between sensor readings. Frames stop while the phone rests, but
+  /// the smoother still has to see how fast the readings are changing.
+  final _sampleClock = Stopwatch()..start();
   Duration _lastFrame = Duration.zero;
   List<SkyFix> _fixes = const [];
   DateTime? _fixesAt;
@@ -285,12 +289,11 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
     _target = attitude;
     _lastSampleAt = _now();
     _refreshFixes();
-    final current = _smoother.current;
-    final moved =
-        current == null ||
-        current.degreesTo(attitude) >= AttitudeSmoother.deadBandDegrees;
+    final sinceSample = _sampleClock.elapsedMicroseconds / 1e6;
+    _sampleClock.reset();
+    _smoother.observe(attitude, sinceSample);
     // A resting phone asks for no frames at all, even though samples still come.
-    if (moved && !_ticker.isActive) {
+    if (_smoother.wantsFrames(attitude) && !_ticker.isActive) {
       _lastFrame = Duration.zero;
       _ticker.start();
     }

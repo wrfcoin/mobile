@@ -349,6 +349,160 @@ void main() {
       expect(q.towards(negated, 0.5).degreesTo(q), lessThan(1e-6));
     });
 
+    // Synthetic streams at the sensor's 30 Hz. A fixed seed keeps them repeatable.
+    group('holding still', () {
+      const dt = 1 / 30;
+      double azimuthOf(AttitudeSmoother smoother) =>
+          SkyPose.from(smoother.current!).boresight.azimuth;
+
+      test('a still phone with sensor noise does not move the view', () {
+        final random = math.Random(7);
+        double noise() => (random.nextDouble() - 0.5) * 0.1;
+        final smoother = AttitudeSmoother(tau: 0.08)
+          ..step(_pointing(100, 30), dt);
+        final start = smoother.current!;
+        var redraws = 0;
+        for (var i = 0; i < 30 * 60; i++) {
+          final noisy = _pointing(100 + noise(), 30 + noise());
+          if (smoother.step(noisy, dt)) redraws++;
+        }
+        expect(smoother.current!.degreesTo(start), lessThan(0.15));
+        expect(redraws, lessThan(30), reason: 'a resting phone stops drawing');
+        expect(
+          smoother.wantsFrames(_pointing(100, 30)),
+          isFalse,
+          reason: 'no frames requested once it is holding',
+        );
+      });
+
+      test('wander back and forth is mostly hidden', () {
+        // Plus or minus 0.3 degrees over 20 s, as the magnetic correction hunts.
+        final smoother = AttitudeSmoother(tau: 0.08)
+          ..step(_pointing(100, 30), dt);
+        var low = 100.0, high = 100.0;
+        for (var i = 0; i < 30 * 60; i++) {
+          final az = 100 + 0.3 * math.sin(2 * math.pi * i * dt / 20);
+          smoother.step(_pointing(az, 30), dt);
+          low = math.min(low, azimuthOf(smoother));
+          high = math.max(high, azimuthOf(smoother));
+        }
+        expect(high - low, lessThan(0.6 / 2), reason: 'raw range is 0.6');
+      });
+
+      test('slow drift comes through gently and fully', () {
+        // 6 degrees over 30 s: a true heading correction, 0.2 degrees a second.
+        final smoother = AttitudeSmoother(tau: 0.08)
+          ..step(_pointing(100, 30), dt);
+        var az = 100.0, shown = azimuthOf(smoother), biggestStep = 0.0;
+        for (var i = 0; i < 30 * 30; i++) {
+          az += 0.2 * dt;
+          smoother.step(_pointing(az, 30), dt);
+          final now = azimuthOf(smoother);
+          biggestStep = math.max(biggestStep, (now - shown).abs());
+          shown = now;
+        }
+        expect(biggestStep, lessThan(0.05), reason: 'no visible jumps');
+        expect(shown, greaterThan(105), reason: 'it follows the correction');
+        // The correction is over. It must not stay hidden.
+        final settled = _pointing(az, 30);
+        for (var i = 0; i < 30 * 10; i++) {
+          smoother.step(settled, dt);
+        }
+        expect(
+          smoother.current!.degreesTo(settled),
+          lessThanOrEqualTo(AttitudeSmoother.holdDegrees + 1e-6),
+        );
+      });
+
+      test('the gap under steady drift stays bounded', () {
+        final smoother = AttitudeSmoother(tau: 0.08)
+          ..step(_pointing(100, 30), dt);
+        var az = 100.0;
+        for (var i = 0; i < 30 * 120; i++) {
+          // Just under the 1 degree a second that reads as motion.
+          az += 0.5 * dt;
+          final target = _pointing(az, 30);
+          smoother.step(target, dt);
+          expect(smoother.current!.degreesTo(target), lessThan(2));
+        }
+      });
+
+      for (final (name, degreesPerSecond, maxLag, maxSamples) in [
+        ('a slow pan', 5.0, 0.8, 3),
+        ('an ordinary turn', 30.0, 2.5, 1),
+        ('a fast swing', 120.0, 12.0, 0),
+      ]) {
+        test('$name follows at once', () {
+          final held = AttitudeSmoother(tau: 0.08)
+            ..step(_pointing(100, 30), dt);
+          // Rest first, as a real move starts from holding.
+          for (var i = 0; i < 60; i++) {
+            held.step(_pointing(100, 30), dt);
+          }
+          expect(held.step(_pointing(100, 30), dt), isFalse);
+          // How many samples until the view starts moving.
+          var firstMove = -1;
+          var az = 100.0;
+          for (var i = 0; i < 15; i++) {
+            az += degreesPerSecond * dt;
+            if (held.step(_pointing(az, 30), dt) && firstMove < 0) {
+              firstMove = i;
+            }
+          }
+          expect(firstMove, inInclusiveRange(0, maxSamples));
+          expect(held.current!.degreesTo(_pointing(az, 30)), lessThan(maxLag));
+        });
+      }
+
+      test('a move starting from holding adds no lag once it is going', () {
+        double lagFrom(AttitudeSmoother smoother) {
+          var az = 100.0;
+          for (var i = 0; i < 30; i++) {
+            az += 30 * dt;
+            smoother.step(_pointing(az, 30), dt);
+          }
+          return smoother.current!.degreesTo(_pointing(az, 30));
+        }
+
+        final held = AttitudeSmoother(tau: 0.08)..step(_pointing(100, 30), dt);
+        // Follow lag is at most speed times tau: the filter's, nothing added.
+        expect(lagFrom(held), lessThan(30 * 0.08));
+      });
+
+      test('a finished move lands fully, without a slow tail', () {
+        final smoother = AttitudeSmoother(tau: 0.08)
+          ..step(_pointing(100, 30), dt);
+        var az = 100.0;
+        for (var i = 0; i < 30; i++) {
+          az += 30 * dt;
+          smoother.step(_pointing(az, 30), dt);
+        }
+        final end = _pointing(az, 30);
+        for (var i = 0; i < 15; i++) {
+          smoother.step(end, dt);
+        }
+        expect(
+          smoother.current!.degreesTo(end),
+          lessThanOrEqualTo(AttitudeSmoother.holdDegrees),
+        );
+      });
+
+      test('frames can stop while samples still decide the mode', () {
+        // As the screen does it: observe every sample, step only on frames.
+        final smoother = AttitudeSmoother(tau: 0.08)
+          ..step(_pointing(100, 30), dt);
+        for (var i = 0; i < 30; i++) {
+          final still = _pointing(100.05, 30);
+          smoother.observe(still, dt);
+          expect(smoother.wantsFrames(still), isFalse);
+        }
+        final moved = _pointing(101, 30);
+        smoother.observe(moved, dt);
+        expect(smoother.wantsFrames(moved), isTrue);
+        expect(smoother.step(moved, dt), isTrue);
+      });
+    });
+
     test('a resting phone stops asking for frames', () {
       final smoother = AttitudeSmoother(tau: 0.1);
       expect(smoother.step(_pointing(50, 20), 1 / 30), isTrue);
