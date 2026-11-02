@@ -179,7 +179,6 @@ class FakeWalletRepository implements WalletRepository {
     String address, {
     int offset = 0,
     int limit = 20,
-    String? creditAfter,
     CancelToken? cancelToken,
   }) async {
     final slice = transactions.skip(offset).take(limit).toList();

@@ -19,11 +19,13 @@ final transactionsProvider =
 class TransactionsState {
   final List<TransactionModel> items;
   final List<TransactionModel> credits;
-  final String? creditNextCursor;
   final bool hasMore;
   final bool loadingMore;
-  final bool discoveringCredits;
-  final bool creditScanBoundReached;
+
+  /// The node had more reward records past those it read, so this list of paid
+  /// rewards may be missing some. It reads the whole chain's records a page at a
+  /// time and keeps this wallet's, so this can be true even with none listed.
+  final bool creditsTruncated;
   final bool historyUnavailable;
 
   /// False for a bounded window; null when not reported.
@@ -33,11 +35,9 @@ class TransactionsState {
   const TransactionsState({
     required this.items,
     this.credits = const [],
-    this.creditNextCursor,
     required this.hasMore,
     required this.loadingMore,
-    this.discoveringCredits = false,
-    this.creditScanBoundReached = false,
+    this.creditsTruncated = false,
     this.historyUnavailable = false,
     this.complete,
     this.windowStartHeight,
@@ -63,11 +63,9 @@ class TransactionsState {
   }) => TransactionsState(
     items: items ?? this.items,
     credits: credits,
-    creditNextCursor: creditNextCursor,
     hasMore: hasMore ?? this.hasMore,
     loadingMore: loadingMore ?? this.loadingMore,
-    discoveringCredits: discoveringCredits,
-    creditScanBoundReached: creditScanBoundReached,
+    creditsTruncated: creditsTruncated,
     historyUnavailable: historyUnavailable ?? this.historyUnavailable,
     complete: complete,
     windowStartHeight: windowStartHeight,
@@ -75,11 +73,10 @@ class TransactionsState {
 }
 
 class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
-  static const pageSize = 20;
-  static const maxCreditDiscoveryPages = 30;
+  /// The most the public edge admits (`limit=<1..50>`). Each read also returns
+  /// this many reward records, so the larger page shows more of them.
+  static const pageSize = 50;
   int _pagesLoaded = 0;
-  int _creditPagesLoaded = 0;
-  bool _transactionHasMore = false;
   int _generation = 0;
   bool _loadingMore = false;
   bool _refreshing = false;
@@ -92,8 +89,6 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
     _cancelToken?.cancel('History request superseded');
     _cancelToken = CancelToken();
     _pagesLoaded = 0;
-    _creditPagesLoaded = 0;
-    _transactionHasMore = false;
     _loadingMore = false;
     return ++_generation;
   }
@@ -112,12 +107,7 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
     if (address == null) return TransactionsState.empty;
     try {
       final page = await _fetchPage(address, generation, offset: 0);
-      final first = _firstPageState(page);
-      if (first.discoveringCredits) {
-        // Publish the first page before background discovery updates it.
-        unawaited(Future<void>(() => _discoverCredits(address, generation)));
-      }
-      return first;
+      return _firstPageState(page);
     } on NotAvailableFailure {
       return TransactionsState.unavailable;
     }
@@ -125,15 +115,12 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
 
   TransactionsState _firstPageState(TransactionPage page) {
     _pagesLoaded = 1;
-    _creditPagesLoaded = 1;
-    _transactionHasMore = page.hasMore;
     return TransactionsState(
       items: page.items,
       credits: page.credits,
-      creditNextCursor: page.creditNextCursor,
-      hasMore: page.hasMore || page.creditNextCursor != null,
+      hasMore: page.hasMore,
       loadingMore: false,
-      discoveringCredits: page.credits.isEmpty && page.creditNextCursor != null,
+      creditsTruncated: page.creditNextCursor != null,
       complete: page.complete,
       windowStartHeight: page.windowStartHeight,
     );
@@ -144,7 +131,6 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
     String address,
     int generation, {
     required int offset,
-    String? creditAfter,
   }) async {
     final previous = _requestTail;
     final finished = Completer<void>();
@@ -158,7 +144,6 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
             address,
             offset: offset,
             limit: pageSize,
-            creditAfter: creditAfter,
             cancelToken: _cancelToken,
           );
       if (!_active(generation)) throw const _HistoryCancelled();
@@ -168,59 +153,6 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
       );
     } finally {
       finished.complete();
-    }
-  }
-
-  Future<void> _discoverCredits(String address, int generation) async {
-    final seenCursors = <String>{};
-    try {
-      while (_active(generation)) {
-        final current = state.value;
-        if (current == null || !current.discoveringCredits) return;
-        final cursor = current.creditNextCursor;
-        if (cursor == null || _creditPagesLoaded >= maxCreditDiscoveryPages) {
-          return;
-        }
-        seenCursors.add(cursor);
-        // Credit-only discovery must not advance the transaction offset.
-        final page = await _fetchPage(
-          address,
-          generation,
-          offset: 0,
-          creditAfter: cursor,
-        );
-        _creditPagesLoaded++;
-        final next = seenCursors.contains(page.creditNextCursor)
-            ? null
-            : page.creditNextCursor;
-        final credits = _merge(current.credits, page.credits);
-        final bounded =
-            credits.isEmpty &&
-            next != null &&
-            _creditPagesLoaded >= maxCreditDiscoveryPages;
-        state = AsyncData(
-          TransactionsState(
-            items: current.items,
-            credits: credits,
-            creditNextCursor: next,
-            hasMore: _transactionHasMore || next != null,
-            loadingMore: false,
-            discoveringCredits: credits.isEmpty && next != null && !bounded,
-            creditScanBoundReached: bounded,
-            complete: bounded ? false : (page.complete ?? current.complete),
-            windowStartHeight:
-                page.windowStartHeight ?? current.windowStartHeight,
-          ),
-        );
-      }
-    } on _HistoryCancelled {
-      // Disposal/refresh cancels transport and prevents stale state publication.
-    } on NotAvailableFailure {
-      if (_active(generation)) {
-        state = const AsyncData(TransactionsState.unavailable);
-      }
-    } catch (e, st) {
-      if (_active(generation)) state = AsyncError(e, st);
     }
   }
 
@@ -244,11 +176,7 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
 
   Future<void> loadMore() async {
     final current = state.value;
-    if (current == null ||
-        _loadingMore ||
-        _refreshing ||
-        current.discoveringCredits ||
-        !current.hasMore) {
+    if (current == null || _loadingMore || _refreshing || !current.hasMore) {
       return;
     }
     _loadingMore = true; // Lock before the asynchronous address read.
@@ -265,27 +193,18 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
         address,
         generation,
         offset: _pagesLoaded * pageSize,
-        creditAfter: current.creditNextCursor,
       );
       _pagesLoaded++;
       final items = _merge(current.items, page.items);
-      _transactionHasMore = items.length > current.items.length && page.hasMore;
-      final credits = current.creditNextCursor == null
-          ? current.credits
-          : _merge(current.credits, page.credits);
-      final cursor =
-          current.creditNextCursor != null &&
-              page.creditNextCursor != current.creditNextCursor
-          ? page.creditNextCursor
-          : null;
       state = AsyncData(
         TransactionsState(
           items: items,
-          credits: credits,
-          creditNextCursor: cursor,
-          hasMore: _transactionHasMore || cursor != null,
+          // Every page repeats the same reward records, and may add a new one.
+          credits: _merge(current.credits, page.credits),
+          hasMore: items.length > current.items.length && page.hasMore,
           loadingMore: false,
-          creditScanBoundReached: current.creditScanBoundReached,
+          creditsTruncated:
+              current.creditsTruncated || page.creditNextCursor != null,
           complete: page.complete ?? current.complete,
           windowStartHeight:
               page.windowStartHeight ?? current.windowStartHeight,
@@ -319,7 +238,6 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
       state = AsyncData(
         _firstPageState(await _fetchPage(address, generation, offset: 0)),
       );
-      await _discoverCredits(address, generation);
     } on _HistoryCancelled {
       // Superseded/disposed.
     } on NotAvailableFailure {

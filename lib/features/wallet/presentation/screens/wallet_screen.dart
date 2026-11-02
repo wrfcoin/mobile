@@ -266,13 +266,16 @@ class WalletScreen extends ConsumerWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text(
-                      '${wallet.transactions} total',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
+                    // The public balance read has no count, so a zero here
+                    // means "not reported" and must not read as no history.
+                    if (wallet.transactions > 0)
+                      Text(
+                        '${wallet.transactions} total',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -290,8 +293,15 @@ class WalletScreen extends ConsumerWidget {
                   ),
                   error: (e, _) => e is AuthFailure
                       ? NotSignedInCard(detail: authHandoff.message)
-                      : AppErrorWidget.fromFailure(
-                          e is Failure ? e : ServerFailure(e.toString()),
+                      : AppErrorWidget(
+                          key: const Key('wallet-history-error'),
+                          title: "Couldn't load your transactions",
+                          message:
+                              'This does not mean there are none. '
+                              'Try again in a moment.',
+                          icon: Icons.cloud_off,
+                          onRetry: () =>
+                              ref.read(transactionsProvider.notifier).refresh(),
                         ),
                   data: (txState) {
                     if (txState.historyUnavailable) {
@@ -299,11 +309,6 @@ class WalletScreen extends ConsumerWidget {
                     }
                     return Column(
                       children: [
-                        if (txState.discoveringCredits)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 8),
-                            child: Text('Checking earnings history…'),
-                          ),
                         if (txState.items.isEmpty &&
                             _unrepeatedCredits(txState).isEmpty)
                           const Padding(
@@ -366,14 +371,25 @@ class WalletScreen extends ConsumerWidget {
                               transaction: tx,
                             ),
                         ],
+                        if (txState.creditsTruncated)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              "Some of your rewards aren't listed here. "
+                              'Your balance includes them.',
+                              key: Key('wallet-credits-truncated'),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         if (txState.hasMore) ...[
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
-                              onPressed:
-                                  txState.loadingMore ||
-                                      txState.discoveringCredits
+                              onPressed: txState.loadingMore
                                   ? null
                                   : () => ref
                                         .read(transactionsProvider.notifier)

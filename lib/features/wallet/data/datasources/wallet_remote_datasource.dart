@@ -89,14 +89,18 @@ class WalletRemoteDataSource {
     String address, {
     int offset = 0,
     int limit = 20,
-    String? creditAfter,
     CancelToken? cancelToken,
   }) async {
+    // Nothing is added to this query: the public edge admits exactly
+    // `limit=<1..50>&offset=<digits>` and answers 404 to anything else.
     final response = await _dio.get(
       ApiConstants.walletTransactions(address, offset: offset, limit: limit),
-      queryParameters: {'creditLimit': 100, 'creditAfter': ?creditAfter},
       cancelToken: cancelToken,
     );
+    // An answer with no list in it is a failed read, not an empty history.
+    if (!_hasHistoryList(response.data)) {
+      throw StateError('Wallet history answer has no transaction list');
+    }
     final list = _extractList(response.data);
     final meta = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
@@ -309,6 +313,15 @@ class WalletRemoteDataSource {
     }
 
     throw StateError('Expected wallet API response to be an object.');
+  }
+
+  static bool _hasHistoryList(dynamic payload) {
+    if (payload is List) return true;
+    if (payload is! Map) return false;
+    return const ['items', 'transactions', 'data'].any((key) {
+      final candidate = payload[key];
+      return candidate is List || _hasHistoryList(candidate);
+    });
   }
 
   List<dynamic> _extractList(dynamic payload) {
