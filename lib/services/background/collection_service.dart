@@ -37,15 +37,11 @@ const _serviceId = 888;
 /// Sent to the app, when it is open, after the notification's Stop button.
 const collectionStoppedMessage = 'collection_stopped';
 
-<<<<<<< HEAD
 /// Sent to the app, when it is open, after each run.
 const collectionTickMessage = 'collection_tick';
 
-const _notificationTitle = 'WRFCoin is collecting weather data';
-=======
 /// Says plainly what is running, and that it uses rough location.
 const collectionNotificationTitle = 'Collecting weather with your rough location';
->>>>>>> feat/collect-battery-ask
 
 enum CollectionServiceStart {
   started,
