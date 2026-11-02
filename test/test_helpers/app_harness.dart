@@ -92,7 +92,6 @@ Future<Widget> buildTestApp({
   LocalAuthClient? localAuthClient,
   // Wallet storage and chain reads, e.g. a saved pending send.
   FakeWalletSecureStorage? walletSecureStorage,
-  FakeWalletRepository? walletRepository,
 }) async {
   // Ensure onboarding is marked complete so it does not block navigation in tests.
   final prefs = await SharedPreferences.getInstance();
