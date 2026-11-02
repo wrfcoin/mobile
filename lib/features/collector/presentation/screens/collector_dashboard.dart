@@ -21,7 +21,6 @@ import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../providers/collector_provider.dart';
 import '../providers/mobile_station_status_provider.dart';
 import '../widgets/owner_ledger_banner.dart';
-import '../widgets/station_ownership_card.dart';
 import '../../data/services/mobile_station_status_service.dart';
 import '../../../../services/background/sync_worker.dart';
 import '../widgets/sync_status.dart';
@@ -74,6 +73,9 @@ class CollectorDashboard extends ConsumerWidget {
       body: ResponsiveListView(
         maxContentWidth: 1040,
         children: [
+          // Anything that blocks collecting or needs action stays first, above
+          // the readings. Each of these renders only when it applies, so a
+          // healthy station opens straight on the readings.
           if (kIsWeb)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -144,16 +146,6 @@ class CollectorDashboard extends ConsumerWidget {
                   MobileStationPhase.onChain &&
               !(stationStatus?.asData?.value.cached ?? true))
             const OwnerLedgerBanner(),
-          if (stationStatus?.asData?.value.phase ==
-                  MobileStationPhase.onChain &&
-              !(stationStatus?.asData?.value.cached ?? true))
-            StationOwnershipCard(onNavigate: (route) => context.push(route)),
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Text(SyncWorker.earningWindowMessage),
-            ),
-          ),
           if (state.staleReadingsCount > 0)
             Card(
               child: Padding(
@@ -178,124 +170,6 @@ class CollectorDashboard extends ConsumerWidget {
                 ),
               ),
             ),
-          // Collection toggle card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.sensors,
-                        size: 32,
-                        color: state.isCollecting
-                            ? AppColors.success
-                            : AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              state.isCollecting
-                                  ? 'Collecting Data'
-                                  : 'Collection Paused',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              state.isCollecting
-                                  ? 'Every ${state.intervalMinutes} minutes'
-                                  : 'Tap to start collecting',
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        value: state.isCollecting,
-                        onChanged: kIsWeb || !canCollect
-                            ? null
-                            : (v) {
-                                if (v) {
-                                  ref
-                                      .read(collectorProvider.notifier)
-                                      .startCollecting();
-                                } else {
-                                  ref
-                                      .read(collectorProvider.notifier)
-                                      .stopCollecting();
-                                }
-                              },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.battery_saver_outlined,
-                        color: AppColors.success,
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Battery Impact',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        batteryImpact.label,
-                        style: const TextStyle(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    batteryImpact.detail,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'GPS gates collection at 50 m movement; barometer reads wait for movement or the next adaptive interval.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
           // Current readings
           Card(
             child: Padding(
@@ -396,11 +270,10 @@ class CollectorDashboard extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-
           // Collect now button
           // Lane 1: also disable while a background sync is in progress to
           // avoid a duplicate submission race.
-          if (state.isCollecting)
+          if (state.isCollecting) ...[
             OutlinedButton.icon(
               onPressed: state.isCollectingNow || state.isSyncing || !canCollect
                   ? null
@@ -416,9 +289,72 @@ class CollectorDashboard extends ConsumerWidget {
                 state.isCollectingNow ? 'Collecting...' : 'Collect Now',
               ),
             ),
-
+            const SizedBox(height: 16),
+          ],
+          // Collection toggle card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.sensors,
+                        size: 32,
+                        color: state.isCollecting
+                            ? AppColors.success
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              state.isCollecting
+                                  ? 'Collecting Data'
+                                  : 'Collection Paused',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              state.isCollecting
+                                  ? 'Every ${state.intervalMinutes} minutes'
+                                  : 'Tap to start collecting',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: state.isCollecting,
+                        onChanged: kIsWeb || !canCollect
+                            ? null
+                            : (v) {
+                                if (v) {
+                                  ref
+                                      .read(collectorProvider.notifier)
+                                      .startCollecting();
+                                } else {
+                                  ref
+                                      .read(collectorProvider.notifier)
+                                      .stopCollecting();
+                                }
+                              },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
-
           // Sync Progress card — show both backend sync totals and the live
           // wallet reward categories that currently feed the earn loop UI.
           Card(
@@ -597,6 +533,13 @@ class CollectorDashboard extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(SyncWorker.earningWindowMessage),
+            ),
+          ),
           if (challengeCapability.available && challengesState != null) ...[
             const SizedBox(height: 16),
             Card(
@@ -666,6 +609,58 @@ class CollectorDashboard extends ConsumerWidget {
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/collect/duels'),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.battery_saver_outlined,
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Battery Impact',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        batteryImpact.label,
+                        style: const TextStyle(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    batteryImpact.detail,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'GPS gates collection at 50 m movement; barometer reads wait for movement or the next adaptive interval.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
