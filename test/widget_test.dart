@@ -25,7 +25,9 @@ class _FakeSyncWorker extends SyncWorker {
       const Stream<List<ConnectivityResult>>.empty();
 
   @override
-  Future<SyncRunResult> syncPendingReadings({bool includeIdempotencyKey = false}) async {
+  Future<SyncRunResult> syncPendingReadings({
+    bool includeIdempotencyKey = false,
+  }) async {
     return const SyncRunResult(
       acceptedCount: 0,
       failedCount: 0,
@@ -41,6 +43,7 @@ void main() {
   ) async {
     SharedPreferences.setMockInitialValues(const <String, Object>{
       'onboarding.completed': true,
+      'welcome.seen': true,
       // The Profile tab is gated behind the achievements flag (#142);
       // enable it so all five tabs render.
       'ff_enableAchievementsUi': true,

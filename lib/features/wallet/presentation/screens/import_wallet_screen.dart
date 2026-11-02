@@ -16,10 +16,17 @@ import '../providers/wallet_provider.dart';
 enum _ImportType { mnemonic, privateKey }
 
 class ImportWalletScreen extends ConsumerStatefulWidget {
-  const ImportWalletScreen({super.key, this.leading});
+  const ImportWalletScreen({
+    super.key,
+    this.leading,
+    this.doneLocation = '/wallet',
+  });
 
   /// The app bar's back button, when there is no screen under this one.
   final Widget? leading;
+
+  /// Where the app goes once the wallet is saved.
+  final String doneLocation;
 
   @override
   ConsumerState<ImportWalletScreen> createState() => _ImportWalletScreenState();
@@ -111,7 +118,7 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen> {
   Future<void> _finishImport(String successMessage) async {
     if (!mounted) return;
     AppSnackbars.success(context, successMessage);
-    context.go('/wallet');
+    context.go(widget.doneLocation);
   }
 
   Future<void> _importWallet() async {
