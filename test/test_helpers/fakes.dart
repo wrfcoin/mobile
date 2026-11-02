@@ -154,7 +154,7 @@ class FakeWalletRepository implements WalletRepository {
 
   final WalletModel? wallet;
   final List<TransactionModel> transactions;
-  final Either<Failure, Map<String, dynamic>>? sendTransactionResult;
+  Either<Failure, Map<String, dynamic>>? sendTransactionResult;
   final Either<Failure, TransferFeeQuote>? transferFeeResult;
   final Either<Failure, Map<String, dynamic>>? sponsorGasResult;
   final Either<Failure, Map<String, dynamic>>? submitUserOpResult;
@@ -210,13 +210,33 @@ class FakeWalletRepository implements WalletRepository {
     required String to,
     required String amountBaseUnits,
     required Ed25519TransferSigner signer,
+    Future<void> Function(String nonce)? onBeforeSubmit,
   }) async {
     sendCalls++;
     sentAmountBaseUnits.add(amountBaseUnits);
     sentTo.add(to);
+    await onBeforeSubmit?.call(signedNonce);
     return sendTransactionResult ??
         const Right(<String, dynamic>{'hash': '0xabc'});
   }
+
+  /// The nonce [sendTransaction] says it signed.
+  String signedNonce = '7';
+  Either<Failure, String> accountNonceResult = const Right('7');
+  Either<Failure, int?> includedBlockResult = const Right(null);
+  int accountNonceReads = 0;
+
+  @override
+  Future<Either<Failure, String>> getAccountNonce(String address) async {
+    accountNonceReads++;
+    return accountNonceResult;
+  }
+
+  @override
+  Future<Either<Failure, int?>> findIncludedBlock(
+    String address,
+    String hash,
+  ) async => includedBlockResult;
 
   @override
   Future<Either<Failure, String>> generateStealthAddress(
@@ -269,6 +289,15 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
   bool backupConfirmed;
   bool isSocial;
   int clearWalletDataCalls = 0;
+  String? pendingSend;
+
+  @override
+  Future<String?> getPendingSend() async => pendingSend;
+
+  @override
+  Future<void> savePendingSend(String? encoded) async {
+    pendingSend = encoded;
+  }
 
   @override
   Future<void> addAddressBookEntry(AddressBookEntry entry) async {
@@ -281,6 +310,7 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
   @override
   Future<void> clearWalletData() async {
     clearWalletDataCalls++;
+    pendingSend = null;
     backupConfirmed = false;
     isSocial = false;
     _addressBook.clear();

@@ -173,6 +173,29 @@ class WalletRemoteDataSource {
     return TransferFeeQuote.fromNonceResponse(_unwrapMap(response.data));
   }
 
+  /// The block this wallet's chain history puts [hash] in, or null if it isn't
+  /// in the newest page. History is newest first, so a just-included send is at
+  /// the top. Deliberately not [getTransactions]: the public edge admits exactly
+  /// `limit=<1..50>&offset=<digits>` here and refuses the credit parameters.
+  Future<int?> findIncludedBlock(String address, String hash) async {
+    final response = await _dio.get(
+      ApiConstants.walletTransactions(
+        address.trim().toLowerCase(),
+        offset: 0,
+        limit: 50,
+      ),
+    );
+    String canonical(Object? id) =>
+        id.toString().trim().toLowerCase().replaceFirst('0x', '');
+    final wanted = canonical(hash);
+    for (final row in _extractList(response.data).whereType<Map>()) {
+      if (canonical(row['txId']) == wanted) {
+        return _readOptionalInt(row['blockHeight']);
+      }
+    }
+    return null;
+  }
+
   /// Submits a client-signed transparent transfer (backend#1197).
   ///
   /// [amountBaseUnits] is an integer base-unit string (see `wrf_units.dart`).
@@ -184,6 +207,7 @@ class WalletRemoteDataSource {
     required String to,
     required String amountBaseUnits,
     required Ed25519TransferSigner signer,
+    Future<void> Function(String nonce)? onBeforeSubmit,
   }) async {
     final sender = from.trim().toLowerCase();
     final recipient = to.trim().toLowerCase();
@@ -207,6 +231,7 @@ class WalletRemoteDataSource {
       amountBaseUnits: amountBaseUnits,
       nonce: nonce,
     );
+    await onBeforeSubmit?.call(nonce);
     final response = await _dio.post(
       ApiConstants.walletSend,
       data: body,

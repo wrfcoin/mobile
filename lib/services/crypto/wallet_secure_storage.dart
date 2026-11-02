@@ -18,6 +18,7 @@ class WalletSecureStorage {
   static const backupConfirmedKey = 'wrf_backup_confirmed';
   static const isSocialKey = 'wrf_is_social';
   static const addressBookKey = 'wrf_address_book';
+  static const pendingSendKey = 'wrf_pending_send';
 
   Future<String?> getWalletAddress() => _storage.read(key: addressKey);
 
@@ -60,12 +61,20 @@ class WalletSecureStorage {
     return _storage.write(key: addressBookKey, value: payload);
   }
 
+  /// The latest send's status, encoded by `PendingSend`. Null removes it.
+  Future<String?> getPendingSend() => _storage.read(key: pendingSendKey);
+
+  Future<void> savePendingSend(String? encoded) => encoded == null
+      ? _storage.delete(key: pendingSendKey)
+      : _storage.write(key: pendingSendKey, value: encoded);
+
   Future<void> clearWalletData() async {
     await Future.wait([
       _storage.delete(key: addressKey),
       _storage.delete(key: backupConfirmedKey),
       _storage.delete(key: isSocialKey),
       _storage.delete(key: addressBookKey),
+      _storage.delete(key: pendingSendKey),
     ]);
   }
 

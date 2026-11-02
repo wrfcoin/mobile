@@ -85,6 +85,9 @@ Future<Widget> buildTestApp({
   bool signedIn = false,
   // The wallet key's biometric prompt, e.g. one that counts prompts.
   LocalAuthClient? localAuthClient,
+  // Wallet storage and chain reads, e.g. a saved pending send.
+  FakeWalletSecureStorage? walletSecureStorage,
+  FakeWalletRepository? walletRepository,
 }) async {
   // Ensure onboarding is marked complete so it does not block navigation in tests.
   final prefs = await SharedPreferences.getInstance();
@@ -186,19 +189,22 @@ Future<Widget> buildTestApp({
         ),
       ),
       walletRepositoryProvider.overrideWithValue(
-        FakeWalletRepository(
-          transactions: const [
-            TransactionModel(
-              hash: '0x1',
-              timestamp: '2026-03-10T00:00:00Z',
-              from: 'wrf1234567890abcdef1234',
-              to: 'wrf0000000000000000000000',
-              value: '10',
+        walletRepository ??
+            FakeWalletRepository(
+              transactions: const [
+                TransactionModel(
+                  hash: '0x1',
+                  timestamp: '2026-03-10T00:00:00Z',
+                  from: 'wrf1234567890abcdef1234',
+                  to: 'wrf0000000000000000000000',
+                  value: '10',
+                ),
+              ],
             ),
-          ],
-        ),
       ),
-      walletSecureStorageProvider.overrideWithValue(FakeWalletSecureStorage()),
+      walletSecureStorageProvider.overrideWithValue(
+        walletSecureStorage ?? FakeWalletSecureStorage(),
+      ),
       keyManagerProvider.overrideWithValue(
         KeyManager(
           biometric: BiometricService(

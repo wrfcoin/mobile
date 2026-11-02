@@ -67,6 +67,7 @@ class WalletRepositoryImpl implements WalletRepository {
     required String to,
     required String amountBaseUnits,
     required Ed25519TransferSigner signer,
+    Future<void> Function(String nonce)? onBeforeSubmit,
   }) async {
     try {
       final result = await _dataSource.sendTransaction(
@@ -74,6 +75,7 @@ class WalletRepositoryImpl implements WalletRepository {
         to: to,
         amountBaseUnits: amountBaseUnits,
         signer: signer,
+        onBeforeSubmit: onBeforeSubmit,
       );
       return Right(result);
     } on DioException catch (e) {
@@ -89,6 +91,34 @@ class WalletRepositoryImpl implements WalletRepository {
       return Left(ValidationFailure(e.message.toString()));
     } on StateError catch (e) {
       return Left(ServerFailure(e.message));
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, String>> getAccountNonce(String address) async {
+    try {
+      // The edge admits only a lowercase address here.
+      return Right(
+        await _dataSource.getAccountNonce(address.trim().toLowerCase()),
+      );
+    } on DioException catch (e) {
+      return Left(DioErrorMapper.map(e));
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, int?>> findIncludedBlock(
+    String address,
+    String hash,
+  ) async {
+    try {
+      return Right(await _dataSource.findIncludedBlock(address, hash));
+    } on DioException catch (e) {
+      return Left(DioErrorMapper.map(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }

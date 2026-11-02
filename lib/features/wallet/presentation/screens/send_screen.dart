@@ -14,9 +14,11 @@ import '../../data/models/transfer_fee.dart';
 import '../../data/models/wallet_model.dart';
 import '../../domain/recipient_safety.dart';
 import '../../data/repositories/wallet_repository_impl.dart';
+import '../providers/pending_send_provider.dart';
 import '../providers/transactions_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../providers/wallet_security_provider.dart';
+import '../widgets/pending_send_card.dart';
 
 /// Launch gate for the shielded-send privacy tiers.
 ///
@@ -173,6 +175,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     _addressController.addListener(_onInputChanged);
     _amountController.addListener(_onInputChanged);
     _readFee();
+    // Don't show an old answer: the send may have confirmed since the last read.
+    Future.microtask(() {
+      if (mounted) ref.read(pendingSendProvider.notifier).check();
+    });
   }
 
   @override
@@ -304,6 +310,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   Future<void> _sendAttempt() async {
     // Defence in depth: never submit from a build with Send disabled.
     if (!ref.read(walletSendEnabledProvider)) return;
+    // The button is off while a send is pending; this covers the moment before
+    // the saved one has loaded.
+    await ref.read(pendingSendProvider.notifier).ready;
+    if (!mounted || ref.read(pendingSendProvider).blocksSend) return;
     // The validator needs a fee, so a failed earlier read gets a new try here.
     if (_fee.state == TransferFeeState.unknown) await _readFee();
     if (!mounted) return;
@@ -405,6 +415,8 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       return;
     }
 
+    if (ref.read(pendingSendProvider).blocksSend) return;
+
     setState(() {
       _sending = true;
       _previousTransferPending = false;
@@ -437,24 +449,20 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         );
 
         if (!userOpSubmitted) {
-          submissionResponse = await ref
-              .read(walletProvider.notifier)
-              .sendTransaction(
-                from: from,
-                to: to,
-                amountBaseUnits: amountBaseUnits,
-                signer: signer,
-              );
+          submissionResponse = await _submitTracked(
+            from: from,
+            to: to,
+            amountBaseUnits: amountBaseUnits,
+            signer: signer,
+          );
         }
       } else {
-        submissionResponse = await ref
-            .read(walletProvider.notifier)
-            .sendTransaction(
-              from: from,
-              to: to,
-              amountBaseUnits: amountBaseUnits,
-              signer: signer,
-            );
+        submissionResponse = await _submitTracked(
+          from: from,
+          to: to,
+          amountBaseUnits: amountBaseUnits,
+          signer: signer,
+        );
       }
 
       if (mounted) {
@@ -472,6 +480,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Submitted. Settlement has not been verified.'),
+                const SizedBox(height: 12),
+                const Text(
+                  'Your wallet page shows it as pending until the chain answers.',
+                ),
                 const SizedBox(height: 12),
                 if (identifier != null) ...[
                   const Text('Transaction identifier'),
@@ -530,6 +542,42 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     }
   }
 
+  /// Posts the transfer and keeps its status on the wallet page. The record is
+  /// written before the post, so a lost answer or a killed app still leaves one.
+  Future<Map<String, dynamic>> _submitTracked({
+    required String from,
+    required String to,
+    required String amountBaseUnits,
+    required Ed25519TransferSigner signer,
+  }) async {
+    final pending = ref.read(pendingSendProvider.notifier);
+    var began = false;
+    try {
+      final receipt = await ref
+          .read(walletProvider.notifier)
+          .sendTransaction(
+            from: from,
+            to: to,
+            amountBaseUnits: amountBaseUnits,
+            signer: signer,
+            onBeforeSubmit: (nonce) async {
+              await pending.begin(
+                from: from,
+                to: to,
+                amountBaseUnits: amountBaseUnits,
+                nonce: nonce,
+              );
+              began = true;
+            },
+          );
+      await pending.markSubmitted(_submissionIdentifier(receipt));
+      return receipt;
+    } catch (e) {
+      if (began) await pending.markFailed(e);
+      rethrow;
+    }
+  }
+
   String? _submissionIdentifier(Map<String, dynamic>? response) {
     // The deployed backend emits hash; tx_id supports a direct transaction
     // response. Do not print arbitrary payload fields or malformed identifiers.
@@ -565,6 +613,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     final socialAsync = ref.watch(socialWalletProvider);
     ref.watch(walletProvider);
     final addressBookAsync = ref.watch(addressBookProvider);
+    final blockedByPending = ref.watch(pendingSendProvider).blocksSend;
 
     final entries = addressBookAsync.value ?? const <AddressBookEntry>[];
     final input = _addressController.text.trim().toLowerCase();
@@ -590,6 +639,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           key: _formKey,
           child: ListView(
             children: [
+              if (ref.watch(pendingSendProvider).send != null) ...[
+                const PendingSendCard(onSendScreen: true),
+                const SizedBox(height: 16),
+              ],
               if (_previousTransferPending) ...[
                 const Text(pendingTransferMessage),
                 const SizedBox(height: 16),
@@ -802,7 +855,8 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _sending ? null : _send,
+                key: const Key('send-submit'),
+                onPressed: _sending || blockedByPending ? null : _send,
                 child: _sending
                     ? const SizedBox(
                         height: 20,

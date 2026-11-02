@@ -23,7 +23,17 @@ abstract class WalletRepository {
     required String to,
     required String amountBaseUnits,
     required Ed25519TransferSigner signer,
+
+    /// Runs with the signed nonce, right before the post.
+    Future<void> Function(String nonce)? onBeforeSubmit,
   });
+
+  /// The account's nonce as committed on chain.
+  Future<Either<Failure, String>> getAccountNonce(String address);
+
+  /// The block holding [hash] in the wallet's chain history, or null if it
+  /// isn't there.
+  Future<Either<Failure, int?>> findIncludedBlock(String address, String hash);
 
   Future<Either<Failure, String>> generateStealthAddress(
     String recipientAddress,
