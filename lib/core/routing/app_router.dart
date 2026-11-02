@@ -36,6 +36,7 @@ import '../../features/wallet/presentation/screens/import_wallet_screen.dart';
 import '../../features/carbon_lottery/presentation/screens/carbon_lottery_dashboard_screen.dart';
 import '../../features/faucet/presentation/screens/faucet_screen.dart';
 import '../../features/explorer/presentation/screens/chain_screen.dart';
+import '../../features/network_nodes/presentation/screens/network_nodes_screen.dart';
 import '../../features/governance/presentation/screens/proposal_list_screen.dart';
 import '../../features/governance/presentation/screens/proposal_detail_screen.dart';
 import '../../features/governance/presentation/screens/vote_screen.dart';
@@ -129,6 +130,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/wallet/import',
         // Public chain data; needs no session.
         '/wallet/chain',
+        '/wallet/nodes',
       };
 
       if (walletConnectPaths.contains(state.matchedLocation)) {
@@ -355,6 +357,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'chain',
                 pageBuilder: (context, state) =>
                     _fadePage(key: state.pageKey, child: const ChainScreen()),
+              ),
+              GoRoute(
+                path: 'nodes',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const NetworkNodesScreen(),
+                ),
               ),
               GoRoute(
                 path: 'faucet',
