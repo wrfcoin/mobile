@@ -97,6 +97,163 @@ void main() {
     );
   });
 
+  group('safety rules', () {
+    const mom = AddressBookEntry(label: 'Mom', address: _mom);
+
+    test('every address is checked strictly', () {
+      for (final bad in [
+        '0x123',
+        '${_dad}0',
+        _dad.substring(2),
+        '0X${_dad.substring(2)}',
+        ' $_dad',
+        '$_dad\n',
+        '0x${'g' * 40}',
+        '0x${'0' * 40}',
+        '\u202E$_dad',
+      ]) {
+        final r = importAddressBook(
+          _file([
+            {'name': 'Bad', 'address': bad},
+          ]),
+          existing: const [],
+        );
+        expect(r.added, isEmpty, reason: bad);
+        expect(r.invalid, 1, reason: bad);
+      }
+    });
+
+    test('too many contacts refuses the whole file', () {
+      final at = [
+        for (var i = 0; i < addressBookImportMaxContacts; i++)
+          {
+            'name': 'C$i',
+            'address': '0x${(i + 1).toRadixString(16).padLeft(40, '0')}',
+          },
+      ];
+      expect(
+        importAddressBook(_file(at), existing: const []).added,
+        hasLength(addressBookImportMaxContacts),
+      );
+      expect(
+        importAddressBook(
+          _file([
+            ...at,
+            {'name': 'One more', 'address': _dad},
+          ]),
+          existing: const [],
+        ).error,
+        'This file has too many contacts.',
+      );
+    });
+
+    for (final name in [
+      'x' * (contactNameMaxLength + 1),
+      'M\u0000om',
+      'Mom\nDad',
+      'M\u007Fom',
+      'M\u0085om',
+      '\u202EmoM',
+      'M\u202Dom',
+      'Mo\u2066m',
+      'M\u200Fom',
+      'M\u061Com',
+      'M\u200Bom',
+      'M\u200Dom',
+      'M\u00ADom',
+      'Mo\u{E0041}m',
+      'M\uFEFFom',
+      'M\u200Com',
+      'Mom\uFE0F',
+      'M\u2028om',
+    ]) {
+      test('the name ${jsonEncode(name)} is refused', () {
+        expect(validateContactName(name), isNotNull);
+        final r = importAddressBook(
+          _file([
+            {'name': name, 'address': _dad},
+          ]),
+          existing: const [],
+        );
+        expect(r.added, isEmpty);
+        expect(r.invalid, 1);
+      });
+    }
+
+    test('ordinary names from any language are fine', () {
+      for (final name in [
+        'Mom',
+        'María',
+        'ماما',
+        '妈妈',
+        'Mom 🌦',
+        "O'Brien",
+        'Mom ❤\uFE0F',
+        '👨\u200D👩\u200D👧',
+        '❤\uFE0F\u200D🔥',
+      ]) {
+        expect(validateContactName(name), isNull, reason: name);
+      }
+    });
+
+    test('a same-name different-address row is flagged, never merged', () {
+      for (final same in ['Mom', 'mom', ' MOM ']) {
+        final r = importAddressBook(
+          _file([
+            {'name': same, 'address': _dad},
+          ]),
+          existing: const [mom],
+        );
+        expect(r.added, isEmpty, reason: same);
+        expect(r.nameClashes.single.address, _dad);
+      }
+    });
+
+    test('two rows in one file cannot share a name', () {
+      final r = importAddressBook(
+        _file([
+          {'name': 'Pat', 'address': _dad},
+          {'name': 'pat', 'address': _legacy},
+        ]),
+        existing: const [],
+      );
+      expect(r.added.single.address, _dad);
+      expect(r.nameClashes.single.address, _legacy);
+    });
+
+    test('a known address under a new name changes nothing', () {
+      final r = importAddressBook(
+        _file([
+          {'name': 'Not Mom', 'address': _mom},
+        ]),
+        existing: const [mom],
+      );
+      expect(r.added, isEmpty);
+      expect(r.nameClashes, isEmpty);
+      expect(r.duplicates, 1);
+    });
+
+    test('nothing but a name and an address is taken from a row', () {
+      final r = importAddressBook(
+        _file([
+          {
+            'name': 'Dad',
+            'address': _dad,
+            'allowed_from': 0,
+            'allowedFrom': 0,
+            'status': 'verifiedCurrent',
+            'replacement': _mom,
+          },
+        ]),
+        existing: const [],
+      );
+      final entry = r.added.single;
+      expect(entry.allowedFrom, isNull);
+      expect(entry.status, AddressStatus.unverified);
+      expect(entry.replacementAddress, isNull);
+    });
+  });
+
   test('files that are not contacts files are refused', () {
     for (final raw in [
       'not json',

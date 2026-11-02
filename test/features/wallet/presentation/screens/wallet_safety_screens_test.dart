@@ -36,6 +36,15 @@ class _FakeGateway extends ContactsFileGateway {
   Future<void> share(String json) async => shared.add(json);
 }
 
+class _ThrowingGateway extends ContactsFileGateway {
+  const _ThrowingGateway(this.error);
+
+  final Object error;
+
+  @override
+  Future<String?> pickFile() async => throw error;
+}
+
 class _Clock {
   DateTime now = DateTime.utc(2026, 11, 1, 12);
 }
@@ -533,10 +542,175 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Import from file'));
       await tester.pumpAndSettle();
+      expect(find.text('Add 1 contact?'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('contacts-import-confirm')));
+      await tester.pumpAndSettle();
       final book = await storage.getAddressBook();
       expect(book.map((e) => e.label), ['Mom', 'Dad']);
       expect(book.every((e) => e.allowedFrom == null), isTrue);
       expect(find.textContaining('Added 1 contact'), findsOneWidget);
+    });
+
+    group('importing shows what it will do first', () {
+      const dadFile = {'name': 'Dad', 'address': _dad};
+      String contactsFile(List<Map<String, Object?>> rows) => jsonEncode({
+        'format': addressBookFileFormat,
+        'version': 1,
+        'contacts': rows,
+      });
+
+      Future<void> startImport(
+        WidgetTester tester,
+        FakeWalletSecureStorage storage,
+        ContactsFileGateway gateway,
+      ) async {
+        await _pump(
+          tester,
+          const AddressBookScreen(),
+          storage: storage,
+          keyManager: await _keyManager(),
+          gateway: gateway,
+        );
+        await tester.tap(find.byKey(const Key('contacts-menu')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Import from file'));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('the name and full address, and nothing saved yet', (
+        tester,
+      ) async {
+        final storage = FakeWalletSecureStorage();
+        await startImport(
+          tester,
+          storage,
+          _FakeGateway(contactsFile([dadFile])),
+        );
+        expect(
+          find.byKey(const Key('contacts-import-preview')),
+          findsOneWidget,
+        );
+        expect(find.text('Dad'), findsOneWidget);
+        expect(find.text(_dad), findsOneWidget);
+        expect(await storage.getAddressBook(), isEmpty);
+      });
+
+      testWidgets('Cancel saves nothing', (tester) async {
+        final storage = FakeWalletSecureStorage();
+        await startImport(
+          tester,
+          storage,
+          _FakeGateway(contactsFile([dadFile])),
+        );
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(await storage.getAddressBook(), isEmpty);
+      });
+
+      testWidgets('a same-name address is flagged and Mom is untouched', (
+        tester,
+      ) async {
+        final allowed = AddressBookEntry(
+          label: 'Mom',
+          address: _mom,
+          allowedFrom: DateTime.utc(2026),
+        );
+        final storage = FakeWalletSecureStorage(addressBook: [allowed]);
+        await startImport(
+          tester,
+          storage,
+          _FakeGateway(
+            contactsFile([
+              {'name': 'mom', 'address': _dad},
+            ]),
+          ),
+        );
+        expect(
+          find.byKey(const Key('contacts-import-name-clashes')),
+          findsOneWidget,
+        );
+        expect(find.text(_dad), findsOneWidget);
+        expect(find.byKey(const Key('contacts-import-confirm')), findsNothing);
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        final book = await storage.getAddressBook();
+        expect(book.single.address, _mom);
+        expect(book.single.label, 'Mom');
+        expect(book.single.allowedFrom, DateTime.utc(2026));
+      });
+
+      testWidgets('with the allowlist on, an import stays not allowed', (
+        tester,
+      ) async {
+        final storage = FakeWalletSecureStorage(
+          sendAllowlist: const SendAllowlistSettings(enabled: true),
+        );
+        await startImport(
+          tester,
+          storage,
+          _FakeGateway(
+            contactsFile([
+              {...dadFile, 'allowed_from': 0},
+            ]),
+          ),
+        );
+        await tester.tap(find.byKey(const Key('contacts-import-confirm')));
+        await tester.pumpAndSettle();
+        final entry = (await storage.getAddressBook()).single;
+        expect(entry.allowedFrom, isNull);
+        expect(
+          SendAllowlistPolicy()
+              .check(to: _dad, book: [entry], settings: storage.sendAllowlist)
+              .blocksSend,
+          isTrue,
+        );
+      });
+
+      for (final (name, message) in const [
+        ('not a contacts file', 'This is not a WRFCoin contacts file.'),
+        ('too large', 'This file is too large.'),
+      ]) {
+        testWidgets('a rejected file ($name) shows one plain message', (
+          tester,
+        ) async {
+          final storage = FakeWalletSecureStorage();
+          await startImport(
+            tester,
+            storage,
+            _ThrowingGateway(ContactsFileRejected(message)),
+          );
+          expect(find.text(message), findsOneWidget);
+          expect(
+            find.byKey(const Key('contacts-import-preview')),
+            findsNothing,
+          );
+          expect(await storage.getAddressBook(), isEmpty);
+        });
+      }
+
+      testWidgets('malformed JSON shows the plain message', (tester) async {
+        await startImport(
+          tester,
+          FakeWalletSecureStorage(),
+          _FakeGateway('{"format": "wrfcoin-contacts", '),
+        );
+        expect(
+          find.text('This is not a WRFCoin contacts file.'),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('anything else thrown shows no raw exception', (
+        tester,
+      ) async {
+        await startImport(
+          tester,
+          FakeWalletSecureStorage(),
+          _ThrowingGateway(StateError('secret detail')),
+        );
+        expect(find.text('That file could not be opened.'), findsOneWidget);
+        expect(find.textContaining('secret detail'), findsNothing);
+      });
     });
 
     testWidgets('export shares names and addresses only', (tester) async {
