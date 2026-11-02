@@ -56,10 +56,62 @@ class RoleEarningsRepository {
     return RoleLeaderboard.parse(response.data, role, period);
   }
 
-  Future<OwnRoleEarnings> ownProfile(String address) async {
-    final response = await dio.get(
-      '/operators/${Uri.encodeComponent(address)}/profile',
+  /// The signed-in viewer's own figures, or null when no public board shows
+  /// them.
+  ///
+  /// The edge admits profiles only by opaque key and has no address lookup, by
+  /// design, and the key can't be derived on the phone. A board row the server
+  /// marks `isYou` is the only source of it, so a viewer on no top-30 board has
+  /// no card. A read that fails while nothing was found throws, so that stays
+  /// distinct from "not on a board".
+  Future<OwnRoleEarnings?> ownEarnings() async {
+    Future<RoleEarningsRow?> ownRow(EarningsRole role) async {
+      final board = await leaderboard(role, EarningsPeriod.all);
+      return board.rows.where((row) => row.isYou).firstOrNull;
+    }
+
+    RoleEarningsRow? weatherRow;
+    var weatherBoardRead = false;
+    Object? readFailure;
+    try {
+      weatherRow = await ownRow(EarningsRole.contribution);
+      weatherBoardRead = true;
+    } catch (e) {
+      readFailure = e;
+    }
+
+    var key = weatherRow?.profileKey ?? '';
+    for (final role in const [EarningsRole.producer, EarningsRole.attester]) {
+      if (key.isNotEmpty) break;
+      try {
+        key = (await ownRow(role))?.profileKey ?? '';
+      } catch (e) {
+        readFailure = e;
+      }
+    }
+
+    OwnRoleEarnings? profile;
+    if (key.isNotEmpty) {
+      try {
+        final response = await dio.get(
+          '/operators/${Uri.encodeComponent(key)}/profile',
+        );
+        profile = OwnRoleEarnings.parse(response.data);
+      } catch (e) {
+        readFailure = e;
+      }
+    }
+    if (weatherRow == null && profile == null) {
+      // Only a key with no readable profile, or a failed board, is unknown.
+      if (readFailure != null) {
+        throw const FormatException('Own earnings unavailable');
+      }
+      return null;
+    }
+    return OwnRoleEarnings.combine(
+      profile: profile,
+      weatherRow: weatherRow,
+      weatherBoardRead: weatherBoardRead,
     );
-    return OwnRoleEarnings.parse(response.data);
   }
 }

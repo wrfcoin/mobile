@@ -171,10 +171,12 @@ class OwnRoleEarningsSummary extends ConsumerWidget {
                     title: Text(role.role.label),
                     subtitle: Text(role.message),
                   ),
-                Text(summary.coverage.label),
-                const Text(
-                  'Confirmed canonical payments; totals may change after a rollback.',
-                ),
+                if (summary.coverage != null) ...[
+                  Text(summary.coverage!.label),
+                  const Text(
+                    'Confirmed canonical payments; totals may change after a rollback.',
+                  ),
+                ],
               ],
             ),
     );
