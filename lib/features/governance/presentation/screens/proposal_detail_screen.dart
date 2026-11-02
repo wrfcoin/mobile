@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/formatting/app_formatters.dart';
 import '../../../../core/preferences/app_preferences.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/proposal_model.dart';
+import '../widgets/voting_closed_notice.dart';
 
 class ProposalDetailScreen extends ConsumerWidget {
   final ProposalModel proposal;
@@ -14,8 +14,8 @@ class ProposalDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final totalVotes =
-        proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain;
+    // The chain's votes are yes or no only, so there is no abstain figure.
+    final totalVotes = proposal.votesFor + proposal.votesAgainst;
     final preferences = ref.watch(appPreferencesProvider).preferences;
 
     return Scaffold(
@@ -84,13 +84,6 @@ class ProposalDetailScreen extends ConsumerWidget {
                     color: AppColors.error,
                   ),
                   const SizedBox(height: 8),
-                  _VoteBar(
-                    label: 'Abstain',
-                    count: proposal.votesAbstain,
-                    total: totalVotes,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(height: 8),
                   Text(
                     'Total: $totalVotes votes',
                     style: const TextStyle(color: AppColors.textSecondary),
@@ -100,11 +93,7 @@ class ProposalDetailScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          if (proposal.status == 'active')
-            ElevatedButton(
-              onPressed: () => context.push('/govern/vote', extra: proposal),
-              child: const Text('Cast Your Vote'),
-            ),
+          if (proposal.status == 'active') const VotingClosedNotice(),
         ],
       ),
     );

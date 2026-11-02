@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_detail_screen.dart';
@@ -49,25 +48,7 @@ void main() {
           TestAppPreferencesStore(),
         ),
       ],
-      child: MaterialApp.router(
-        routerConfig: GoRouter(
-          initialLocation: '/govern',
-          routes: [
-            GoRoute(
-              path: '/govern',
-              builder: (context, state) =>
-                  ProposalDetailScreen(proposal: proposal),
-              routes: [
-                GoRoute(
-                  path: 'vote',
-                  builder: (context, state) =>
-                      const Scaffold(body: Text('Vote Page')),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      child: MaterialApp(home: ProposalDetailScreen(proposal: proposal)),
     );
   }
 
@@ -82,40 +63,43 @@ void main() {
     );
     expect(find.text('For'), findsOneWidget);
     expect(find.text('Against'), findsOneWidget);
-    expect(find.text('Abstain'), findsOneWidget);
-    expect(find.text('Total: 100 votes'), findsOneWidget);
+    expect(find.text('Abstain'), findsNothing);
+    expect(find.text('Total: 90 votes'), findsOneWidget);
   });
 
   testWidgets('shows vote percentages for each option', (tester) async {
     await tester.pumpWidget(buildWidget(activeProposal));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('70 (70.0%)'), findsOneWidget);
-    expect(find.text('20 (20.0%)'), findsOneWidget);
-    expect(find.text('10 (10.0%)'), findsOneWidget);
+    expect(find.text('70 (77.8%)'), findsOneWidget);
+    expect(find.text('20 (22.2%)'), findsOneWidget);
   });
 
-  testWidgets('shows Cast Your Vote button for active proposals', (tester) async {
+  testWidgets('an active proposal says voting is closed, with no vote action', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildWidget(activeProposal));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Cast Your Vote'), findsOneWidget);
+    expect(find.text("Voting isn't open on testnet yet"), findsOneWidget);
+    expect(find.text('Cast Your Vote'), findsNothing);
+    expect(find.byType(ElevatedButton), findsNothing);
     expect(find.text('ACTIVE'), findsOneWidget);
   });
 
-  testWidgets('hides vote button for passed proposals', (tester) async {
+  testWidgets('a passed proposal shows no voting notice', (tester) async {
     await tester.pumpWidget(buildWidget(passedProposal));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Cast Your Vote'), findsNothing);
+    expect(find.text("Voting isn't open on testnet yet"), findsNothing);
     expect(find.text('PASSED'), findsOneWidget);
   });
 
-  testWidgets('hides vote button for rejected proposals', (tester) async {
+  testWidgets('a rejected proposal shows no voting notice', (tester) async {
     await tester.pumpWidget(buildWidget(rejectedProposal));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Cast Your Vote'), findsNothing);
+    expect(find.text("Voting isn't open on testnet yet"), findsNothing);
     expect(find.text('REJECTED'), findsOneWidget);
   });
 
@@ -131,6 +115,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Total: 0 votes'), findsOneWidget);
-    expect(find.text('Cast Your Vote'), findsOneWidget);
+    expect(find.text('Cast Your Vote'), findsNothing);
   });
 }

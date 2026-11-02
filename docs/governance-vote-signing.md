@@ -1,5 +1,10 @@
 # Mobile governance vote signing
 
+**Voting is closed in the app for now.** The vote screen explains why and has no
+submit action, because ordinary wallets have no voting power on testnet and a vote
+could be dropped after the node accepted it. The signer and `GovernanceRepository.vote`
+described below stay, with their tests, for when a real vote screen comes back.
+
 This build targets the owner-selected chain-777 v1 vote protocol, implemented by
 backend PR #1337. The backend operator must select
 `WRFCOIN_GOVERNANCE_SIGNING_VERSION=1`. The mobile Dart define of the same name
@@ -17,8 +22,8 @@ binding. Abstain is absent because the backend/core4 vote contract is binary.
 The proposal, choice, and preimage are built locally. Only the optional reason
 is unsigned, matching the backend contract.
 
-The confirmation dialog precedes one biometric-gated wallet-key access. The
-signer refuses background execution, legacy wallets, and a key whose derived
+When a vote screen comes back, a confirmation dialog must precede the one
+biometric-gated wallet-key access. The signer refuses background execution, legacy wallets, and a key whose derived
 address differs from the stored voting wallet. A different login-wallet address
 also refuses signing. The API's existing session policy must report signed in;
 voting never starts a login loop. The backend verifies that the signature's
@@ -26,5 +31,5 @@ public key derives to the authenticated JWT subject. The phone sends only
 `voteType`, `signer_public_key`, `signature`, and optional `reason`.
 
 The collect key is never opened. Synthetic Node-crypto signature fixtures and
-production-provider/screen tests cover both choices and cancellation. Local
+production-provider tests cover both choices and cancellation. Local
 Flutter tests do not prove physical-device biometric behavior or live voting.

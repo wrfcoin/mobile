@@ -4,10 +4,7 @@ import 'dart:io';
 import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
-import 'package:wrfcoin_mobile/features/governance/presentation/screens/vote_screen.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
@@ -229,63 +226,4 @@ void main() {
       expect(storage.privateReads, 0);
     },
   );
-  for (final allowed in [true, false]) {
-    testWidgets(
-      'confirmed screen vote authenticates the wallet once (allowed=$allowed)',
-      (tester) async {
-        await setup(allowed: allowed);
-        const proposal = ProposalModel(
-          id: 'proposal-1',
-          title: 'Synthetic',
-          description: 'Test',
-          proposalType: 'platform_upgrade',
-          status: 'active',
-          votesFor: 0,
-          votesAgainst: 0,
-          votesAbstain: 0,
-        );
-        final router = GoRouter(
-          initialLocation: '/vote',
-          routes: [
-            GoRoute(
-              path: '/',
-              builder: (_, _) => const Scaffold(body: Text('Parent')),
-              routes: [
-                GoRoute(
-                  path: 'vote',
-                  builder: (_, _) => const VoteScreen(proposal: proposal),
-                ),
-              ],
-            ),
-          ],
-        );
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: MaterialApp.router(routerConfig: router),
-          ),
-        );
-        await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.text('Vote For'));
-        await tester.pump();
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Submit Vote'));
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(auth.authenticateBiometricOnlyCalls, isEmpty);
-        await tester.runAsync(() async {
-          await tester.tap(find.widgetWithText(TextButton, 'Cast Vote'));
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        });
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(auth.authenticateBiometricOnlyCalls, hasLength(1));
-        expect(
-          requests.where((r) => r.method == 'POST'),
-          hasLength(allowed ? 1 : 0),
-        );
-        expect(storage.privateReads, allowed ? 1 : 0);
-        expect(find.text(allowed ? 'Parent' : 'Synthetic'), findsOneWidget);
-        await tester.pumpWidget(const SizedBox());
-        router.dispose();
-      },
-    );
-  }
 }
