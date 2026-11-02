@@ -23,6 +23,8 @@ import '../../features/collector/presentation/screens/station_recovery_screen.da
 import '../../features/collector/presentation/screens/station_security_screen.dart';
 import '../../features/collector/presentation/screens/station_transfer_screen.dart';
 import '../../features/challenges/presentation/screens/challenges_screen.dart';
+import '../../features/duels/presentation/screens/forecast_duel_screen.dart';
+import '../../features/duels/presentation/screens/forecast_duels_screen.dart';
 import '../../features/wallet/presentation/screens/wallet_screen.dart';
 import '../../features/analytics/presentation/screens/analytics_dashboard_screen.dart';
 import '../../features/wallet/presentation/screens/send_screen.dart';
@@ -256,6 +258,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   key: state.pageKey,
                   child: const FriendChallengesRoute(),
                 ),
+              ),
+              GoRoute(
+                path: 'duels',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const ForecastDuelsScreen(),
+                ),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: ForecastDuelScreen(
+                        id: state.pathParameters['id'] ?? '',
+                      ),
+                    ),
+                  ),
+                ],
               ),
               GoRoute(
                 path: 'imagery',
