@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wrfcoin_mobile/features/settings/presentation/screens/privacy_center_screen.dart';
 
 import '../test_helpers/app_harness.dart';
 
@@ -23,8 +24,13 @@ void main() {
     var toggle = tester.widget<Switch>(find.byType(Switch));
     expect(toggle.onChanged, isNotNull);
 
-    await tester.tap(find.byTooltip('Privacy center'));
-    await pumpUntilFound(tester, find.text('Privacy Center'));
+    await tester.tap(find.byTooltip('Settings'));
+    await pumpUntilFound(tester, find.text('Collecting'));
+    await pumpFrames(tester);
+    await tester.ensureVisible(find.text('Privacy Center'));
+    await pumpFrames(tester);
+    await tester.tap(find.text('Privacy Center'));
+    await pumpUntilFound(tester, find.byType(PrivacyCenterScreen));
     await pumpFrames(tester);
 
     await tester.scrollUntilVisible(

@@ -7,6 +7,7 @@ import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
+import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../providers/weather_narratives_provider.dart';
 import '../providers/weather_provider.dart';
 import '../providers/wrf_forecast_provider.dart';
@@ -73,6 +74,7 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
               onPressed: () => context.push('/weather/alerts'),
             ),
           ),
+          const SettingsGearButton(),
         ],
       ),
       body: state.loading
@@ -317,14 +319,6 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
                           icon: Icons.stars,
                           label: 'Sky View',
                           onTap: () => context.push('/weather/ar'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _QuickAction(
-                          icon: Icons.tune,
-                          label: 'Alert Settings',
-                          onTap: () => context.push('/weather/alert-settings'),
                         ),
                       ),
                     ],

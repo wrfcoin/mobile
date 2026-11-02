@@ -424,9 +424,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             // Gate only the achievements surfaces behind the flag: settings
-            // and privacy must stay reachable regardless — the Collect
-            // dashboard links straight to /profile/privacy and
-            // /profile/settings even when the Profile tab is hidden.
+            // and privacy must stay reachable regardless — every tab's gear
+            // opens /profile/settings, and the Collect dashboard links straight
+            // to /profile/privacy, even when the Profile tab is hidden.
             redirect: (context, state) {
               if (featureFlags.enableAchievementsUi) return null;
               final path = state.uri.path;
@@ -504,11 +504,14 @@ class ScaffoldWithNavBar extends ConsumerWidget {
 
     final uri = GoRouterState.of(context).uri;
     final pathFromHash = uri.fragment.startsWith('/') ? uri.fragment : '';
-    final location = uri.path.isNotEmpty
+    final topLocation = uri.path.isNotEmpty
         ? uri.path
         : pathFromHash.isNotEmpty
         ? pathFromHash
         : uri.toString();
+    // The tab the user is on is the bottom of the shell's stack, not the top:
+    // Settings is /profile/settings, but opened from Weather it stays Weather.
+    final location = _shellBaseLocation(context) ?? topLocation;
     final currentIndex = tabs.indexWhere((t) => location.startsWith(t.$1));
     final selectedIndex = currentIndex < 0 ? 0 : currentIndex;
 
@@ -557,6 +560,19 @@ class ScaffoldWithNavBar extends ConsumerWidget {
       },
     );
   }
+}
+
+String? _shellBaseLocation(BuildContext context) {
+  final matches = GoRouter.of(context)
+      .routerDelegate
+      .currentConfiguration
+      .matches;
+  for (final match in matches) {
+    if (match is ShellRouteMatch && match.matches.isNotEmpty) {
+      return match.matches.first.matchedLocation;
+    }
+  }
+  return null;
 }
 
 /// Notifies only when [AuthHandoffController.gatesNavigation] changes, not

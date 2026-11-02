@@ -18,6 +18,7 @@ import '../../../../services/crypto/key_manager.dart';
 import '../../../../services/crypto/collect_key_store.dart';
 import '../../../collector/data/services/station_registration_service.dart';
 import '../../../../services/crypto/wallet_secure_storage.dart';
+import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../data/models/transaction_model.dart';
 import '../providers/transactions_provider.dart';
 import '../widgets/transaction_history_unavailable_card.dart';
@@ -84,6 +85,7 @@ class WalletScreen extends ConsumerWidget {
               onPressed: () => context.push('/wallet/receive'),
             ),
           ),
+          const SettingsGearButton(),
         ],
       ),
       bottomNavigationBar: const SafeArea(child: TestnetNotice()),
