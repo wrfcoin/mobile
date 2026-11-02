@@ -328,6 +328,23 @@ void main() {
     await pumpUntilFound(tester, find.byType(PrivacyCenterScreen));
   });
 
+  testWidgets('Payout notifications moved from Earnings to Settings', (
+    tester,
+  ) async {
+    final router = await pumpApp(tester);
+    router.go('/wallet');
+    await pumpFrames(tester);
+    expect(find.byTooltip('Payout notifications'), findsNothing);
+
+    await tester.tap(find.byType(SettingsGearButton));
+    await pumpUntilFound(tester, find.text('Payout notifications'));
+    await pumpFrames(tester);
+    await tester.ensureVisible(find.text('Payout notifications'));
+    await pumpFrames(tester);
+    await tester.tap(find.text('Payout notifications'));
+    await pumpUntilFound(tester, find.byType(PayoutNotificationsScreen));
+  });
+
   testWidgets('Weather no longer has the Alert Settings button', (
     tester,
   ) async {
