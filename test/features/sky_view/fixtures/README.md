@@ -17,3 +17,6 @@ elevation. Moon: 301 from 500@399, QUANTITIES=1, rows are JD, RA, Dec.
 
 `WMM2025_TestValues.txt` is NOAA's official table, unchanged; see
 docs/licenses/wmm2025-provenance.md.
+
+`bsc5_sample.json` and `constellation_lines_source.json` are untouched extracts of the raw sources,
+written by `scripts/sky_catalog/build_sky_catalog.py`, so the tests can check the shipped asset against them.

@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-const skyCatalogLicense = r'''MIT License
+const skyCatalogLicense = r'''Bright Star Catalogue, 5th Revised Ed., Hoffleit and Warren (1991), in the JSON
+conversion by Bretton Wade, commit abffb3b
+(https://github.com/brettonw/YaleBrightStarCatalog).
+
+MIT License
 
 Copyright (c) 2016 Bretton Wade
 
@@ -23,6 +27,46 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ''';
 
+/// Star positions, magnitudes and designations.
+const skyCatalogPackage = 'Yale Bright Star Catalogue (BSC5), via brettonw';
+
+/// Constellation figures, names and boundaries.
+const skyConstellationPackage = 'd3-celestial constellation data';
+
+const skyConstellationLicense = r'''Constellation figures, names and boundaries from d3-celestial, commit 7e720a3
+(https://github.com/ofrohn/d3-celestial). It cites the IAU constellation pages
+for the figures and Davenhall and Leggett (1989), VizieR VI/49, for the
+boundaries.
+
+Copyright (c) 2015, Olaf Frohn
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+''';
+
 bool _registered = false;
 
 /// Keep the complete dataset notice in the binary and Flutter's licenses UI.
@@ -30,10 +74,11 @@ void registerSkyCatalogLicense() {
   if (_registered) return;
   _registered = true;
   LicenseRegistry.addLicense(
-    () => Stream.value(
-      const LicenseEntryWithLineBreaks([
-        'Yale BSC5 bright-star subset',
-      ], skyCatalogLicense),
-    ),
+    () => Stream.fromIterable(const [
+      LicenseEntryWithLineBreaks([skyCatalogPackage], skyCatalogLicense),
+      LicenseEntryWithLineBreaks([
+        skyConstellationPackage,
+      ], skyConstellationLicense),
+    ]),
   );
 }

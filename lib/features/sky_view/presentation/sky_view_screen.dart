@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -8,19 +9,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../weather/data/weather_location_resolver.dart';
 import '../../weather/domain/models/coarse_location.dart';
+import '../data/bright_stars.dart';
 import '../data/catalog_license.dart';
 import '../data/sky_catalog.dart';
 import '../data/sky_sensors.dart';
+import '../data/sky_star_catalog.dart';
 import '../domain/sky_accuracy.dart';
 import '../domain/sky_astronomy.dart';
 import '../domain/sky_attitude.dart';
+import '../domain/sky_frame.dart';
 import '../domain/sky_horizon.dart';
+import '../domain/sky_moon.dart';
+import '../domain/sky_projection.dart';
 import '../domain/wmm.dart';
 import 'sky_map_painter.dart';
+import 'sky_star_layer.dart';
 
 const _alignAzimuthKey = 'sky_view.align_azimuth';
 const _alignAltitudeKey = 'sky_view.align_altitude';
 const _declinationKey = 'sky_view.declination_override';
+const _constellationsKey = 'sky_view.constellations';
 
 /// A sensor silent for longer than this no longer describes where the phone is.
 const _staleAfter = Duration(seconds: 4);
@@ -70,6 +78,9 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
   List<SkyFix> _fixes = const [];
   DateTime? _fixesAt;
   Size _mapSize = Size.zero;
+  SkyStarLayer? _stars;
+  SkyFrame? _frame;
+  bool _showConstellations = true;
 
   // Location.
   WeatherLocationRequest? _locationRequest;
@@ -107,6 +118,7 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
     registerSkyCatalogLicense();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_loadCalibration());
+    unawaited(_loadStars());
     _startSensors();
     _startClock();
     WidgetsBinding.instance.addPostFrameCallback((_) => _askForLocation());
@@ -353,6 +365,8 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
       return;
     }
     _fixes = computeSky(now, cell);
+    // Same moment as the fixes, so named stars and dots stay in register.
+    _frame = SkyFrame.at(now, cell);
     _fixesAt = now;
   }
 
@@ -443,6 +457,31 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
     _publishPose();
   }
 
+  // --- Stars -------------------------------------------------------------
+
+  Future<void> _loadStars() async {
+    try {
+      final catalog = await loadSkyStarCatalog();
+      if (mounted) setState(() => _stars = SkyStarLayer(catalog));
+    } catch (_) {
+      // A damaged install still gets the built-in brightest stars.
+    }
+  }
+
+  void _toggleConstellations() {
+    setState(() => _showConstellations = !_showConstellations);
+    unawaited(_saveConstellations());
+  }
+
+  Future<void> _saveConstellations() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_constellationsKey, _showConstellations);
+    } catch (_) {
+      // No store on this platform: the choice lasts for this session only.
+    }
+  }
+
   // --- Calibration -------------------------------------------------------
 
   Future<void> _loadCalibration() async {
@@ -453,6 +492,7 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
       final altitude = prefs.getDouble(_alignAltitudeKey);
       setState(() {
         _declinationOverride = prefs.getDouble(_declinationKey);
+        _showConstellations = prefs.getBool(_constellationsKey) ?? true;
         if (azimuth != null && altitude != null) {
           _alignment = SkyAlignment(azimuth, altitude);
         }
@@ -530,8 +570,59 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
   void _onTapMap(TapUpDetails details) {
     final pose = _pose.value;
     if (pose == null) return;
-    final fix = skyObjectAt(details.localPosition, _fixes, pose, _mapSize);
+    final tap = details.localPosition;
+    // A named object under the finger wins, then a constellation's name, then
+    // the dots, then a named object a little further away.
+    final close = skyObjectAt(tap, _fixes, pose, _mapSize, reach: 20);
+    if (close != null) {
+      _select(close);
+      return;
+    }
+    final layer = _stars, frame = _frame;
+    if (layer != null && frame != null && _fixes.isNotEmpty) {
+      final projection = SkyProjection(pose, _mapSize);
+      if (_showConstellations && !_aligning) {
+        final constellation = skyConstellationAt(
+          tap,
+          layer.catalog,
+          projection,
+          frame,
+          _labels,
+        );
+        if (constellation != null) {
+          _constellationDetails(constellation);
+          return;
+        }
+      }
+      final star = layer.starAt(tap, projection, frame);
+      if (star != null) {
+        final object = layer.catalog.object(star);
+        _select(SkyFix(object, observedHorizontal(object, _now(), _cell!)));
+        return;
+      }
+    }
+    final fix = skyObjectAt(tap, _fixes, pose, _mapSize);
     if (fix != null) _select(fix);
+  }
+
+  void _constellationDetails(SkyConstellation constellation) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(constellation.name),
+        content: Text(
+          'Abbreviation: ${constellation.abbreviation}\n\n'
+          'One of the 88 constellations of the International Astronomical '
+          'Union. The lines are a common way to draw it, not an official shape.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _details(SkyFix fix) {
@@ -548,6 +639,7 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
         content: SingleChildScrollView(
           child: Text(
             '${object.id} ${object.constellation}\n'
+            '${object.magnitude.isNaN ? '' : 'Magnitude ${object.magnitude.toStringAsFixed(2)}\n'}'
             'J2000 RA ${object.position.ra.toStringAsFixed(2)}°, Dec ${object.position.dec.toStringAsFixed(2)}°\n'
             'Azimuth ${horizontal.azimuth.toStringAsFixed(1)}°, altitude ${horizontal.altitude.toStringAsFixed(1)}°\n'
             'Geometric, approximate position; no atmospheric refraction.\n\n'
@@ -667,15 +759,22 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
   }
 
   void _about() {
+    final catalog = _stars?.catalog;
+    final contents = catalog == null
+        ? 'Shows the ${brightStars.length} brightest catalog stars, the Sun, '
+              'the Moon and seven planets.'
+        : 'Shows ${catalog.starCount} stars, down to about what a dark sky '
+              'shows the naked eye, with names on the ${brightStars.length} '
+              'brightest. Also the ${catalog.constellations.length} '
+              'constellations, the Sun, the Moon and seven planets.';
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('About this map'),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Text(
             'Drawn from calculation, offline. It uses no camera and no network.\n\n'
-            'Shows the 93 brightest catalog stars, the Sun, the Moon and seven '
-            'planets. Positions are approximate and geometric: atmospheric '
+            '$contents Positions are approximate and geometric: atmospheric '
             'refraction is not included, so objects near the horizon look a '
             'little higher in the real sky.\n\n'
             'Compass error of several degrees is normal on a phone. "Align on a '
@@ -712,6 +811,17 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
         ? '${at.altitude.round()}° up'
         : '${(-at.altitude).round()}° below the horizon';
     return 'Facing $name (${at.azimuth.round()}°), $height';
+  }
+
+  /// The IAU constellation under the ring, from its official boundaries.
+  SkyConstellation? _ringConstellation(SkyPose pose) {
+    final catalog = _stars?.catalog, frame = _frame;
+    if (catalog == null || frame == null || _fixes.isEmpty) return null;
+    final at = frame.toCatalog(pose.forward);
+    return catalog.constellationAt(
+      math.atan2(at.y, at.x) * 180 / math.pi,
+      math.asin(at.z.clamp(-1.0, 1.0)) * 180 / math.pi,
+    );
   }
 
   /// Objects in or near the reticle, nearest first.
@@ -762,6 +872,15 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
+            tooltip: _showConstellations
+                ? 'Hide constellations'
+                : 'Show constellations',
+            isSelected: _showConstellations,
+            icon: const Icon(Icons.polyline_outlined),
+            selectedIcon: const Icon(Icons.polyline),
+            onPressed: _toggleConstellations,
+          ),
+          IconButton(
             tooltip: 'Location and compass',
             icon: const Icon(Icons.tune),
             onPressed: _settings,
@@ -791,6 +910,9 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
                       fixes: _fixes,
                       aligning: _aligning,
                       labels: _labels,
+                      stars: _stars,
+                      frame: _frame,
+                      constellations: _showConstellations,
                     ),
                   ),
                 ),
@@ -824,140 +946,144 @@ class _SkyViewScreenState extends ConsumerState<SkyViewScreen>
         color: const Color(0xD9101A2C),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (locationMessage != null) ...[
-            Text(locationMessage, style: bright),
-            if (!_locating)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (locationMessage != null) ...[
+              Text(locationMessage, style: bright),
+              if (!_locating)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: _settings,
+                      child: const Text('Enter location'),
+                    ),
+                    if (_locationProblem !=
+                        LocationUnavailableReason.permissionBlocked)
+                      TextButton(
+                        onPressed: _askForLocation,
+                        child: const Text('Use my location'),
+                      )
+                    else
+                      TextButton(
+                        onPressed: Geolocator.openAppSettings,
+                        child: const Text('Open settings'),
+                      ),
+                  ],
+                ),
+            ],
+            if (!_epochSupported)
+              const Text(
+                'Positions unavailable outside 1800–2050.',
+                style: bright,
+              ),
+            if (_notice case final notice?)
+              Row(
+                children: [
+                  Expanded(child: Text(notice, style: bright)),
+                  IconButton(
+                    tooltip: 'Dismiss',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.white70,
+                    ),
+                    onPressed: () => setState(() => _notice = null),
+                  ),
+                ],
+              ),
+            if (_aligning)
+              const Text(
+                'Aim the back of the phone at a star you can see, so it would sit '
+                'behind the ring. Then tap that star on the map.',
+                style: bright,
+              ),
+            if (_fallback && pose != null)
+              const Text(
+                'This phone has no fused motion sensor, so the map is less steady.',
+                style: dim,
+              ),
+            if (_accuracy.low && !_hideCalibrationPrompt && pose != null)
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Compass needs calibrating: move the phone in a figure-eight, away from metal.',
+                      style: bright,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        setState(() => _hideCalibrationPrompt = true),
+                    child: const Text('Hide'),
+                  ),
+                ],
+              ),
+            if (wmm != null &&
+                wmm.compassUnreliable &&
+                _declinationOverride == null)
+              const Text(
+                'Close to a magnetic pole, a phone compass is unreliable.',
+                style: dim,
+              ),
+            if (pose == null && locationMessage == null && _epochSupported)
+              const Text('Waiting for the motion sensors…', style: bright),
+            if (pose != null) ...[
+              Text(_describePointing(pose.boresight), style: bright),
+              if (_ringConstellation(pose) case final constellation?)
+                Text('The ring is in ${constellation.name}', style: bright),
+              Text(
+                'Compass: ${_accuracy.label.toLowerCase()} · '
+                '${declination == null ? 'magnetic north, uncorrected' : 'true north'}'
+                '${_alignment.isSet ? ' · aligned' : ''}',
+                style: dim,
+              ),
+            ],
+            if (near.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final (fix, _) in near)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(fix.object.name),
+                          onPressed: () => _select(fix),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (pose != null && _fixes.isNotEmpty && near.isEmpty)
+              const Text('Nothing bright near the ring.', style: dim),
+            if (pose != null && _fixes.isNotEmpty)
               Wrap(
                 spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   TextButton(
-                    onPressed: _settings,
-                    child: const Text('Enter location'),
+                    onPressed: () => setState(() {
+                      _aligning = !_aligning;
+                      _notice = null;
+                    }),
+                    child: Text(_aligning ? 'Cancel align' : 'Align on a star'),
                   ),
-                  if (_locationProblem !=
-                      LocationUnavailableReason.permissionBlocked)
+                  if (_alignment.isSet)
                     TextButton(
-                      onPressed: _askForLocation,
-                      child: const Text('Use my location'),
-                    )
-                  else
-                    TextButton(
-                      onPressed: Geolocator.openAppSettings,
-                      child: const Text('Open settings'),
+                      onPressed: _resetAlignment,
+                      child: const Text('Reset alignment'),
                     ),
+                  const Text('Approximate, no refraction', style: dim),
                 ],
               ),
           ],
-          if (!_epochSupported)
-            const Text(
-              'Positions unavailable outside 1800–2050.',
-              style: bright,
-            ),
-          if (_notice case final notice?)
-            Row(
-              children: [
-                Expanded(child: Text(notice, style: bright)),
-                IconButton(
-                  tooltip: 'Dismiss',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(
-                    Icons.close,
-                    size: 18,
-                    color: Colors.white70,
-                  ),
-                  onPressed: () => setState(() => _notice = null),
-                ),
-              ],
-            ),
-          if (_aligning)
-            const Text(
-              'Aim the back of the phone at a star you can see, so it would sit '
-              'behind the ring. Then tap that star on the map.',
-              style: bright,
-            ),
-          if (_fallback && pose != null)
-            const Text(
-              'This phone has no fused motion sensor, so the map is less steady.',
-              style: dim,
-            ),
-          if (_accuracy.low && !_hideCalibrationPrompt && pose != null)
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Compass needs calibrating: move the phone in a figure-eight, away from metal.',
-                    style: bright,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      setState(() => _hideCalibrationPrompt = true),
-                  child: const Text('Hide'),
-                ),
-              ],
-            ),
-          if (wmm != null &&
-              wmm.compassUnreliable &&
-              _declinationOverride == null)
-            const Text(
-              'Close to a magnetic pole, a phone compass is unreliable.',
-              style: dim,
-            ),
-          if (pose == null && locationMessage == null && _epochSupported)
-            const Text('Waiting for the motion sensors…', style: bright),
-          if (pose != null) ...[
-            Text(_describePointing(pose.boresight), style: bright),
-            Text(
-              'Compass: ${_accuracy.label.toLowerCase()} · '
-              '${declination == null ? 'magnetic north, uncorrected' : 'true north'}'
-              '${_alignment.isSet ? ' · aligned' : ''}',
-              style: dim,
-            ),
-          ],
-          if (near.isNotEmpty)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final (fix, _) in near)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ActionChip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(fix.object.name),
-                        onPressed: () => _select(fix),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          if (pose != null && _fixes.isNotEmpty && near.isEmpty)
-            const Text('Nothing bright near the ring.', style: dim),
-          if (pose != null && _fixes.isNotEmpty)
-            Wrap(
-              spacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: () => setState(() {
-                    _aligning = !_aligning;
-                    _notice = null;
-                  }),
-                  child: Text(_aligning ? 'Cancel align' : 'Align on a star'),
-                ),
-                if (_alignment.isSet)
-                  TextButton(
-                    onPressed: _resetAlignment,
-                    child: const Text('Reset alignment'),
-                  ),
-                const Text('Approximate, no refraction', style: dim),
-              ],
-            ),
-        ],
+        ),
       ),
     );
   }

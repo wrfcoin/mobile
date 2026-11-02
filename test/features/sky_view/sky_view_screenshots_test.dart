@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wrfcoin_mobile/features/sky_view/data/sky_sensors.dart';
+import 'package:wrfcoin_mobile/features/sky_view/data/sky_star_catalog.dart';
 import 'package:wrfcoin_mobile/features/sky_view/domain/sky_attitude.dart';
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
 import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.dart';
@@ -61,6 +62,7 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.runAsync(_loadRoboto);
       SharedPreferences.setMockInitialValues({});
+      forgetSkyStarCatalog();
       const channel = MethodChannel('flutter.baseflow.com/geolocator');
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
