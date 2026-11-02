@@ -302,7 +302,20 @@ class WalletScreen extends ConsumerWidget {
                     }
                     return Column(
                       children: [
+                        if (txState.discoveringCredits)
+                          const Padding(
+                            key: Key('wallet-credits-discovering'),
+                            padding: EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'Looking for your rewards…',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         if (txState.items.isEmpty &&
+                            !txState.discoveringCredits &&
                             _unrepeatedCredits(txState).isEmpty)
                           const Padding(
                             padding: EdgeInsets.all(24),
@@ -364,7 +377,8 @@ class WalletScreen extends ConsumerWidget {
                               transaction: tx,
                             ),
                         ],
-                        if (txState.creditsTruncated)
+                        if (txState.creditsTruncated &&
+                            !txState.discoveringCredits)
                           const Padding(
                             padding: EdgeInsets.only(top: 8),
                             child: Text(
@@ -382,7 +396,9 @@ class WalletScreen extends ConsumerWidget {
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
-                              onPressed: txState.loadingMore
+                              onPressed:
+                                  txState.loadingMore ||
+                                      txState.discoveringCredits
                                   ? null
                                   : () => ref
                                         .read(transactionsProvider.notifier)

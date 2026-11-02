@@ -71,6 +71,7 @@ class _CountingWallet extends FakeWalletRepository {
     String address, {
     int offset = 0,
     int limit = 20,
+    String? creditAfter,
     CancelToken? cancelToken,
   }) {
     transactionCalls++;
@@ -78,6 +79,7 @@ class _CountingWallet extends FakeWalletRepository {
       address,
       offset: offset,
       limit: limit,
+      creditAfter: creditAfter,
       cancelToken: cancelToken,
     );
   }
