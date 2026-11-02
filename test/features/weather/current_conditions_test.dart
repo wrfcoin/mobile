@@ -237,7 +237,7 @@ Map<String, Object?> _current(Map<String, Object?> current) => {
 };
 
 Finder _row(String label, String value) => find.descendant(
-  of: find.ancestor(of: find.text(label), matching: find.byType(Row)).first,
+  of: find.ancestor(of: find.text(label), matching: find.byType(Wrap)).first,
   matching: find.text(value),
 );
 

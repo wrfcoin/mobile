@@ -177,18 +177,25 @@ class CollectorDashboard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Current Readings',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                  // Side by side when they fit; a large text size wraps them.
+                  SizedBox(
+                    width: double.infinity,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        const Text(
+                          'Current Readings',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      SyncStatus(pendingCount: state.pendingSyncCount),
-                    ],
+                        SyncStatus(pendingCount: state.pendingSyncCount),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (state.currentReading != null) ...[

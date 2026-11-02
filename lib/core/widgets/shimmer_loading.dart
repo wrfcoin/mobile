@@ -32,13 +32,17 @@ class ShimmerList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: List.generate(count, (index) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: index < count - 1 ? 8 : 0),
-          child: ShimmerCard(height: height),
-        );
-      }),
+    // Cards past the bottom of a short window are clipped, not an overflow.
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        children: List.generate(count, (index) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: index < count - 1 ? 8 : 0),
+            child: ShimmerCard(height: height),
+          );
+        }),
+      ),
     );
   }
 }
