@@ -68,15 +68,6 @@ class CollectorDashboard extends ConsumerWidget {
                 onPressed: () => context.push('/collect/challenges'),
               ),
             ),
-          Semantics(
-            button: true,
-            label: 'Open field diagnostics mode',
-            child: IconButton(
-              tooltip: 'Field mode',
-              icon: const Icon(Icons.radar),
-              onPressed: () => context.push('/collect/field-mode'),
-            ),
-          ),
           const SettingsGearButton(),
         ],
       ),
