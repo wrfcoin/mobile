@@ -34,7 +34,9 @@ void main() {
     expect(find.byType(BottomNavigationBar), findsNothing);
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.text('Weather'), findsWidgets);
-    expect(find.text('Earnings'), findsWidgets);
+    expect(find.text('Wallet'), findsWidgets);
+    expect(find.text('More'), findsWidgets);
+    expect(find.text('Govern'), findsNothing);
   });
 }
 

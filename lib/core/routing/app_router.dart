@@ -44,6 +44,7 @@ import '../../features/faucet/presentation/screens/faucet_screen.dart';
 import '../../features/explorer/presentation/screens/chain_screen.dart';
 import '../../features/network_nodes/presentation/screens/network_nodes_screen.dart';
 import '../../features/governance/presentation/screens/proposal_list_screen.dart';
+import '../../features/more/presentation/screens/more_screen.dart';
 import '../../features/governance/presentation/screens/proposal_detail_screen.dart';
 import '../../features/governance/presentation/screens/vote_screen.dart';
 import '../../features/governance/data/models/proposal_model.dart';
@@ -427,12 +428,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // The More tab. Its first route is the tab's first screen. Govern
+          // shares the branch, so a link to /govern highlights More.
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/more',
+                pageBuilder: (context, state) => NoTransitionPage(
+                  child: _MoreBranchBack(builder: (_, _) => const MoreScreen()),
+                ),
+              ),
+              GoRoute(
                 path: '/govern',
-                pageBuilder: (context, state) =>
-                    const NoTransitionPage(child: ProposalListScreen()),
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: _MoreBranchBack(
+                    toList: true,
+                    builder: (_, leading) =>
+                        ProposalListScreen(leading: leading),
+                  ),
+                ),
                 routes: [
                   GoRoute(
                     path: 'proposal',
@@ -467,14 +482,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 // Gate only the achievements surfaces behind the flag: settings
                 // and privacy must stay reachable regardless — every tab's gear
                 // opens /profile/settings, and the Collect dashboard links straight
-                // to /profile/privacy, even when the Profile tab is hidden.
+                // to /profile/privacy, even when the Profile tab is hidden. More
+                // also opens competitions and the leaderboard with the tab hidden.
                 redirect: (context, state) {
                   if (featureFlags.enableAchievementsUi) return null;
                   final path = state.uri.path;
                   final gated =
-                      path == '/profile' ||
-                      path.startsWith('/profile/deserts') ||
-                      path.startsWith('/profile/leaderboard');
+                      path == '/profile' || path.startsWith('/profile/deserts');
                   return gated ? '/weather' : null;
                 },
                 pageBuilder: (context, state) =>
@@ -539,14 +553,17 @@ class ScaffoldWithNavBar extends ConsumerStatefulWidget {
 
   const ScaffoldWithNavBar({super.key, required this.navigationShell});
 
-  /// One per [StatefulShellBranch], in order.
+  /// In bar order, each with its [StatefulShellBranch] index. Branch order is
+  /// not bar order: More is branch [_moreBranch] and sits last on the bar.
   static const _allTabs = [
-    (Icons.cloud, 'Weather'),
-    (Icons.sensors, 'Collect'),
-    (Icons.account_balance_wallet, 'Earnings'),
-    (Icons.how_to_vote, 'Govern'),
-    (Icons.person, 'Profile'),
+    (Icons.cloud, 'Weather', 0),
+    (Icons.sensors, 'Collect', 1),
+    (Icons.account_balance_wallet, 'Wallet', 2),
+    (Icons.person, 'Profile', 4),
+    (Icons.menu, 'More', _moreBranch),
   ];
+
+  static const _moreBranch = 3;
 
   @override
   ConsumerState<ScaffoldWithNavBar> createState() => _ScaffoldWithNavBarState();
@@ -557,6 +574,9 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
 
   /// The tab to open once the screen in [_closeWhenLeft] has closed.
   int? _openAfterClose;
+
+  /// The tab More was opened from, where Back on its list returns.
+  int? _cameToMoreFrom;
 
   @override
   void didUpdateWidget(ScaffoldWithNavBar oldWidget) {
@@ -573,6 +593,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
       });
     }
     if (previous == current) return;
+    if (current == ScaffoldWithNavBar._moreBranch) _cameToMoreFrom = previous;
     final now = ref.read(appClockProvider)();
     _leftAt[previous] = now;
     final left = _leftAt[current];
@@ -595,6 +616,8 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
     }
   }
 
+  void _leaveMore() => widget.navigationShell.goBranch(_cameToMoreFrom ?? 0);
+
   void _selectTab(int index) {
     final shell = widget.navigationShell;
     final current = shell.currentIndex;
@@ -615,7 +638,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
   @override
   Widget build(BuildContext context) {
     final flags = ref.watch(featureFlagsProvider);
-    // Profile is the last branch, so hiding it leaves the other indexes alone.
     final tabs = flags.enableAchievementsUi
         ? ScaffoldWithNavBar._allTabs
         : ScaffoldWithNavBar._allTabs.where((t) => t.$2 != 'Profile').toList();
@@ -623,7 +645,9 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
     // The branch, not the top route: Settings is /profile/settings, but opened
     // from Weather it sits on Weather's stack and stays Weather.
     final branch = widget.navigationShell.currentIndex;
-    final selectedIndex = branch < tabs.length ? branch : 0;
+    final selected = tabs.indexWhere((t) => t.$3 == branch);
+    final selectedIndex = selected < 0 ? 0 : selected;
+    void selectBarItem(int item) => _selectTab(tabs[item].$3);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -634,7 +658,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
                 SafeArea(
                   child: NavigationRail(
                     selectedIndex: selectedIndex,
-                    onDestinationSelected: _selectTab,
+                    onDestinationSelected: selectBarItem,
                     labelType: NavigationRailLabelType.all,
                     destinations: tabs
                         .map(
@@ -657,7 +681,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
           body: widget.navigationShell,
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: selectedIndex,
-            onTap: _selectTab,
+            onTap: selectBarItem,
             type: BottomNavigationBarType.fixed,
             items: tabs
                 .map(
@@ -667,6 +691,43 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Back at the bottom of the More branch, where a tab would close the app:
+/// the list returns to the tab More was opened from, and Govern opened by a
+/// link, with no list under it, returns to the list. Anywhere higher up this
+/// does nothing and Back is an ordinary pop.
+class _MoreBranchBack extends StatelessWidget {
+  const _MoreBranchBack({required this.builder, this.toList = false});
+
+  /// Given the app bar's back button, when the screen needs its own.
+  final Widget Function(BuildContext, Widget? leading) builder;
+  final bool toList;
+
+  @override
+  Widget build(BuildContext context) {
+    final atBottom = ModalRoute.of(context)?.isFirst ?? false;
+    void back() {
+      if (toList) {
+        context.go('/more');
+      } else {
+        context
+            .findAncestorStateOfType<_ScaffoldWithNavBarState>()
+            ?._leaveMore();
+      }
+    }
+
+    return PopScope(
+      canPop: !atBottom,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) back();
+      },
+      child: builder(
+        context,
+        atBottom && toList ? BackButton(onPressed: back) : null,
+      ),
     );
   }
 }

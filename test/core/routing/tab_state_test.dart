@@ -200,7 +200,7 @@ void main() {
     await tester.pump();
     final screen = tester.state(find.byType(ForecastDashboard));
 
-    for (final other in const ['Collect', 'Earnings', 'Govern', 'Profile']) {
+    for (final other in const ['Collect', 'Wallet', 'Profile', 'More']) {
       await tapTab(tester, other);
       expect(find.byType(ForecastDashboard), findsNothing);
       await tester.tap(
@@ -422,7 +422,7 @@ void main() {
       findsNothing,
       reason: 'not kept mounted behind another tab',
     );
-    await tapTab(tester, 'Earnings');
+    await tapTab(tester, 'Wallet');
     expect(router.state.uri.path, '/wallet');
   });
 
@@ -441,12 +441,12 @@ void main() {
     expect(opened, greaterThan(0));
 
     await tapTab(tester, 'Weather');
-    await tapTab(tester, 'Earnings');
+    await tapTab(tester, 'Wallet');
     expect(wallet.transactionCalls, opened, reason: 'a quick look is free');
 
     await tapTab(tester, 'Weather');
     now = now.add(tabDataStaleAfter);
-    await tapTab(tester, 'Earnings');
+    await tapTab(tester, 'Wallet');
     await pumpFrames(tester);
     expect(wallet.transactionCalls, opened + 1);
     tester.takeException();

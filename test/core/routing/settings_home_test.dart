@@ -41,7 +41,7 @@ const _phone = Size(390, 844);
 const _tabs = <(String, String)>[
   ('/weather', 'Weather'),
   ('/collect', 'Collect'),
-  ('/wallet', 'Earnings'),
+  ('/wallet', 'Wallet'),
   ('/govern', 'Govern'),
   ('/profile', 'Profile'),
 ];
@@ -102,6 +102,8 @@ void main() {
     expect(actions, findsWidgets);
     var leftmost = size.width;
     for (final element in actions.evaluate()) {
+      // A back button sits left of the title, not in the action row.
+      if (element.findAncestorWidgetOfExactType<BackButton>() != null) continue;
       final box = element.renderObject! as RenderBox;
       final rect = box.localToGlobal(Offset.zero) & box.size;
       expect(rect.left, greaterThanOrEqualTo(0));
