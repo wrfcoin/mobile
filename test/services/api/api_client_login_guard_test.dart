@@ -42,6 +42,9 @@ class _ScriptedBackend implements HttpClientAdapter {
   _Mode login = _Mode.ok;
   _Mode refresh = _Mode.ok;
 
+  /// Runs while a refresh is on the wire: another isolate acting meanwhile.
+  Future<void> Function()? onRefreshInFlight;
+
   /// When true every protected route answers 401 even with a fresh token.
   bool protectedAlways401 = false;
 
@@ -131,6 +134,7 @@ class _ScriptedBackend implements HttpClientAdapter {
     }
     if (options.method == 'POST' && path.endsWith('/auth/refresh')) {
       refreshPosts++;
+      await onRefreshInFlight?.call();
       final failed = _failure(refresh, options);
       if (failed != null) return failed;
       final jwt = 'jwt-r-${_counter++}';
@@ -208,6 +212,7 @@ void main() {
     KeyManager? keyManager,
     AuthHandoffController? auth,
     bool canStartLogin = true,
+    Future<void> Function()? refreshSettle,
   }) {
     final authDio = Dio(BaseOptions(baseUrl: 'https://auth.invalid/api'))
       ..httpClientAdapter = backend;
@@ -223,6 +228,7 @@ void main() {
       loginGuardClock: clock.call,
       loginGuardRandom: () => 1.0,
       canStartLogin: canStartLogin,
+      refreshSettle: refreshSettle ?? () async {},
     );
     client.dio.options.baseUrl = 'https://auth.invalid/api';
     client.dio.httpClientAdapter = backend;
@@ -610,6 +616,56 @@ void main() {
         expect(backend.loginPosts, 1);
       },
     );
+  });
+
+  group('a refresh token rotated by another isolate is not a rejection', () {
+    Future<void> otherIsolateRotates() => keys.storeAuthSession(
+      jwt: 'jwt-from-other-isolate',
+      refreshToken: 'refresh-rotated',
+      expiresInSeconds: 900,
+      walletScheme: KeyManager.ed25519AuthScheme,
+    );
+
+    test('rotated while our request was on the wire', () async {
+      await storeExpiredSession();
+      backend.refresh = _Mode.reject;
+      backend.onRefreshInFlight = otherIsolateRotates;
+      final client = newClient(auth: handoff, canStartLogin: false);
+
+      expect(await client.ensureWalletSession(), isTrue);
+      expect(await keys.getRefreshToken(), 'refresh-rotated');
+      expect(await keys.getAuthToken(), 'jwt-from-other-isolate');
+      expect(handoff.message, isNull);
+    });
+
+    test('the other isolate saves its answer just after ours fails', () async {
+      await storeExpiredSession();
+      backend.refresh = _Mode.reject;
+      final client = newClient(
+        auth: handoff,
+        canStartLogin: false,
+        refreshSettle: otherIsolateRotates,
+      );
+
+      expect(await client.ensureWalletSession(), isTrue);
+      expect(await keys.getRefreshToken(), 'refresh-rotated');
+      expect(handoff.message, isNull);
+    });
+
+    test('nothing rotated: the 401 still ends the session', () async {
+      await storeExpiredSession();
+      backend.refresh = _Mode.reject;
+      var settled = 0;
+      final client = newClient(
+        auth: handoff,
+        canStartLogin: false,
+        refreshSettle: () async => settled++,
+      );
+
+      expect(await client.ensureWalletSession(), isFalse);
+      expect(settled, 1);
+      expect(await keys.getRefreshToken(), isNull);
+    });
   });
 
   group('codex round 48 [P1] the interceptor keeps transient failures transient', () {
