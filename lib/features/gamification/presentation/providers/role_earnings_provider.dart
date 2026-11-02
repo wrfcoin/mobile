@@ -86,5 +86,5 @@ final ownRoleEarningsProvider = FutureProvider.autoDispose<OwnRoleEarnings?>((
   if (!await ref.watch(earningsReadProvider.future)) return null;
   final address = await ref.watch(ownEarningsAddressProvider.future);
   if (address == null) return null;
-  return ref.watch(roleEarningsRepositoryProvider).ownProfile(address);
+  return ref.watch(roleEarningsRepositoryProvider).ownEarnings();
 });

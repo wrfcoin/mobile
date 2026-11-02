@@ -98,7 +98,16 @@ class RolePaidSummary {
   final EarningsStatus status;
   final String? amount;
   final EarningsCoverage? coverage;
-  const RolePaidSummary(this.role, this.status, this.amount, this.coverage);
+
+  /// Replaces the status wording when the phone knows something more exact.
+  final String? note;
+  const RolePaidSummary(
+    this.role,
+    this.status,
+    this.amount,
+    this.coverage, {
+    this.note,
+  });
   factory RolePaidSummary.parse(Map<String, dynamic> j, EarningsRole role) {
     if (j['role'] != role.name) throw const FormatException('Role mismatch');
     final status = EarningsStatus.values.byName(text(j['status']));
@@ -121,11 +130,13 @@ class RolePaidSummary {
     }
     return RolePaidSummary(role, status, null, null);
   }
-  String get message => switch (status) {
-    EarningsStatus.available => '$amount WRF',
-    EarningsStatus.unsupported => kNodePaymentsNotice,
-    EarningsStatus.unavailable => 'Paid-event coverage unavailable',
-  };
+  String get message =>
+      note ??
+      switch (status) {
+        EarningsStatus.available => '$amount WRF',
+        EarningsStatus.unsupported => kNodePaymentsNotice,
+        EarningsStatus.unavailable => 'Paid-event coverage unavailable',
+      };
 }
 
 class RoleEarningsRow {
@@ -327,8 +338,59 @@ class RoleLeaderboard {
 
 class OwnRoleEarnings {
   final List<RolePaidSummary> roles;
-  final EarningsCoverage coverage;
+
+  /// Null when only the weather board could be read.
+  final EarningsCoverage? coverage;
   const OwnRoleEarnings(this.roles, this.coverage);
+
+  /// The viewer's figures from what the public edge admits.
+  ///
+  /// [profile] is the role profile, when it could be read. [weatherRow] is the
+  /// viewer's row on the weather board: the profile has no weather figure, so
+  /// that row supplies it, as a lifetime amount. [weatherBoardRead] says the
+  /// board answered, so a missing row means only that the viewer isn't on it.
+  factory OwnRoleEarnings.combine({
+    OwnRoleEarnings? profile,
+    RoleEarningsRow? weatherRow,
+    required bool weatherBoardRead,
+  }) {
+    RolePaidSummary forRole(EarningsRole role) {
+      if (role == EarningsRole.contribution) {
+        if (weatherRow != null) {
+          return RolePaidSummary(
+            role,
+            EarningsStatus.available,
+            weatherRow.amount,
+            null,
+            note: '${weatherRow.amount} WRF (lifetime station rewards)',
+          );
+        }
+        if (weatherBoardRead) {
+          return RolePaidSummary(
+            role,
+            EarningsStatus.unavailable,
+            null,
+            null,
+            note: 'Not among the top 30 weather earners',
+          );
+        }
+      }
+      return profile?.roles.firstWhere((r) => r.role == role) ??
+          RolePaidSummary(
+            role,
+            role == EarningsRole.node
+                ? EarningsStatus.unsupported
+                : EarningsStatus.unavailable,
+            null,
+            null,
+          );
+    }
+
+    return OwnRoleEarnings(
+      List.unmodifiable(EarningsRole.values.map(forRole)),
+      profile?.coverage,
+    );
+  }
   factory OwnRoleEarnings.parse(dynamic value) {
     final j = object(value), p = object(j['profile']);
     // Use server-authenticated ownership, never a matching label/address.

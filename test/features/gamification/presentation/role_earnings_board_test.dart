@@ -80,11 +80,21 @@ void main() {
     (tester) async {
       final address = StateProvider<String?>((ref) => 'synthetic-first');
       final pending = Completer<Response<dynamic>>();
+      var profileReads = 0;
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
           onRequest: (o, h) async {
-            if (o.path.contains('synthetic-first')) {
+            if (o.path == '/weather/leaderboard') {
+              h.resolve(Response(requestOptions: o, data: weatherBoard()));
+            } else if (o.path == '/earnings/leaderboard') {
+              h.resolve(
+                Response(
+                  requestOptions: o,
+                  data: roleBoard(o.queryParameters['role'] as String),
+                ),
+              );
+            } else if (++profileReads == 1) {
               h.resolve(
                 Response(requestOptions: o, data: roleFixture()['ownProfile']),
               );
