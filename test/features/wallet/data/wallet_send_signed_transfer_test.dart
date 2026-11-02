@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/core/utils/wrf_units.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/datasources/wallet_remote_datasource.dart';
+import 'package:wrfcoin_mobile/features/wallet/data/models/transfer_fee.dart';
 import 'package:wrfcoin_mobile/services/crypto/signed_transfer.dart';
 import 'package:wrfcoin_mobile/services/crypto/transparent_transfer_authorization.dart';
 import 'package:wrfcoin_mobile/services/crypto/wallet_setup_service.dart';
@@ -174,6 +175,79 @@ void main() {
       nonce: '5',
     );
     expect(body, expected);
+  });
+
+  group('backend and edge contract', () {
+    test('the POST body is exactly SIGNED_TRANSFER_CONTRACT.fields', () async {
+      final recorder = _Recorder();
+      await WalletRemoteDataSource(recorder.dio()).sendTransaction(
+        from: from,
+        to: to,
+        amountBaseUnits: '200000000',
+        signer: signer,
+      );
+      final post = recorder.requests.singleWhere((r) => r.method == 'POST');
+      expect(post.path, '/wallet/send');
+      expect(post.uri.query, isEmpty, reason: 'the edge admits no query');
+      final body = post.data as Map<String, String>;
+      // backend wallet-transfer-contract.js SIGNED_TRANSFER_CONTRACT.fields.
+      // No fee: the signature covers from|to|amount|nonce, and the node
+      // declares the fee itself.
+      expect(body.keys.toSet(), {
+        'from',
+        'to',
+        'amount',
+        'nonce',
+        'auth_pubkey',
+        'auth_signature',
+      });
+      // The same rules as backend parseSignedTransfer.
+      final launchAddress = RegExp(r'^0x[0-9a-f]{40}$');
+      expect(body['from'], matches(launchAddress));
+      expect(body['to'], matches(launchAddress));
+      expect(body['amount'], matches(RegExp(r'^[1-9]\d*$')));
+      expect(BigInt.parse(body['amount']!) <= maxJsonSafeBaseUnits, isTrue);
+      expect(body['nonce'], matches(RegExp(r'^\d{1,20}$')));
+      expect(body['auth_pubkey'], matches(RegExp(r'^[0-9a-f]{64}$')));
+      expect(body['auth_signature'], matches(RegExp(r'^[0-9a-f]{128}$')));
+    });
+
+    test('sending calls only the nonce read and the send route', () async {
+      final recorder = _Recorder();
+      await WalletRemoteDataSource(recorder.dio()).sendTransaction(
+        from: from,
+        to: to,
+        amountBaseUnits: '1',
+        signer: signer,
+      );
+      expect(recorder.requests.map((r) => '${r.method} ${r.path}'), [
+        'GET /wallet/$from/nonce',
+        'POST /wallet/send',
+      ]);
+    });
+
+    test('the fee read uses the admitted nonce path and no query', () async {
+      final recorder = _Recorder();
+      final quote = await WalletRemoteDataSource(recorder.dio())
+          .getTransferFee('0xABCDEF0000000000000000000000000000000001');
+      final read = recorder.requests.single;
+      expect(read.method, 'GET');
+      // The edge rule is ^/api/wallet/0x[0-9a-f]{40}/nonce$ with no query.
+      expect(
+        read.path,
+        '/wallet/0xabcdef0000000000000000000000000000000001/nonce',
+      );
+      expect(read.uri.query, isEmpty);
+      expect(quote.state, TransferFeeState.notReported);
+    });
+
+    test('a failed fee read is an error, never a quiet zero', () async {
+      final recorder = _Recorder()..nonceStatus = 503;
+      await expectLater(
+        WalletRemoteDataSource(recorder.dio()).getTransferFee(from),
+        throwsA(isA<DioException>()),
+      );
+    });
   });
 
   test('refuses to sign for an address the key does not control', () async {

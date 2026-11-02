@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wrfcoin_mobile/core/errors/failures.dart';
+import 'package:wrfcoin_mobile/features/wallet/data/models/transfer_fee.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_provider.dart';
@@ -31,29 +32,19 @@ class _Wallet extends WalletNotifier {
 }
 
 class _Fees extends FakeWalletRepository {
-  _Fees(this.fee, this.authoritative);
+  _Fees(this.fee, this.stated);
   String? fee;
-  final bool authoritative;
+
+  /// False is today's backend: the answer has no fee field at all.
+  final bool stated;
   @override
-  Future<Either<Failure, Map<String, dynamic>>> estimateGas({
-    required String from,
-    required String to,
-    required String amount,
-    String? memo,
-  }) async {
-    final fallback = await super.estimateGas(
-      from: from,
-      to: to,
-      amount: amount,
-      memo: memo,
-    );
+  Future<Either<Failure, TransferFeeQuote>> getTransferFee(
+    String address,
+  ) async {
+    if (!stated) return const Right(TransferFeeQuote.notReported);
     return fee == null
-        ? fallback
-        : Right({
-            'amountBaseUnits': amount,
-            'feeBaseUnits': fee,
-            'authoritative': authoritative,
-          });
+        ? const Left(ServerFailure('fee read failed'))
+        : Right(TransferFeeQuote.known(BigInt.parse(fee!)));
   }
 }
 
@@ -78,7 +69,7 @@ Future<(_Wallet, _Auth, FakeWalletRepository)> _open(
   String? balance = '1000000000',
   String amount = '2',
   String? fee = '0',
-  bool authoritative = true,
+  bool stated = true,
   bool changeDuringPin = false,
   String? balanceAfterPin,
   String? feeAfterPin,
@@ -99,7 +90,7 @@ Future<(_Wallet, _Auth, FakeWalletRepository)> _open(
   final biometric = BiometricService(client: auth);
   final wallet = _Wallet(balance);
   if (changeDuringPin) auth.afterPin = () => wallet.change(balanceAfterPin);
-  final repo = _Fees(fee, authoritative);
+  final repo = _Fees(fee, stated);
   if (feeAfterPin != null) auth.afterPin = () => repo.fee = feeAfterPin;
   if (loseFeeDuringPin) auth.afterPin = () => repo.fee = null;
   final router = GoRouter(
@@ -157,7 +148,10 @@ void main() {
     final (_, auth, repo) = await _open(tester, loseFeeDuringPin: true);
     expect(auth.authenticateBiometricOnlyCalls, isNotEmpty);
     expect(
-      find.textContaining('Network fee unavailable — try again'),
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('Network fee unavailable — try again'),
+      ),
       findsOneWidget,
     );
     expect(find.textContaining('Balance after:'), findsNothing);
@@ -180,7 +174,9 @@ void main() {
       find.widgetWithText(TextFormField, 'Amount (WRF)'),
       '2.0',
     );
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    // The Retry button makes the fee row taller, so scroll to the button.
+    await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'Send'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ElevatedButton, 'Send'));
     await tester.pumpAndSettle();
@@ -202,7 +198,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.textContaining('Network fee: 2 WRF'),
+        matching: find.textContaining('Network fee: 2 WRF (burned)'),
       ),
       findsOneWidget,
     );
@@ -275,10 +271,25 @@ void main() {
       expect(repo.sendCalls, 0);
     },
   );
-  testWidgets('estimated fee makes balance after approximate', (tester) async {
-    await _open(tester, fee: '100000000', authoritative: false);
-    expect(find.textContaining('Balance after: about 7 WRF'), findsOneWidget);
-  });
+  testWidgets(
+    'no fee figure from the network makes balance after approximate',
+    (tester) async {
+      final (_, _, repo) = await _open(tester, stated: false);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.textContaining(
+            'Network fee: none reported by the network',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Balance after: about 8 WRF'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Send'));
+      await tester.pumpAndSettle();
+      expect(repo.sendCalls, 1);
+    },
+  );
   testWidgets('comma amount is displayed parsed with a known zero fee', (
     tester,
   ) async {

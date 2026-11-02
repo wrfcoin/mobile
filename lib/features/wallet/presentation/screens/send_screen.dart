@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +10,7 @@ import '../../../../core/widgets/app_snackbars.dart';
 import '../../../../services/crypto/key_manager.dart';
 import '../../../../services/crypto/signed_transfer.dart';
 import '../../data/models/address_book_entry.dart';
+import '../../data/models/transfer_fee.dart';
 import '../../data/models/wallet_model.dart';
 import '../../domain/recipient_safety.dart';
 import '../../data/repositories/wallet_repository_impl.dart';
@@ -60,39 +59,6 @@ Map<String, dynamic> buildSponsoredUserOperation({
   };
 }
 
-/// Shown whenever no usable `feeBaseUnits` figure is available.
-const String kFeeEstimateUnavailable = 'Fee estimate unavailable';
-
-/// Label for a fee already formatted as display WRF, or
-/// [kFeeEstimateUnavailable] when there is none.
-@visibleForTesting
-String feeLabel({required String? feeWrf, required bool authoritative}) {
-  if (feeWrf == null || feeWrf.trim().isEmpty) {
-    return kFeeEstimateUnavailable;
-  }
-  return authoritative
-      ? 'Network fee: $feeWrf WRF'
-      : 'Fee estimate: $feeWrf WRF (non-authoritative, not charged on chain)';
-}
-
-/// Reads the `POST /wallet/estimate-gas` response (backend #1200) and returns
-/// its `feeBaseUnits` formatted as display WRF.
-///
-/// Returns `null` when `feeBaseUnits` is missing or not an integer string, or
-/// when the echoed `amountBaseUnits` differs from [requestedBaseUnits]. A
-/// WRF-formatted `fee` field is ignored: the contract no longer sends one.
-@visibleForTesting
-String? feeWrfFromEstimate(
-  Map<String, dynamic> response, {
-  required String requestedBaseUnits,
-}) {
-  final fee = response['feeBaseUnits'];
-  if (fee is! String) return null;
-  final echoed = response['amountBaseUnits'];
-  if (echoed != null && echoed != requestedBaseUnits) return null;
-  return wrfBaseUnitsToDisplay(fee);
-}
-
 BigInt? _walletBalanceUnits(AsyncValue<WalletModel?> wallet) {
   // Do not use retained data during a refresh or after a failed read.
   if (wallet.isLoading || wallet.hasError) return null;
@@ -102,7 +68,6 @@ BigInt? _walletBalanceUnits(AsyncValue<WalletModel?> wallet) {
 }
 
 const _balanceUnavailable = 'Balance unavailable — refresh and try again';
-const _networkFeeUnavailable = 'Network fee unavailable — try again';
 
 /// Reads the same provider as WalletScreen, including changes while open.
 class SendConfirmationDialog extends ConsumerWidget {
@@ -110,8 +75,7 @@ class SendConfirmationDialog extends ConsumerWidget {
     super.key,
     required this.to,
     required this.amountBaseUnits,
-    this.feeBaseUnits,
-    this.authoritative = false,
+    this.fee = TransferFeeQuote.unknown,
     this.sponsored = false,
     this.contact,
   });
@@ -119,26 +83,21 @@ class SendConfirmationDialog extends ConsumerWidget {
   final String to;
   final AddressBookEntry? contact;
   final String amountBaseUnits;
-  final BigInt? feeBaseUnits;
-  final bool authoritative;
+  final TransferFeeQuote fee;
   final bool sponsored;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final balance = _walletBalanceUnits(ref.watch(walletProvider));
     final amount = BigInt.parse(amountBaseUnits);
-    final fee = sponsored ? BigInt.zero : feeBaseUnits;
-    final after = balance == null || fee == null
+    final reserve = sponsored ? BigInt.zero : fee.reserveBaseUnits;
+    final after = balance == null || reserve == null
         ? null
-        : balance - amount - fee;
+        : balance - amount - reserve;
     final canSend = after != null && after >= BigInt.zero;
-    final approximate = !sponsored && fee != null && !authoritative;
-    final feeText = sponsored
-        ? 'Network fee: Free transfer'
-        : feeLabel(
-            feeWrf: fee == null ? null : wrfBaseUnitsToDisplay(fee.toString()),
-            authoritative: authoritative,
-          );
+    // With no figure from the network, the balance after is only an estimate.
+    final approximate = !sponsored && !fee.isStated;
+    final feeText = sponsored ? 'Network fee: Free transfer' : fee.label;
     final contactLine = switch (contact?.status) {
       null => 'Recipient not verified: confirm the full address above',
       AddressStatus.verifiedCurrent =>
@@ -160,7 +119,6 @@ class SendConfirmationDialog extends ConsumerWidget {
             '${after.isNegative ? '-' : ''}'
             '${wrfBaseUnitsToDisplay(after.abs().toString())} WRF',
       if (balance == null) _balanceUnavailable,
-      if (fee == null) _networkFeeUnavailable,
       if (after != null && after.isNegative)
         'Insufficient balance: short by ${wrfBaseUnitsToDisplay((-after).toString())} WRF',
     ];
@@ -201,12 +159,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   bool _attemptInFlight = false;
   bool _previousTransferPending = false;
   bool _saveRecipient = false;
-  bool _estimatingFee = false;
-  String? _feePreview;
-  BigInt? _feeBaseUnits;
-  bool _feeAuthoritative = false;
+  bool _readingFee = true;
+  TransferFeeQuote _fee = TransferFeeQuote.unknown;
   int _feeRequestId = 0;
-  Timer? _feeDebounce;
   String? _ownLegacyAlias;
 
   @override
@@ -215,13 +170,13 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     ref.read(keyManagerProvider).getOwnLegacyAlias().then((alias) {
       if (mounted) setState(() => _ownLegacyAlias = alias);
     });
-    _addressController.addListener(_scheduleFeeEstimate);
-    _amountController.addListener(_scheduleFeeEstimate);
+    _addressController.addListener(_onInputChanged);
+    _amountController.addListener(_onInputChanged);
+    _readFee();
   }
 
   @override
   void dispose() {
-    _feeDebounce?.cancel();
     _addressController.dispose();
     _amountController.dispose();
     _memoController.dispose();
@@ -229,74 +184,42 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     super.dispose();
   }
 
-  /// Signed transfers and fee estimates accept only core4 hex addresses
+  /// Signed transfers accept only core4 hex addresses
   /// (backend `isLaunchAddress`).
   bool _isValidAddress(String value) =>
       RegExp(r'^0x[a-fA-F0-9]{40}$').hasMatch(value.trim());
 
-  void _scheduleFeeEstimate() {
-    _feeDebounce?.cancel();
-    _feeRequestId++;
-    if (mounted) {
-      setState(() {
-        _feePreview = null;
-        _feeBaseUnits = null;
-        _feeAuthoritative = false;
-        _estimatingFee = false;
-      });
-    }
-    _feeDebounce = Timer(const Duration(milliseconds: 450), _updateFeePreview);
+  void _onInputChanged() {
+    if (mounted) setState(() {});
   }
 
-  Future<void> _updateFeePreview() async {
-    final requestId = _feeRequestId;
-    final amount = _amountController.text.trim();
-    final to = _addressController.text.trim();
-    if (amount.isEmpty || to.isEmpty || !_isValidAddress(to)) return;
-
-    final from = await ref.read(keyManagerProvider).getAddress();
-    if (from == null) return;
-
-    // estimate-gas takes integer base units (backend #1200). An amount that
-    // does not convert exactly is not sent; the label stays unavailable.
-    final amountBaseUnits = wrfDisplayToBaseUnits(amount);
-    if (amountBaseUnits == null) return;
-
+  /// Reads the network fee. Any failure leaves it unknown, which stops Send.
+  Future<void> _readFee() async {
+    final requestId = ++_feeRequestId;
+    if (mounted) {
+      setState(() {
+        _readingFee = true;
+        _fee = TransferFeeQuote.unknown;
+      });
+    }
+    var quote = TransferFeeQuote.unknown;
+    try {
+      final from = await ref.read(keyManagerProvider).getAddress();
+      if (!mounted) return;
+      if (from != null) {
+        final result = await ref
+            .read(walletRepositoryProvider)
+            .getTransferFee(from);
+        quote = result.getOrElse((_) => TransferFeeQuote.unknown);
+      }
+    } catch (_) {
+      // A wallet read that throws leaves the fee unknown, so Send stops.
+    }
     if (!mounted || requestId != _feeRequestId) return;
-    setState(() => _estimatingFee = true);
-    final repo = ref.read(walletRepositoryProvider);
-    final result = await repo.estimateGas(
-      from: from,
-      to: to,
-      amount: amountBaseUnits,
-      memo: _memoController.text.trim().isEmpty
-          ? null
-          : _memoController.text.trim(),
-    );
-
-    // Drop responses for inputs the user has since changed.
-    if (!mounted || requestId != _feeRequestId) return;
-
-    result.fold(
-      (_) => setState(() {
-        _feePreview = null;
-        _feeBaseUnits = null;
-        _feeAuthoritative = false;
-        _estimatingFee = false;
-      }),
-      (data) => setState(() {
-        _feePreview = feeWrfFromEstimate(
-          data,
-          requestedBaseUnits: amountBaseUnits,
-        );
-        _feeBaseUnits = _feePreview == null
-            ? null
-            : BigInt.parse(data['feeBaseUnits'] as String);
-        _feeAuthoritative =
-            _feePreview != null && data['authoritative'] == true;
-        _estimatingFee = false;
-      }),
-    );
+    setState(() {
+      _readingFee = false;
+      _fee = quote;
+    });
   }
 
   Future<bool> _trySocialSubmission({
@@ -328,9 +251,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   String? _balanceProblem(String amountBaseUnits, {required bool sponsored}) {
     final balance = _walletBalanceUnits(ref.read(walletProvider));
     if (balance == null) return _balanceUnavailable;
-    final fee = sponsored ? BigInt.zero : _feeBaseUnits;
-    if (fee == null) return _networkFeeUnavailable;
-    return BigInt.parse(amountBaseUnits) + fee > balance
+    final reserve = sponsored ? BigInt.zero : _fee.reserveBaseUnits;
+    if (reserve == null) return kNetworkFeeUnavailable;
+    return BigInt.parse(amountBaseUnits) + reserve > balance
         ? 'Insufficient balance'
         : null;
   }
@@ -381,6 +304,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   Future<void> _sendAttempt() async {
     // Defence in depth: never submit from a build with Send disabled.
     if (!ref.read(walletSendEnabledProvider)) return;
+    // The validator needs a fee, so a failed earlier read gets a new try here.
+    if (_fee.state == TransferFeeState.unknown) await _readFee();
+    if (!mounted) return;
     if (!_formKey.currentState!.validate()) return;
 
     final keyManager = ref.read(keyManagerProvider);
@@ -443,8 +369,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       () => ref.read(socialWalletProvider.future),
     );
     // Finish a fresh fee read after PIN; confirmation uses this final figure.
-    _feeDebounce?.cancel();
-    if (!isSocial) await _updateFeePreview();
+    if (!isSocial) await _readFee();
     if (!mounted) return;
 
     // Fresh knowledge about the captured destination, right before confirming.
@@ -460,8 +385,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       builder: (_) => SendConfirmationDialog(
         to: to,
         amountBaseUnits: amountBaseUnits,
-        feeBaseUnits: _feeBaseUnits,
-        authoritative: _feeAuthoritative,
+        fee: _fee,
         sponsored: isSocial,
         contact: _contactFor(to),
       ),
@@ -760,7 +684,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                     onTap: () {
                       _addressController.text = entry.address;
                       setState(() {});
-                      _scheduleFeeEstimate();
                     },
                   ),
               ],
@@ -795,10 +718,13 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(10),
+                // Follows the app theme: a fixed dark box hid the fee on light.
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -808,15 +734,18 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                       child: Text(
                         kSponsoredSendEnabled && socialAsync.value == true
                             ? 'Network fee: Free transfer'
-                            : _estimatingFee
-                            ? 'Estimating fee...'
-                            : feeLabel(
-                                feeWrf: _feePreview,
-                                authoritative: _feeAuthoritative,
-                              ),
+                            : _readingFee
+                            ? 'Checking network fee...'
+                            : _fee.label,
                         style: const TextStyle(fontSize: 13),
                       ),
                     ),
+                    if (!_readingFee && _fee.state == TransferFeeState.unknown)
+                      TextButton(
+                        key: const Key('retry-network-fee'),
+                        onPressed: _readFee,
+                        child: const Text('Retry'),
+                      ),
                   ],
                 ),
               ),

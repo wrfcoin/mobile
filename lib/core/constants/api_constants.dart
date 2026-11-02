@@ -200,7 +200,6 @@ class ApiConstants {
   static const String walletSend = '/wallet/send';
   static const String walletSendPrivate = '/wallet/send-private';
   static const String walletStealthAddress = '/privacy/stealth-address';
-  static const String walletEstimateGas = '/wallet/estimate-gas';
   static const String gasSponsor = '/gas/sponsor';
   static const String submitUserOp = '/chain/submit-userop';
 

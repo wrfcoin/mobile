@@ -117,10 +117,6 @@ void main() {
     ) async {
       final id = List.filled(64, 'a').join();
       final repository = FakeWalletRepository(
-        estimateGasResult: const Right({
-          'feeBaseUnits': '0',
-          'authoritative': true,
-        }),
         sendTransactionResult: Right({
           key: id,
           'status': 'submitted',
@@ -150,10 +146,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
       sendTransactionResult: const Right({'status': 'submitted'}),
     );
     await _pumpAndSend(tester, repository, amount: '1');
@@ -179,10 +171,6 @@ void main() {
       tester,
     ) async {
       final repository = FakeWalletRepository(
-        estimateGasResult: const Right({
-          'feeBaseUnits': '0',
-          'authoritative': true,
-        }),
         sendTransactionResult: Right({
           'hash': invalid,
           'status': 'submitted',
@@ -211,10 +199,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
       sendTransactionResult: const Left(NetworkFailure('Timeout')),
     );
     await _pumpAndSend(tester, repository, amount: '1');
@@ -228,10 +212,6 @@ void main() {
     'pending send stays on screen with an inline notice and no error toast',
     (tester) async {
       final repository = FakeWalletRepository(
-        estimateGasResult: const Right({
-          'feeBaseUnits': '0',
-          'authoritative': true,
-        }),
         sendTransactionResult: const Left(
           ServerFailure('raw replay sentinel', statusCode: 409),
         ),
@@ -254,10 +234,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '1.5');
 
@@ -270,10 +246,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '1,25');
 
@@ -287,10 +259,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '1,000');
 
@@ -305,10 +273,6 @@ void main() {
 
   testWidgets('mixed separators are refused by the Send form', (tester) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '1,250.5');
 
@@ -321,10 +285,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '0.00000001');
 
@@ -335,10 +295,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '1.000000001');
 
@@ -348,10 +304,6 @@ void main() {
 
   testWidgets('non-hex recipient is rejected before signing', (tester) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(
       tester,
@@ -368,10 +320,6 @@ void main() {
     tester,
   ) async {
     final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
     );
     await _pumpAndSend(tester, repository, amount: '1', authenticate: false);
 

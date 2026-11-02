@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fpdart/fpdart.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/send_screen.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_provider.dart';
@@ -43,10 +42,6 @@ void main() {
         overrides: [
           walletRepositoryProvider.overrideWithValue(
             FakeWalletRepository(
-              estimateGasResult: const Right({
-                'feeBaseUnits': '0',
-                'authoritative': true,
-              }),
             ),
           ),
           walletProvider.overrideWith(_FundedWallet.new),
