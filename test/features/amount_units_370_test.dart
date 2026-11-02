@@ -10,7 +10,6 @@ import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/sensor_stream_provider.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/screens/pws_dashboard_screen.dart';
 import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
-import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_list_screen.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/widgets/treasury_card.dart';
 import 'package:wrfcoin_mobile/services/api/api_client.dart';
 
@@ -52,37 +51,35 @@ Future<void> _pumpTreasury(
   WidgetTester tester,
   Map<String, Object?> treasury,
 ) async {
-  final calls = <String>[];
   final dio = Dio()
     ..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          calls.add(options.path);
           handler.resolve(
             Response(
               requestOptions: options,
               statusCode: 200,
-              data: options.path == ApiConstants.proposals
-                  ? {'proposals': []}
-                  : {'success': true, 'data': treasury},
+              data: {'success': true, 'data': treasury},
             ),
           );
         },
       ),
     );
   addTearDown(() => dio.close(force: true));
+  final result = await tester.runAsync(
+    () => GovernanceRepository(dio).getTreasuryInfo(),
+  );
+  final info = result!.getOrElse((failure) => fail('$failure'));
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        governanceRepositoryProvider.overrideWithValue(
-          GovernanceRepository(dio),
+    MaterialApp(
+      home: Scaffold(
+        body: TreasuryCard(
+          balance: info['balance'] as String?,
+          amountUnits: info['amountUnits'],
         ),
-      ],
-      child: const MaterialApp(home: ProposalListScreen()),
+      ),
     ),
   );
-  await tester.pumpAndSettle();
-  expect(calls, containsAll([ApiConstants.treasury, ApiConstants.proposals]));
   expect(tester.takeException(), isNull);
 }
 

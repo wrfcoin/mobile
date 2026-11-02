@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/formatting/reported_amount.dart';
 import '../../../../core/theme/app_theme.dart';
 
+/// Not shown anywhere yet: the chain has no treasury that holds funds. Kept for
+/// when one exists, along with its declared-units tests.
 class TreasuryCard extends StatelessWidget {
   final String? balance;
   final Object? amountUnits;

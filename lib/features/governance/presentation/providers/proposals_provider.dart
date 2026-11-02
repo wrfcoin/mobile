@@ -26,18 +26,4 @@ class ProposalsNotifier extends AsyncNotifier<List<ProposalModel>> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_fetchProposals);
   }
-
-  Future<void> vote({
-    required String proposalId,
-    required String voteType,
-    String? reason,
-  }) async {
-    final repo = ref.read(governanceRepositoryProvider);
-    final result = await repo.vote(
-      proposalId: proposalId,
-      voteType: voteType,
-      reason: reason,
-    );
-    result.fold((failure) => throw failure, (_) => refresh());
-  }
 }

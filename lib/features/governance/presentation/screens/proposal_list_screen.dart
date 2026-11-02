@@ -7,50 +7,14 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
-import '../../data/repositories/governance_repository_impl.dart';
 import '../providers/proposals_provider.dart';
 import '../widgets/proposal_card.dart';
-import '../widgets/treasury_card.dart';
 
-class ProposalListScreen extends ConsumerStatefulWidget {
+class ProposalListScreen extends ConsumerWidget {
   const ProposalListScreen({super.key});
 
   @override
-  ConsumerState<ProposalListScreen> createState() => _ProposalListScreenState();
-}
-
-class _ProposalListScreenState extends ConsumerState<ProposalListScreen> {
-  String? _treasuryBalance;
-  Object? _treasuryAmountUnits;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTreasury();
-  }
-
-  Future<void> _loadTreasury() async {
-    final repo = ref.read(governanceRepositoryProvider);
-    final result = await repo.getTreasuryInfo();
-    result.fold(
-      (_) {
-        if (mounted) setState(() => _treasuryBalance = null);
-      },
-      (data) {
-        if (mounted) {
-          setState(() {
-            _treasuryBalance = data['balance'] is String
-                ? data['balance'] as String
-                : null;
-            _treasuryAmountUnits = data['amountUnits'];
-          });
-        }
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final proposalsAsync = ref.watch(proposalsProvider);
 
     return Scaffold(
@@ -68,19 +32,10 @@ class _ProposalListScreenState extends ConsumerState<ProposalListScreen> {
           onRetry: () => ref.invalidate(proposalsProvider),
         ),
         data: (proposals) => RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(proposalsProvider);
-            await _loadTreasury();
-          },
+          onRefresh: () async => ref.invalidate(proposalsProvider),
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              TreasuryCard(
-                balance: _treasuryBalance,
-                amountUnits: _treasuryAmountUnits,
-                activeProposals: proposals.length,
-              ),
-              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -100,7 +55,9 @@ class _ProposalListScreenState extends ConsumerState<ProposalListScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(32),
                     child: Text(
-                      'No proposals yet',
+                      'No proposals yet. Submitting proposals isn\'t available '
+                      'on testnet yet.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                   ),

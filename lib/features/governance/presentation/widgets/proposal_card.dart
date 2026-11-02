@@ -11,8 +11,8 @@ class ProposalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalVotes =
-        proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain;
+    // The chain's votes are yes or no only, so there is no abstain figure.
+    final totalVotes = proposal.votesFor + proposal.votesAgainst;
     final forPercent = totalVotes > 0 ? proposal.votesFor / totalVotes : 0.0;
 
     return Card(
@@ -88,13 +88,6 @@ class ProposalCard extends StatelessWidget {
                     'Against: ${proposal.votesAgainst}',
                     style: const TextStyle(
                       color: AppColors.error,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text(
-                    'Abstain: ${proposal.votesAbstain}',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
                       fontSize: 12,
                     ),
                   ),
