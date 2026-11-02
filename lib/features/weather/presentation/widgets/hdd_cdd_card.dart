@@ -160,10 +160,10 @@ class _DegreeDay extends StatelessWidget {
               ),
               Text(
                 value.toStringAsFixed(1),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
             ],

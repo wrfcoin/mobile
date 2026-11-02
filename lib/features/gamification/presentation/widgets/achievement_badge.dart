@@ -170,7 +170,7 @@ class _BadgeContent extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: achievement.earned
-                  ? AppColors.textPrimary
+                  ? Theme.of(context).colorScheme.onSurface
                   : AppColors.textMuted,
             ),
           ),
