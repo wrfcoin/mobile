@@ -85,8 +85,8 @@ void main() {
     expect(bottomNav.items.length, 5);
     expect(bottomNav.items[0].label, 'Weather');
     expect(bottomNav.items[1].label, 'Collect');
-    expect(bottomNav.items[2].label, 'Earnings');
-    expect(bottomNav.items[3].label, 'Govern');
-    expect(bottomNav.items[4].label, 'Profile');
+    expect(bottomNav.items[2].label, 'Wallet');
+    expect(bottomNav.items[3].label, 'Profile');
+    expect(bottomNav.items[4].label, 'More');
   });
 }

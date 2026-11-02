@@ -123,7 +123,7 @@ void main() {
       expect(path(), '/collect');
       expect(find.byType(Switch), findsWidgets);
 
-      await tester.tap(find.text('Earnings'));
+      await tester.tap(find.text('Wallet'));
       await pumpUntilFound(tester, find.text('Not signed in'));
       expect(path(), '/wallet');
       final handoff = container.read(authHandoffControllerProvider);

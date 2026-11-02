@@ -176,11 +176,15 @@ void main() {
 
     // The stored wallet has no session: Earnings offers Sign in (mobile#320)
     // and the other tabs stay reachable.
-    await tester.tap(find.text('Earnings'));
+    await tester.tap(find.text('Wallet'));
     await tester.pumpAndSettle();
     expect(find.text('Not signed in'), findsOneWidget);
     expect(find.byKey(const Key('wallet-sign-in')), findsOneWidget);
 
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Govern'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Govern'));
     await tester.pumpAndSettle();
     expect(find.text('Proposals'), findsOneWidget);

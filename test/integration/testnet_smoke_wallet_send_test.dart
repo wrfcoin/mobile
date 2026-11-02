@@ -90,8 +90,8 @@ void main() {
       ),
     );
     await pumpFrames(tester);
-    await pumpUntilFound(tester, find.text('Earnings'));
-    await tester.tap(find.text('Earnings').last);
+    await pumpUntilFound(tester, find.text('Wallet'));
+    await tester.tap(find.text('Wallet').last);
     await pumpUntilFound(tester, find.widgetWithText(ElevatedButton, 'Send'));
     await tester.tap(find.widgetWithText(ElevatedButton, 'Send'));
     await pumpUntilFound(tester, find.widgetWithText(TextFormField, 'Send to'));

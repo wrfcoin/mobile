@@ -11,7 +11,10 @@ import '../providers/proposals_provider.dart';
 import '../widgets/proposal_card.dart';
 
 class ProposalListScreen extends ConsumerWidget {
-  const ProposalListScreen({super.key});
+  const ProposalListScreen({super.key, this.leading});
+
+  /// The app bar's back button, when opened by a link with nothing to pop to.
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,6 +22,7 @@ class ProposalListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: leading,
         title: const Text('Governance'),
         actions: const [SettingsGearButton()],
       ),

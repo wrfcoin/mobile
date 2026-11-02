@@ -69,7 +69,7 @@ class ApiDuelRepository implements DuelRepository {
     if (status == null) return const NetworkFailure();
     if (status == 401 || code == 'WALLET_LOGIN_REQUIRED') {
       return const AuthFailure(
-        'Your wallet session ended. Sign in again on the Earnings tab.',
+        'Your wallet session ended. Sign in again on the Wallet tab.',
       );
     }
     // A 404 without a code is the route being off (feature flag or edge).
