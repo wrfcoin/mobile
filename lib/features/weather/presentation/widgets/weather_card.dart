@@ -31,6 +31,53 @@ class WeatherCard extends ConsumerWidget {
         : current.relativeHumidityPercent;
     final pressure = current == null ? forecast.pressure : current.pressureHpa;
 
+    // The big temperature leaves no room beside it at large text sizes.
+    final stacked = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    final temperature = Text(
+      forecast.temperature == null
+          ? '—'
+          : AppFormatters.formatTemperature(
+              context,
+              preferences,
+              forecast.temperature!,
+            ),
+      style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+    );
+    final details = Column(
+      children: [
+        _DataRow(
+          icon: Icons.water_drop,
+          label: 'Humidity',
+          value: humidity == null ? notAvailable : '${humidity.round()}%',
+        ),
+        const SizedBox(height: 8),
+        _DataRow(
+          icon: Icons.air,
+          label: 'Wind',
+          value: forecast.windSpeed == null
+              ? '—'
+              : AppFormatters.formatWindSpeed(
+                  context,
+                  preferences,
+                  forecast.windSpeed!,
+                ),
+        ),
+        const SizedBox(height: 8),
+        _DataRow(
+          icon: Icons.compress,
+          label: 'Pressure',
+          value: pressure == null
+              ? notAvailable
+              : AppFormatters.formatPressure(
+                  context,
+                  preferences,
+                  pressure,
+                  fractionDigits: 0,
+                ),
+        ),
+      ],
+    );
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -39,74 +86,41 @@ class WeatherCard extends ConsumerWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Current Conditions',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                const Flexible(
+                  child: Text(
+                    'Current Conditions',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
                 ),
-                Text(
-                  forecast.location,
-                  style: const TextStyle(color: AppColors.textSecondary),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    forecast.location,
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Text(
-                  forecast.temperature == null
-                      ? '—'
-                      : AppFormatters.formatTemperature(
-                          context,
-                          preferences,
-                          forecast.temperature!,
-                        ),
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: Column(
+            stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _DataRow(
-                        icon: Icons.water_drop,
-                        label: 'Humidity',
-                        value: humidity == null
-                            ? notAvailable
-                            : '${humidity.round()}%',
-                      ),
-                      const SizedBox(height: 8),
-                      _DataRow(
-                        icon: Icons.air,
-                        label: 'Wind',
-                        value: forecast.windSpeed == null
-                            ? '—'
-                            : AppFormatters.formatWindSpeed(
-                                context,
-                                preferences,
-                                forecast.windSpeed!,
-                              ),
-                      ),
-                      const SizedBox(height: 8),
-                      _DataRow(
-                        icon: Icons.compress,
-                        label: 'Pressure',
-                        value: pressure == null
-                            ? notAvailable
-                            : AppFormatters.formatPressure(
-                                context,
-                                preferences,
-                                pressure,
-                                fractionDigits: 0,
-                              ),
-                      ),
+                      temperature,
+                      const SizedBox(height: 16),
+                      details,
+                    ],
+                  )
+                : Row(
+                    children: [
+                      temperature,
+                      const SizedBox(width: 24),
+                      Expanded(child: details),
                     ],
                   ),
-                ),
-              ],
-            ),
             if (forecast.precipitation != null &&
                 forecast.precipitation! > 0) ...[
               const Divider(height: 24),
@@ -154,12 +168,23 @@ class _DataRow extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: AppColors.textSecondary),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
         ),
-        const Spacer(),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
       ],
     );
   }

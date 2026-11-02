@@ -68,7 +68,10 @@ class TestnetNotice extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Expanded(child: TestnetNoticeText()),
+            // Scrolls when a large text size leaves it too little height.
+            const Expanded(
+              child: SingleChildScrollView(child: TestnetNoticeText()),
+            ),
             IconButton(
               key: const Key('testnet-notice-dismiss'),
               tooltip: 'Dismiss testnet notice',

@@ -219,9 +219,48 @@ void main() {
       expect(weatherScroll(tester).pixels, 100);
     }
     expect(weather.forecastCalls, 1, reason: 'no reload for any tab switch');
-    // The short window keeps Weather scrollable; a fixed-height card on
-    // another tab may overflow at this height. Not what is under test here.
-    tester.takeException();
+  });
+
+  testWidgets('no tab overflows in a short window', (tester) async {
+    // Each tab twice: a tab's data can change its layout after the first visit.
+    await pumpApp(tester);
+    for (var round = 0; round < 2; round++) {
+      for (final tab in const [
+        'Weather',
+        'Collect',
+        'Wallet',
+        'Profile',
+        'More',
+      ]) {
+        await tapTab(tester, tab);
+        await pumpFrames(tester, frames: 8);
+        expect(tester.takeException(), isNull, reason: tab);
+      }
+    }
+  });
+
+  testWidgets('Govern does not overflow in a short window while loading', (
+    tester,
+  ) async {
+    final router = await pumpApp(tester);
+    router.go('/govern');
+    await pumpFrames(tester, frames: 8);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no tab overflows in a short window at twice the text size', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpApp(tester);
+    await pumpFrames(tester, frames: 8);
+    expect(tester.takeException(), isNull, reason: 'Weather');
+    for (final tab in const ['Collect', 'Wallet', 'Profile', 'More']) {
+      await tapTab(tester, tab);
+      await pumpFrames(tester, frames: 8);
+      expect(tester.takeException(), isNull, reason: tab);
+    }
   });
 
   testWidgets('old weather refreshes on return, keeping the screen', (
@@ -489,7 +528,6 @@ void main() {
     await tapTab(tester, 'Wallet');
     await pumpFrames(tester);
     expect(wallet.transactionCalls, opened + 1);
-    tester.takeException();
   });
 
   testWidgets('Sky View opens over the shell and Back returns to Weather', (
