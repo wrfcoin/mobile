@@ -45,6 +45,15 @@ class _AchievementsScreenState extends ConsumerState<AchievementsScreen>
           ),
           Semantics(
             button: true,
+            label: 'Open weekly competition',
+            child: IconButton(
+              tooltip: 'Weekly competition',
+              icon: const Icon(Icons.emoji_events_outlined),
+              onPressed: () => context.push('/profile/competitions'),
+            ),
+          ),
+          Semantics(
+            button: true,
             label: 'Open data desert map',
             child: IconButton(
               tooltip: 'Data desert map',
