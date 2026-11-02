@@ -8,6 +8,7 @@ import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/models/achievement_model.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/repositories/gamification_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/gamification/presentation/screens/achievements_screen.dart';
+import '../../../test_helpers/fakes.dart';
 
 void main() {
   group('AchievementModel unlock rule', () {
@@ -56,6 +57,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     ProviderContainer container() => ProviderContainer(
       overrides: [
+        noWeatherStoriesOverride,
         earningsReadProvider.overrideWith((ref) async => false),
         sharedPreferencesProvider.overrideWithValue(prefs),
       ],
@@ -98,6 +100,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            noWeatherStoriesOverride,
             earningsReadProvider.overrideWith((ref) async => false),
             sharedPreferencesProvider.overrideWithValue(prefs),
             gamificationRepositoryProvider.overrideWithValue(

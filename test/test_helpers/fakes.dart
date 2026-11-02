@@ -26,6 +26,7 @@ import 'package:wrfcoin_mobile/features/weather/data/models/wrf_forecast_model.d
 import 'package:wrfcoin_mobile/features/weather/data/repositories/weather_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
 import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.dart';
+import 'package:wrfcoin_mobile/features/weather/presentation/providers/weather_narratives_provider.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transfer_fee.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/address_book_entry.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_model.dart';
@@ -844,3 +845,14 @@ class FakeCollectorLocalStore implements CollectorLocalStore {
     );
   }
 }
+
+class _NoWeatherStories extends WeatherNarrativesNotifier {
+  @override
+  WeatherNarrativesState build() => const WeatherNarrativesState();
+}
+
+/// For tests that mount the Profile tab without a database: its story card
+/// reads the local sensor history.
+final noWeatherStoriesOverride = weatherNarrativesProvider.overrideWith(
+  _NoWeatherStories.new,
+);

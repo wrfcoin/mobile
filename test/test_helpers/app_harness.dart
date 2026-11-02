@@ -82,6 +82,7 @@ Future<Widget> buildTestApp({
   // Replace the harness's fixed weather, for tests that count or fail calls.
   WeatherRepository? weatherRepository,
   WeatherLocationResolver? weatherLocationResolver,
+  WeatherNarrativesNotifier Function()? weatherNarratives,
   WalletRepository? walletRepository,
   // Appended after the harness overrides, e.g. a recording data source.
   List<Override> extraOverrides = const <Override>[],
@@ -124,7 +125,8 @@ Future<Widget> buildTestApp({
       localCrashReportStoreProvider.overrideWith((ref) async => null),
       syncWorkerProvider.overrideWithValue(FakeSyncWorker()),
       weatherNarrativesProvider.overrideWith(
-        () => WeatherNarrativesNotifier()..autoAnalyze = false,
+        weatherNarratives ??
+            () => WeatherNarrativesNotifier()..autoAnalyze = false,
       ),
       collectorRepositoryProvider.overrideWithValue(
         FakeCollectorRepository(
