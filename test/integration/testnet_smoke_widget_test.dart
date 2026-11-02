@@ -23,6 +23,7 @@ void main() {
     (tester) async {
       SharedPreferences.setMockInitialValues(const <String, Object>{
         'onboarding.completed': true,
+        'welcome.seen': true,
       });
       final prefs = await SharedPreferences.getInstance();
 

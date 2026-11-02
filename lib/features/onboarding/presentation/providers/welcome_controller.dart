@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../services/crypto/key_manager.dart';
+
 /// Persistent state for the first-run welcome flow (issue #159).
 ///
 /// `seenWelcome=true` means the user has completed or skipped the flow at
@@ -49,9 +51,19 @@ class WelcomeController extends Notifier<WelcomeState> {
   /// background load.
   Future<void> load() async {
     await _inFlightLoad;
-    final seen = await _store.loadSeen();
+    // A phone that already holds a wallet is past first run, whatever the flag
+    // says: an update must not greet an existing user as a newcomer.
+    final seen = await _store.loadSeen() || await _hasWallet();
     state = state.copyWith(loaded: true, seenWelcome: seen);
     _inFlightLoad = null;
+  }
+
+  Future<bool> _hasWallet() async {
+    try {
+      return await ref.read(keyManagerProvider).hasWallet();
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> complete() async {

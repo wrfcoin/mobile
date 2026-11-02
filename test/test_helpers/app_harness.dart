@@ -93,16 +93,20 @@ Future<Widget> buildTestApp({
   LocalAuthClient? localAuthClient,
   // Wallet storage and chain reads, e.g. a saved pending send.
   FakeWalletSecureStorage? walletSecureStorage,
+  // False for a clean install: no wallet on the phone.
+  bool withWallet = true,
 }) async {
   // Ensure onboarding is marked complete so it does not block navigation in tests.
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool('onboarding.completed', true);
 
   final keyStorage = InMemoryKeyValueStorage();
-  await keyStorage.write(
-    key: 'wrf_address',
-    value: '0x1234567890abcdef1234567890abcdef12345678',
-  );
+  if (withWallet) {
+    await keyStorage.write(
+      key: 'wrf_address',
+      value: '0x1234567890abcdef1234567890abcdef12345678',
+    );
+  }
   if (signedIn) {
     // Automatic callers never start a wallet login (mobile#320), so only a
     // stored session shows the loaded wallet tab. Without one the wallet

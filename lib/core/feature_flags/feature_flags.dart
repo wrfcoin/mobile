@@ -16,7 +16,7 @@ class FeatureFlags {
     this.enablePwsAutoDiscovery = false,
     this.enableConnectivityHardening = false,
     this.enableAchievementsUi = true,
-    this.enableFirstRunWelcome = false,
+    this.enableFirstRunWelcome = true,
     this.enableNftPortfolio = false,
     this.enableCarbonLottery = false,
     this.enableMultiWallet = false,
@@ -60,7 +60,8 @@ class FeatureFlags {
   /// First-run welcome flow: 3-slide intro + inline wallet creation +
   /// permission pre-prompts.  Distinct from [enableOnboardingTour] (which
   /// is an interactive tour shown *after* the user is in the app).
-  /// Dark-launched; router redirects to `/welcome` on first launch when on.
+  /// On by default: the router sends a phone with no wallet to `/welcome` on
+  /// first launch.
   final bool enableFirstRunWelcome;
 
   /// Weather NFT portfolio section in the Profile tab (streak + storm-chaser
@@ -157,7 +158,7 @@ class FeatureFlagsNotifier extends Notifier<FeatureFlags> {
       enableConnectivityHardening:
           _prefs.getBool(_keyConnectivityHardening) ?? false,
       enableAchievementsUi: _prefs.getBool(_keyAchievementsUi) ?? true,
-      enableFirstRunWelcome: _prefs.getBool(_keyFirstRunWelcome) ?? false,
+      enableFirstRunWelcome: _prefs.getBool(_keyFirstRunWelcome) ?? true,
       enableNftPortfolio: _prefs.getBool(_keyNftPortfolio) ?? false,
       enableCarbonLottery: _prefs.getBool(_keyCarbonLottery) ?? false,
       enableMultiWallet: _prefs.getBool(_keyMultiWallet) ?? false,

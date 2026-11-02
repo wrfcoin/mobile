@@ -18,10 +18,17 @@ import '../providers/transactions_provider.dart';
 import '../providers/wallet_provider.dart';
 
 class CreateWalletScreen extends ConsumerStatefulWidget {
-  const CreateWalletScreen({super.key, this.leading});
+  const CreateWalletScreen({
+    super.key,
+    this.leading,
+    this.doneLocation = '/wallet',
+  });
 
   /// The app bar's back button, when there is no screen under this one.
   final Widget? leading;
+
+  /// Where the app goes once the wallet is saved.
+  final String doneLocation;
 
   @override
   ConsumerState<CreateWalletScreen> createState() => _CreateWalletScreenState();
@@ -256,7 +263,7 @@ class _CreateWalletScreenState extends ConsumerState<CreateWalletScreen>
 
       if (!mounted) return;
       AppSnackbars.success(context, 'Wallet created successfully');
-      context.go('/wallet');
+      context.go(widget.doneLocation);
     } catch (e) {
       if (!mounted) return;
       AppSnackbars.error(context, ServerFailure(e.toString()));
@@ -401,6 +408,17 @@ class _CreateWalletScreenState extends ConsumerState<CreateWalletScreen>
   }
 }
 
+/// Follows the theme: the words take their colour from it, so a box that stayed
+/// dark left them unreadable in light mode.
+BoxDecoration _phraseBoxDecoration(BuildContext context) {
+  final light = Theme.of(context).brightness == Brightness.light;
+  return BoxDecoration(
+    color: light ? AppColors.lightSurfaceMuted : AppColors.surfaceLight,
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: light ? AppColors.lightBorder : AppColors.border),
+  );
+}
+
 class _PhraseWords extends StatelessWidget {
   const _PhraseWords({required this.words});
 
@@ -410,11 +428,7 @@ class _PhraseWords extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: _phraseBoxDecoration(context),
       child: Wrap(
         spacing: 16,
         runSpacing: 8,
@@ -442,11 +456,7 @@ class _PhrasePlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: _phraseBoxDecoration(context),
       child: Text(
         message,
         style: const TextStyle(

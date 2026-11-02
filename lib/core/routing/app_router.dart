@@ -95,14 +95,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final navigationGate = _NavigationGate(authHandoff);
   ref.onDispose(navigationGate.dispose);
   final onboardingState = ref.watch(onboardingControllerProvider);
-  final welcomeState = ref.watch(welcomeControllerProvider);
+  // Read in the redirect, not watched: watching would rebuild the whole router,
+  // back at its initial location, when the welcome flow finishes, and lose the
+  // screen it was opening.
+  final welcomeGate = _WelcomeGate();
+  ref.onDispose(welcomeGate.dispose);
+  ref.listen(welcomeControllerProvider, (previous, next) {
+    if (next.shouldShowWelcome && !(previous?.shouldShowWelcome ?? false)) {
+      welcomeGate.notify();
+    }
+  });
   final featureFlags = ref.watch(featureFlagsProvider);
   final walletSendEnabled = ref.watch(walletSendEnabledProvider);
 
   return GoRouter(
     initialLocation: '/weather',
-    refreshListenable: navigationGate,
+    refreshListenable: Listenable.merge([navigationGate, welcomeGate]),
     redirect: (context, state) {
+      final welcomeState = ref.read(welcomeControllerProvider);
       if (featureFlags.enableFirstRunWelcome &&
           welcomeState.shouldShowWelcome &&
           state.matchedLocation != '/welcome') {
@@ -189,7 +199,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _fadePage(
           key: state.pageKey,
           child: _BackToWallet(
-            builder: (context, leading) => CreateWalletScreen(leading: leading),
+            builder: (context, leading) => CreateWalletScreen(
+              leading: leading,
+              doneLocation: _walletDoneLocation(state),
+            ),
           ),
         ),
       ),
@@ -198,7 +211,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _fadePage(
           key: state.pageKey,
           child: _BackToWallet(
-            builder: (context, leading) => ImportWalletScreen(leading: leading),
+            builder: (context, leading) => ImportWalletScreen(
+              leading: leading,
+              doneLocation: _walletDoneLocation(state),
+            ),
           ),
         ),
       ),
@@ -408,7 +424,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'passkey',
                     pageBuilder: (context, state) => _fadePage(
                       key: state.pageKey,
-                      child: const PasskeyWalletScreen(),
+                      child: PasskeyWalletScreen(
+                        continueToCollect:
+                            state.uri.queryParameters['then'] == 'collect',
+                      ),
                     ),
                   ),
                   GoRoute(
@@ -777,6 +796,16 @@ class _BackToWallet extends StatelessWidget {
       child: builder(context, atBottom ? BackButton(onPressed: back) : null),
     );
   }
+}
+
+/// Where setting up a wallet ends. The first-run flow carries on to Collect.
+/// Only this one value is honoured, so a link can't send the user elsewhere.
+String _walletDoneLocation(GoRouterState state) =>
+    state.uri.queryParameters['then'] == 'collect' ? '/collect' : '/wallet';
+
+/// Makes the router look again when the welcome flow is due.
+class _WelcomeGate extends ChangeNotifier {
+  void notify() => notifyListeners();
 }
 
 /// Notifies only when [AuthHandoffController.gatesNavigation] changes, not

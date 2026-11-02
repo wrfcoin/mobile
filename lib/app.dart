@@ -10,6 +10,7 @@ import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/collector/presentation/providers/collector_provider.dart';
 import 'features/onboarding/presentation/providers/onboarding_controller.dart';
+import 'features/onboarding/presentation/providers/welcome_controller.dart';
 import 'features/weather/presentation/providers/alert_settings_provider.dart';
 
 class WrfcoinApp extends ConsumerStatefulWidget {
@@ -53,8 +54,11 @@ class _WrfcoinAppState extends ConsumerState<WrfcoinApp>
     final router = ref.watch(appRouterProvider);
     final appPreferences = ref.watch(appPreferencesProvider).preferences;
     final onboardingState = ref.watch(onboardingControllerProvider);
+    final welcomeState = ref.watch(welcomeControllerProvider);
 
-    if (!onboardingState.loaded) {
+    // Both decide the first screen, so nothing is drawn until they're known: a
+    // newcomer doesn't see Weather flash up before the welcome.
+    if (!onboardingState.loaded || !welcomeState.loaded) {
       return MaterialApp(
         title: 'WRFCoin',
         theme: AppTheme.lightTheme,

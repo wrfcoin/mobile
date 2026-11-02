@@ -45,6 +45,7 @@ Future<void> _pumpAppAtSize(WidgetTester tester, Size size) async {
   tester.view.physicalSize = size;
   SharedPreferences.setMockInitialValues(const <String, Object>{
     'onboarding.completed': true,
+    'welcome.seen': true,
   });
   final prefs = await SharedPreferences.getInstance();
 

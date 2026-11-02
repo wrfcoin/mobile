@@ -16,7 +16,10 @@ import 'receive_screen.dart' show AddressQr;
 /// app can show its balance. It never presents that as being signed in: the app
 /// holds no key for this wallet.
 class PasskeyWalletScreen extends ConsumerStatefulWidget {
-  const PasskeyWalletScreen({super.key});
+  const PasskeyWalletScreen({super.key, this.continueToCollect = false});
+
+  /// The first-run flow: offer the way on to Collect.
+  final bool continueToCollect;
 
   @override
   ConsumerState<PasskeyWalletScreen> createState() =>
@@ -168,6 +171,17 @@ class _PasskeyWalletScreenState extends ConsumerState<PasskeyWalletScreen> {
                 onPressed: () => context.push('/wallet/create'),
                 icon: const Icon(Icons.add),
                 label: const Text('Create a 12-word wallet to collect'),
+              ),
+            ),
+          ],
+          if (widget.continueToCollect) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('passkey-continue'),
+                onPressed: () => context.go('/collect'),
+                child: const Text('Continue to Collect'),
               ),
             ),
           ],
