@@ -7,6 +7,7 @@ import 'package:wrfcoin_mobile/features/gamification/presentation/widgets/role_e
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wrfcoin_mobile/features/gamification/data/models/role_earnings_model.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/repositories/role_earnings_repository.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/repositories/gamification_repository_impl.dart';
 
@@ -18,6 +19,7 @@ import 'package:wrfcoin_mobile/features/gamification/presentation/screens/leader
 import 'package:wrfcoin_mobile/features/gamification/presentation/screens/achievements_screen.dart';
 
 import '../../../fixtures/role_earnings_fixture.dart';
+import '../../../fixtures/weather_earnings_fixture.dart';
 
 Widget screen({
   bool profile = false,
@@ -39,6 +41,14 @@ Widget screen({
         if (retry) {
           retry = false;
           h.reject(DioException(requestOptions: o));
+          return;
+        }
+        if (o.path == '/weather/leaderboard') {
+          final body = weatherBoard(
+            period: o.queryParameters['period'] as String,
+          );
+          if (empty) body['entries'] = [];
+          h.resolve(Response(requestOptions: o, data: body));
           return;
         }
         final role = o.queryParameters['role'] as String;
@@ -183,11 +193,12 @@ void main() {
         await tester.tap(find.text(role));
         await tester.pumpAndSettle();
         if (role == 'Nodes') {
-          expect(
-            find.text('Node payments are not implemented yet'),
-            findsOneWidget,
-          );
-        } else if (role == 'Weather data' || role == 'Forecasting') {
+          expect(find.text(kNodePaymentsNotice), findsOneWidget);
+          expect(find.textContaining('not implemented'), findsNothing);
+        } else if (role == 'Weather data') {
+          expect(find.text('1887.95124509 WRF'), findsOneWidget);
+          expect(find.text('Earnings unavailable right now'), findsNothing);
+        } else if (role == 'Forecasting') {
           expect(find.text('Earnings unavailable right now'), findsOneWidget);
           expect(find.text('No forecast payments observed'), findsNothing);
           expect(find.text('90071992.54741000 WRF'), findsNothing);
@@ -220,7 +231,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Your role payments · All time'), findsOneWidget);
     expect(find.text('90071992.54741000 WRF'), findsNWidgets(2));
-    expect(find.text('Node payments are not implemented yet'), findsOneWidget);
+    expect(find.text(kNodePaymentsNotice), findsOneWidget);
     await tester.tap(find.text('Leaderboard'));
     await tester.pumpAndSettle();
     expect(find.text('90071992.54741000 WRF'), findsOneWidget);

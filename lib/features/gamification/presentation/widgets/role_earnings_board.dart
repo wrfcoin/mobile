@@ -44,7 +44,8 @@ class _RoleEarningsBoardState extends ConsumerState<RoleEarningsBoard> {
           ),
         ),
         if (state.role == EarningsRole.producer ||
-            state.role == EarningsRole.attester)
+            state.role == EarningsRole.attester ||
+            state.role == EarningsRole.contribution)
           Wrap(
             children: [
               for (final period in EarningsPeriod.values)
@@ -57,6 +58,14 @@ class _RoleEarningsBoardState extends ConsumerState<RoleEarningsBoard> {
                   ),
                 ),
             ],
+          ),
+        if (board != null && board.lifetimeAmounts)
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text(
+              '${state.period.label} ranking · Lifetime amounts\nLifetime station rewards paid, proven by the node. The period changes the ranking only, not the amounts.',
+              textAlign: TextAlign.center,
+            ),
           ),
         if (board?.coverage != null)
           Padding(
@@ -75,7 +84,12 @@ class _RoleEarningsBoardState extends ConsumerState<RoleEarningsBoard> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Text('Earnings unavailable right now'),
-                      const Text('Paid-event coverage unavailable'),
+                      Text(
+                        state.role == EarningsRole.contribution
+                            ? 'We could not confirm every amount, so no ranking is shown.'
+                            : 'Paid-event coverage unavailable',
+                        textAlign: TextAlign.center,
+                      ),
                       TextButton(
                         onPressed: () => notifier.load(),
                         child: const Text('Retry'),
@@ -85,17 +99,24 @@ class _RoleEarningsBoardState extends ConsumerState<RoleEarningsBoard> {
                 )
               : board?.status == EarningsStatus.unsupported
               ? const Center(
-                  child: Text('Node payments are not implemented yet'),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      kNodePaymentsNotice,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 )
               : board == null
               ? const SizedBox.shrink()
               : board.rows.isEmpty
               ? Center(
-                  child: Text(
-                    state.role == EarningsRole.forecast
-                        ? 'No forecast payments observed'
-                        : 'No payments observed for this period',
-                  ),
+                  child: Text(switch (state.role) {
+                    EarningsRole.forecast => 'No forecast payments observed',
+                    EarningsRole.contribution =>
+                      'No station rewards have been paid yet',
+                    _ => 'No payments observed for this period',
+                  }),
                 )
               : ListView(
                   children: [

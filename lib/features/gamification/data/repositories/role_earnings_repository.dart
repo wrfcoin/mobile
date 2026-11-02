@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/api_constants.dart';
 import '../../../../services/api/api_client.dart';
 import '../models/role_earnings_model.dart';
 
@@ -30,6 +31,20 @@ class RoleEarningsRepository {
     EarningsRole role,
     EarningsPeriod period,
   ) async {
+    // The role board has no index for weather contributions and answers
+    // `unavailable`. Station rewards are on the weather board, as on the web.
+    if (role == EarningsRole.contribution) {
+      final response = await dio.get(
+        ApiConstants.leaderboard,
+        // Insertion order is part of the public edge allowlist contract.
+        queryParameters: <String, dynamic>{
+          'metric': 'earnings',
+          'period': period.wire,
+          'limit': 30,
+        },
+      );
+      return RoleLeaderboard.parseWeather(response.data, period);
+    }
     final response = await dio.get(
       '/earnings/leaderboard',
       queryParameters: <String, dynamic>{

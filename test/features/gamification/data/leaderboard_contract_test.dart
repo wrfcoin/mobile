@@ -16,7 +16,9 @@ Map<String, dynamic> fixture() => jsonDecode(
 ) as Map<String, dynamic>;
 
 void main() {
-  for (final role in EarningsRole.values) {
+  for (final role in EarningsRole.values.where(
+    (role) => role != EarningsRole.contribution,
+  )) {
     for (final period in EarningsPeriod.values) {
       test('B2 exact Dio URI ${role.name}/${period.wire}', () async {
         final dio = Dio();
