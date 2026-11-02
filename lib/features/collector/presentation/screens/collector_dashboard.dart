@@ -689,6 +689,19 @@ class CollectorDashboard extends ConsumerWidget {
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.sports_score),
+              title: const Text('Forecast duels'),
+              subtitle: const Text(
+                'Two forecasters pick the same station and hour. The chain judges. '
+                'Free play.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/collect/duels'),
+            ),
+          ),
         ],
       ),
     );

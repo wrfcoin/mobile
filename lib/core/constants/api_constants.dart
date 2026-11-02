@@ -299,4 +299,12 @@ class ApiConstants {
   static const String challenges = '/challenges';
   static const String challengesJoin = '/challenges/join';
   static const String challengesSync = '/challenges/sync';
+
+  // Free-play forecast duels (backend duel-routes.ts). The board, one duel and a
+  // record hand-in need no login; open, accept and link need the wallet token.
+  static const String duels = '/duels';
+  static String duel(String id) => '/duels/$id';
+  static String duelAccept(String id) => '/duels/$id/accept';
+  static String duelForecast(String id) => '/duels/$id/forecast';
+  static String duelRecord(String id) => '/duels/$id/record';
 }
