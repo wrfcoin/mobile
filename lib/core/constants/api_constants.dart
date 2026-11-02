@@ -192,11 +192,19 @@ class ApiConstants {
 
   /// Wallet history (backend#1199). The backend pages by `limit` (1–100) and
   /// `offset` only; it ignores `page`.
+  /// The public edge admits exactly this query, in this order, and answers 404
+  /// to anything else: `limit=<1..50>&offset=<digits>`, then optional
+  /// `creditLimit=<1..100>`, then optional `creditAfter=<64 lowercase hex>`.
   static String walletTransactions(
     String address, {
     int offset = 0,
     int limit = 20,
-  }) => '/wallet/$address/transactions?limit=$limit&offset=$offset';
+    int? creditLimit,
+    String? creditAfter,
+  }) =>
+      '/wallet/$address/transactions?limit=$limit&offset=$offset'
+      '${creditLimit == null ? '' : '&creditLimit=$creditLimit'}'
+      '${creditAfter == null ? '' : '&creditAfter=$creditAfter'}';
   static const String walletSend = '/wallet/send';
   static const String walletSendPrivate = '/wallet/send-private';
   static const String walletStealthAddress = '/privacy/stealth-address';

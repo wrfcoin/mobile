@@ -64,6 +64,7 @@ class _AuthGatedRepository extends FakeWalletRepository {
     String address, {
     int offset = 0,
     int limit = 20,
+    String? creditAfter,
     CancelToken? cancelToken,
   }) async {
     if (!api.signedIn) {
@@ -73,6 +74,7 @@ class _AuthGatedRepository extends FakeWalletRepository {
       address,
       offset: offset,
       limit: limit,
+      creditAfter: creditAfter,
       cancelToken: cancelToken,
     );
   }

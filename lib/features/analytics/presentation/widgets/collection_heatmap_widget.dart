@@ -51,7 +51,7 @@ class CollectionHeatmapWidget extends StatelessWidget {
                   )!;
                   final foreground = intensity > 0.55
                       ? AppColors.background
-                      : AppColors.textPrimary;
+                      : Theme.of(context).colorScheme.onSurface;
 
                   return Container(
                     constraints: BoxConstraints.tightFor(

@@ -11,39 +11,35 @@ void main() {
     });
 
     Widget buildTestApp(Widget child) {
-      return ProviderScope(child: MaterialApp(home: child));
+      return ProviderScope(
+        child: MaterialApp(
+          home: child,
+        ),
+      );
     }
 
-    testWidgets('Welcome screen renders on first load', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Welcome screen renders on first load',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Welcome'), findsOneWidget);
-      expect(
-        find.text('Turn your phone into a weather station'),
-        findsOneWidget,
-      );
+      expect(find.text('Turn your phone into a weather station'), findsOneWidget);
       expect(find.byIcon(Icons.wb_sunny_outlined), findsOneWidget);
     });
 
-    testWidgets('Next button is visible on non-final screens', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Next button is visible on non-final screens',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.widgetWithText(ElevatedButton, 'Next'), findsOneWidget);
-      expect(
-        find.widgetWithText(ElevatedButton, 'Create Wallet'),
-        findsNothing,
-      );
+      expect(find.widgetWithText(ElevatedButton, 'Create Wallet'),
+          findsNothing);
     });
 
-    testWidgets('Back button is disabled on first screen', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Back button is disabled on first screen',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -55,18 +51,15 @@ void main() {
       expect(button.onPressed, isNull);
     });
 
-    testWidgets('Skip button is visible on welcome screen', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Skip button is visible on welcome screen',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.widgetWithText(TextButton, 'Skip'), findsOneWidget);
     });
 
-    testWidgets('Final screen shows action buttons', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Final screen shows action buttons', (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -76,19 +69,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Should show action buttons
-      expect(
-        find.widgetWithText(ElevatedButton, 'Create Wallet'),
-        findsOneWidget,
-      );
-      expect(
-        find.widgetWithText(OutlinedButton, 'Explore First'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(ElevatedButton, 'Create Wallet'),
+          findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Explore First'),
+          findsOneWidget);
     });
 
-    testWidgets('Progress indicators update on page navigation', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Progress indicators update on page navigation',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -96,9 +84,8 @@ void main() {
       expect(find.byType(AnimatedContainer), findsWidgets);
     });
 
-    testWidgets('Dont show again checkbox visible on final screen', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('Dont show again checkbox visible on final screen',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestApp(const OnboardingTourScreen()));
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -108,10 +95,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Should show checkbox
-      expect(
-        find.widgetWithText(CheckboxListTile, "Don't show again"),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(CheckboxListTile, "Don't show again"),
+          findsOneWidget);
     });
   });
 }

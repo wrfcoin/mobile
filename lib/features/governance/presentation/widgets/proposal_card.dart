@@ -41,8 +41,8 @@ class ProposalCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 proposal.title,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),

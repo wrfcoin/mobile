@@ -359,11 +359,18 @@ class _ContactTile extends StatelessWidget {
           child: Text(entry.label.characters.first.toUpperCase()),
         ),
         title: Text(entry.label),
-        subtitle: Text(
-          entry.address,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        // The chip sits under the address: beside it, a phone-width row left
+        // the address a few characters per line.
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              entry.address,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+            if (chip != null) ...[const SizedBox(height: 4), chip],
+          ],
         ),
-        trailing: chip,
         onTap: onTap,
       ),
     );

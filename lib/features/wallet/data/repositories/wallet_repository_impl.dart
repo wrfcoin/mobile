@@ -42,6 +42,7 @@ class WalletRepositoryImpl implements WalletRepository {
     String address, {
     int offset = 0,
     int limit = 20,
+    String? creditAfter,
     CancelToken? cancelToken,
   }) async {
     try {
@@ -49,6 +50,7 @@ class WalletRepositoryImpl implements WalletRepository {
         address,
         offset: offset,
         limit: limit,
+        creditAfter: creditAfter,
         cancelToken: cancelToken,
       );
       return Right(transactions);

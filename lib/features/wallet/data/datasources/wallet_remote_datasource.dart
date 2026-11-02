@@ -19,6 +19,10 @@ final walletRemoteDataSourceProvider = Provider<WalletRemoteDataSource>((ref) {
 final RegExp _launchAddress = RegExp(r'^0x[0-9a-f]{40}$');
 
 class WalletRemoteDataSource {
+  /// Reward records read per request: the most the public edge and the node
+  /// allow.
+  static const creditPageSize = 100;
+
   final Dio _dio;
   final TransferSigningDomain _signingDomain;
   final WalletSetupService _walletSetup = WalletSetupService();
@@ -89,12 +93,17 @@ class WalletRemoteDataSource {
     String address, {
     int offset = 0,
     int limit = 20,
+    String? creditAfter,
     CancelToken? cancelToken,
   }) async {
-    // Nothing is added to this query: the public edge admits exactly
-    // `limit=<1..50>&offset=<digits>` and answers 404 to anything else.
     final response = await _dio.get(
-      ApiConstants.walletTransactions(address, offset: offset, limit: limit),
+      ApiConstants.walletTransactions(
+        address,
+        offset: offset,
+        limit: limit,
+        creditLimit: creditPageSize,
+        creditAfter: creditAfter,
+      ),
       cancelToken: cancelToken,
     );
     // An answer with no list in it is a failed read, not an empty history.
@@ -179,8 +188,8 @@ class WalletRemoteDataSource {
 
   /// The block this wallet's chain history puts [hash] in, or null if it isn't
   /// in the newest page. History is newest first, so a just-included send is at
-  /// the top. Deliberately not [getTransactions]: the public edge admits exactly
-  /// `limit=<1..50>&offset=<digits>` here and refuses the credit parameters.
+  /// the top. Deliberately not [getTransactions]: only the transactions matter
+  /// here, so it asks for no reward records.
   Future<int?> findIncludedBlock(String address, String hash) async {
     final response = await _dio.get(
       ApiConstants.walletTransactions(

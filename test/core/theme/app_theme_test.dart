@@ -32,8 +32,9 @@ void main() {
       expect(tt.labelLarge, isNotNull);
     });
 
-    testWidgets('ElevatedButton resolves foreground from theme colorScheme',
-        (tester) async {
+    testWidgets('ElevatedButton resolves foreground from theme colorScheme', (
+      tester,
+    ) async {
       // The ElevatedButton style should use ColorScheme colors rather than
       // hardcoded hex so it adapts when the scheme changes.
       final theme = AppTheme.darkTheme;
@@ -41,10 +42,7 @@ void main() {
         MaterialApp(
           theme: theme,
           home: Scaffold(
-            body: ElevatedButton(
-              onPressed: () {},
-              child: const Text('Press'),
-            ),
+            body: ElevatedButton(onPressed: () {}, child: const Text('Press')),
           ),
         ),
       );
