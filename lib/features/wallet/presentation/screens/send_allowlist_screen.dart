@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/errors/failures.dart';
 import '../../../../core/layout/responsive_layout.dart';
+import '../../../../core/widgets/app_snackbars.dart';
 import '../../data/models/address_book_entry.dart';
 import '../../domain/send_allowlist.dart';
 import '../providers/wallet_security_provider.dart';
@@ -33,6 +35,8 @@ class SendAllowlistScreen extends ConsumerWidget {
                 subtitle: Text(
                   !on
                       ? 'Off. Send works with any address.'
+                      : settings.unreadable
+                      ? 'On, because its saved setting could not be read.'
                       : turnsOffAt == null
                       ? 'On. Send refuses everyone else.'
                       : 'On until ${formatAllowlistTime(turnsOffAt)}.',
@@ -41,10 +45,51 @@ class SendAllowlistScreen extends ConsumerWidget {
                 onChanged: settingsAsync.isLoading
                     ? null
                     : (value) => value
-                          ? ref.read(sendAllowlistProvider.notifier).turnOn()
+                          ? _save(
+                              context,
+                              ref.read(sendAllowlistProvider.notifier).turnOn,
+                            )
                           : _confirmTurnOff(context, ref),
               ),
             ),
+            if (settings.unreadable) ...[
+              const SizedBox(height: 8),
+              SafetyNotice(
+                key: const Key('allowlist-unreadable'),
+                tone: SafetyTone.blocked,
+                icon: Icons.error_outline,
+                title: "Can't read your saved setting",
+                body:
+                    'This phone could not read whether your allowlist is on, '
+                    'so it counts as on. Send only goes to contacts you '
+                    'already allowed. Try again, keep it on, or turn it off '
+                    'with the switch above, which waits 24 hours as usual.',
+                children: [
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonal(
+                        key: const Key('allowlist-unreadable-keep-on'),
+                        onPressed: () => _save(
+                          context,
+                          ref
+                              .read(sendAllowlistProvider.notifier)
+                              .cancelTurnOff,
+                        ),
+                        child: const Text('Keep it on'),
+                      ),
+                      TextButton(
+                        key: const Key('allowlist-unreadable-retry'),
+                        onPressed: () => ref.invalidate(sendAllowlistProvider),
+                        child: const Text('Try again'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
             if (turnsOffAt != null) ...[
               const SizedBox(height: 8),
               SafetyNotice(
@@ -59,9 +104,10 @@ class SendAllowlistScreen extends ConsumerWidget {
                   const SizedBox(height: 8),
                   FilledButton.tonal(
                     key: const Key('allowlist-keep-on'),
-                    onPressed: () => ref
-                        .read(sendAllowlistProvider.notifier)
-                        .cancelTurnOff(),
+                    onPressed: () => _save(
+                      context,
+                      ref.read(sendAllowlistProvider.notifier).cancelTurnOff,
+                    ),
                     child: const Text('Keep it on'),
                   ),
                 ],
@@ -146,8 +192,29 @@ class SendAllowlistScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (sure == true) {
-      await ref.read(sendAllowlistProvider.notifier).requestTurnOff();
+    if (sure == true && context.mounted) {
+      await _save(
+        context,
+        ref.read(sendAllowlistProvider.notifier).requestTurnOff,
+      );
+    }
+  }
+
+  /// A failed write leaves the allowlist as it was, and says so.
+  Future<void> _save(
+    BuildContext context,
+    Future<void> Function() change,
+  ) async {
+    try {
+      await change();
+    } catch (_) {
+      if (!context.mounted) return;
+      AppSnackbars.error(
+        context,
+        const ValidationFailure(
+          "Couldn't save that on this phone. Nothing changed. Try again.",
+        ),
+      );
     }
   }
 

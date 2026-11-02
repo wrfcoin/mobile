@@ -10,9 +10,21 @@ const String sendAllowlistScopeNote =
 
 /// Stored settings for the app-level send allowlist. Device-only.
 class SendAllowlistSettings {
-  const SendAllowlistSettings({this.enabled = false, this.turnsOffAt});
+  const SendAllowlistSettings({
+    this.enabled = false,
+    this.turnsOffAt,
+    this.unreadable = false,
+  });
 
   static const off = SendAllowlistSettings();
+
+  /// What a saved setting that can't be read counts as: on, with no turn-off
+  /// pending, so a damaged setting never skips the 24 hour wait. Never saved:
+  /// the turn-off path and "keep it on" each replace it with a real setting.
+  static const unreadableOn = SendAllowlistSettings(
+    enabled: true,
+    unreadable: true,
+  );
 
   /// The user turned the allowlist on (and it has not finished turning off).
   final bool enabled;
@@ -20,19 +32,28 @@ class SendAllowlistSettings {
   /// A requested turn-off that applies at this time. Null: none pending.
   final DateTime? turnsOffAt;
 
+  /// The saved setting could not be read, so this is [unreadableOn].
+  final bool unreadable;
+
   Map<String, dynamic> toJson() => {
     'enabled': enabled,
     if (turnsOffAt != null)
       'turns_off_at': turnsOffAt!.toUtc().millisecondsSinceEpoch,
   };
 
+  /// Throws [FormatException] unless this is exactly what [toJson] writes: a
+  /// wrong shape must not read as off.
   static SendAllowlistSettings fromJson(Map<String, dynamic> json) {
+    final enabled = json['enabled'];
     final at = json['turns_off_at'];
+    if (enabled is! bool || (at != null && at is! int)) {
+      throw const FormatException('Invalid send allowlist settings');
+    }
     return SendAllowlistSettings(
-      enabled: json['enabled'] == true,
-      turnsOffAt: at is int
-          ? DateTime.fromMillisecondsSinceEpoch(at, isUtc: true)
-          : null,
+      enabled: enabled,
+      turnsOffAt: at == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(at as int, isUtc: true),
     );
   }
 
@@ -40,10 +61,11 @@ class SendAllowlistSettings {
   bool operator ==(Object other) =>
       other is SendAllowlistSettings &&
       other.enabled == enabled &&
-      other.turnsOffAt == turnsOffAt;
+      other.turnsOffAt == turnsOffAt &&
+      other.unreadable == unreadable;
 
   @override
-  int get hashCode => Object.hash(enabled, turnsOffAt);
+  int get hashCode => Object.hash(enabled, turnsOffAt, unreadable);
 }
 
 /// Where one contact stands with the allowlist.
@@ -53,13 +75,21 @@ enum ContactAllowState { notAllowed, pending, allowed }
 enum AllowlistVerdictKind { allowed, notSaved, notAllowed, pending }
 
 class AllowlistVerdict {
-  const AllowlistVerdict(this.kind, {this.contact, this.allowedFrom});
+  const AllowlistVerdict(
+    this.kind, {
+    this.contact,
+    this.allowedFrom,
+    this.settingsUnreadable = false,
+  });
 
   final AllowlistVerdictKind kind;
   final AddressBookEntry? contact;
 
   /// For [AllowlistVerdictKind.pending]: when the contact becomes allowed.
   final DateTime? allowedFrom;
+
+  /// Refused while the saved settings can't be read, which is why it is on.
+  final bool settingsUnreadable;
 
   bool get blocksSend => kind != AllowlistVerdictKind.allowed;
 }
@@ -149,7 +179,10 @@ class SendAllowlistPolicy {
       }
     }
     if (contact == null) {
-      return const AllowlistVerdict(AllowlistVerdictKind.notSaved);
+      return AllowlistVerdict(
+        AllowlistVerdictKind.notSaved,
+        settingsUnreadable: settings.unreadable,
+      );
     }
     return switch (stateOf(contact)) {
       ContactAllowState.allowed => AllowlistVerdict(
@@ -160,10 +193,12 @@ class SendAllowlistPolicy {
         AllowlistVerdictKind.pending,
         contact: contact,
         allowedFrom: contact.allowedFrom,
+        settingsUnreadable: settings.unreadable,
       ),
       ContactAllowState.notAllowed => AllowlistVerdict(
         AllowlistVerdictKind.notAllowed,
         contact: contact,
+        settingsUnreadable: settings.unreadable,
       ),
     };
   }

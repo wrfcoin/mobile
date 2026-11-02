@@ -290,6 +290,12 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
 
   final List<AddressBookEntry> _addressBook;
   SendAllowlistSettings sendAllowlist;
+
+  /// Thrown by [getAddressBook] when set: a failed secure-storage read.
+  Object? addressBookReadError;
+
+  /// Thrown by [saveSendAllowlist] when set: a failed secure-storage write.
+  Object? allowlistWriteError;
   bool backupConfirmed;
   bool isSocial;
   int clearWalletDataCalls = 0;
@@ -309,8 +315,10 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
   }
 
   @override
-  Future<List<AddressBookEntry>> getAddressBook() async =>
-      List.unmodifiable(_addressBook);
+  Future<List<AddressBookEntry>> getAddressBook() async {
+    if (addressBookReadError case final error?) throw error;
+    return List.unmodifiable(_addressBook);
+  }
 
   @override
   Future<void> saveAddressBook(List<AddressBookEntry> entries) async {
@@ -324,6 +332,7 @@ class FakeWalletSecureStorage extends WalletSecureStorage {
 
   @override
   Future<void> saveSendAllowlist(SendAllowlistSettings settings) async {
+    if (allowlistWriteError case final error?) throw error;
     sendAllowlist = settings;
   }
 
@@ -613,9 +622,9 @@ class FakeWeatherRepository extends WeatherRepository {
   @override
   Future<Either<Failure, ForecastWithDaily>> getForecastWithDaily(
     CoarseLocation location,
-  ) async => (await getForecast(
-    location,
-  )).map((f) => ForecastWithDaily(forecast: f, daily: daily));
+  ) async =>
+      (await getForecast(location))
+          .map((f) => ForecastWithDaily(forecast: f, daily: daily));
 
   @override
   Future<Either<Failure, List<HourlyForecast>>> getHourlyForecast(

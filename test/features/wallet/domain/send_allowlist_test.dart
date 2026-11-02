@@ -17,6 +17,95 @@ void main() {
   const on = SendAllowlistSettings(enabled: true);
   const momEntry = AddressBookEntry(label: 'Mom', address: _mom);
 
+  group('settings that could not be read', () {
+    const unreadable = SendAllowlistSettings.unreadableOn;
+    final allowedMom = momEntry.copyWith(
+      allowedFrom: DateTime.utc(2026, 10, 1),
+    );
+
+    test('count as on and stay that way with time', () {
+      expect(policy.isOn(unreadable), isTrue);
+      now = now.add(const Duration(days: 400));
+      expect(policy.isOn(unreadable), isTrue);
+      expect(policy.settle(unreadable), unreadable);
+    });
+
+    test('turning off starts the normal wait, then settles to off', () {
+      final pending = policy.requestTurnOff(unreadable);
+      expect(pending.unreadable, isFalse);
+      expect(pending.turnsOffAt, now.add(const Duration(hours: 24)));
+      expect(policy.isOn(pending), isTrue);
+      now = now.add(const Duration(hours: 24));
+      expect(policy.settle(pending), SendAllowlistSettings.off);
+    });
+
+    test('keeping it on becomes an ordinary on', () {
+      expect(policy.cancelTurnOff(unreadable), on);
+    });
+
+    test('refuses a stranger, saying why', () {
+      final verdict = policy.check(
+        to: _stranger,
+        book: [allowedMom],
+        settings: unreadable,
+      );
+      expect(verdict.blocksSend, isTrue);
+      expect(verdict.settingsUnreadable, isTrue);
+    });
+
+    test('refuses a contact not allowed yet, saying why', () {
+      final verdict = policy.check(
+        to: _mom,
+        book: const [momEntry],
+        settings: unreadable,
+      );
+      expect(verdict.blocksSend, isTrue);
+      expect(verdict.settingsUnreadable, isTrue);
+    });
+
+    test('an already allowed contact still works, as with it on', () {
+      final verdict = policy.check(
+        to: _mom,
+        book: [allowedMom],
+        settings: unreadable,
+      );
+      expect(verdict.blocksSend, isFalse);
+    });
+
+    test('allowing a contact takes the wait', () {
+      expect(
+        policy.allow(momEntry, unreadable).allowedFrom,
+        now.add(const Duration(hours: 24)),
+      );
+    });
+  });
+
+  group('reading saved settings', () {
+    for (final bad in <Map<String, dynamic>>[
+      const {},
+      const {'enabled': 'true'},
+      const {'enabled': 1},
+      const {'enabled': true, 'turns_off_at': 'tomorrow'},
+    ]) {
+      test('rejects \$bad rather than reading it as off', () {
+        expect(
+          () => SendAllowlistSettings.fromJson(bad),
+          throwsFormatException,
+        );
+      });
+    }
+
+    test('what it writes reads back the same', () {
+      final pending = SendAllowlistSettings(
+        enabled: true,
+        turnsOffAt: DateTime.utc(2026, 11, 2),
+      );
+      for (final s in [SendAllowlistSettings.off, on, pending]) {
+        expect(SendAllowlistSettings.fromJson(s.toJson()), s);
+      }
+    });
+  });
+
   group('turning on and off', () {
     test('off by default; turning on is instant', () {
       expect(policy.isOn(SendAllowlistSettings.off), isFalse);
@@ -62,10 +151,6 @@ void main() {
     test('settings round-trip through JSON', () {
       final pending = policy.requestTurnOff(on);
       expect(SendAllowlistSettings.fromJson(pending.toJson()), pending);
-      expect(
-        SendAllowlistSettings.fromJson(const {}),
-        SendAllowlistSettings.off,
-      );
     });
   });
 

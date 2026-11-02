@@ -204,6 +204,89 @@ void main() {
       expect((await storage.getAddressBook()).single.allowedFrom, clock.now);
     });
 
+    group('when the saved setting could not be read', () {
+      testWidgets('shows on, says why, and turning off takes the 24 hours', (
+        tester,
+      ) async {
+        final clock = _Clock();
+        final storage = FakeWalletSecureStorage(
+          sendAllowlist: SendAllowlistSettings.unreadableOn,
+        );
+        await _pump(
+          tester,
+          const SendAllowlistScreen(),
+          storage: storage,
+          clock: clock,
+        );
+        expect(find.byKey(const Key('allowlist-unreadable')), findsOneWidget);
+        expect(find.textContaining('counts as on'), findsOneWidget);
+        expect(
+          tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+          isTrue,
+        );
+
+        await tester.tap(find.byKey(const Key('allowlist-switch')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('allowlist-turn-off-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(storage.sendAllowlist.unreadable, isFalse);
+        expect(
+          storage.sendAllowlist.turnsOffAt,
+          clock.now.add(const Duration(hours: 24)),
+        );
+        expect(find.byKey(const Key('allowlist-unreadable')), findsNothing);
+        expect(
+          find.byKey(const Key('allowlist-turn-off-pending')),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('keep it on saves an ordinary on', (tester) async {
+        final storage = FakeWalletSecureStorage(
+          sendAllowlist: SendAllowlistSettings.unreadableOn,
+        );
+        await _pump(tester, const SendAllowlistScreen(), storage: storage);
+        await tester.tap(find.byKey(const Key('allowlist-unreadable-keep-on')));
+        await tester.pumpAndSettle();
+        expect(
+          storage.sendAllowlist,
+          const SendAllowlistSettings(enabled: true),
+        );
+        expect(find.byKey(const Key('allowlist-unreadable')), findsNothing);
+      });
+
+      testWidgets('try again picks up a setting that reads now', (
+        tester,
+      ) async {
+        final storage = FakeWalletSecureStorage(
+          sendAllowlist: SendAllowlistSettings.unreadableOn,
+        );
+        await _pump(tester, const SendAllowlistScreen(), storage: storage);
+        storage.sendAllowlist = SendAllowlistSettings.off;
+        await tester.tap(find.byKey(const Key('allowlist-unreadable-retry')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('allowlist-unreadable')), findsNothing);
+        expect(find.textContaining('Off.'), findsOneWidget);
+      });
+
+      testWidgets('a failed save stays on and says so', (tester) async {
+        final storage = FakeWalletSecureStorage(
+          sendAllowlist: SendAllowlistSettings.unreadableOn,
+        );
+        await _pump(tester, const SendAllowlistScreen(), storage: storage);
+        storage.allowlistWriteError = StateError('storage failed');
+        await tester.tap(find.byKey(const Key('allowlist-switch')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('allowlist-turn-off-confirm')));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(find.textContaining("Couldn't save"), findsOneWidget);
+        expect(find.byKey(const Key('allowlist-unreadable')), findsOneWidget);
+        expect(storage.sendAllowlist, SendAllowlistSettings.unreadableOn);
+      });
+    });
+
     testWidgets('a due turn-off settles to off when the screen opens', (
       tester,
     ) async {

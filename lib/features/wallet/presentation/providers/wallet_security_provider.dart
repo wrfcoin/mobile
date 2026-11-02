@@ -131,13 +131,26 @@ class SendAllowlistNotifier extends AsyncNotifier<SendAllowlistSettings> {
   SendAllowlistPolicy get _policy => ref.read(sendAllowlistPolicyProvider);
 
   @override
-  Future<SendAllowlistSettings> build() => current();
+  Future<SendAllowlistSettings> build() => _read();
 
-  /// Fresh settings from storage, with a due turn-off applied and saved.
+  /// Fresh settings from storage, with a due turn-off applied and saved. Screens
+  /// follow what this finds, so one that opens after a refused send shows why.
   Future<SendAllowlistSettings> current() async {
+    final settled = await _read();
+    if (ref.mounted && state.value != settled) state = AsyncData(settled);
+    return settled;
+  }
+
+  Future<SendAllowlistSettings> _read() async {
     final stored = await _storage.getSendAllowlist();
     final settled = _policy.settle(stored);
-    if (settled != stored) await _storage.saveSendAllowlist(settled);
+    if (settled != stored) {
+      try {
+        await _storage.saveSendAllowlist(settled);
+      } catch (_) {
+        // The wait is over either way; the next read settles it again.
+      }
+    }
     return settled;
   }
 

@@ -72,15 +72,17 @@ class WalletSecureStorage {
       ? _storage.delete(key: pendingSendKey)
       : _storage.write(key: pendingSendKey, value: encoded);
 
+  /// Off only when nothing was ever saved. A failed read or a value this app
+  /// could not have written fails closed: see [SendAllowlistSettings.unreadableOn].
   Future<SendAllowlistSettings> getSendAllowlist() async {
-    final raw = await _storage.read(key: sendAllowlistKey);
-    if (raw == null || raw.isEmpty) return SendAllowlistSettings.off;
     try {
+      final raw = await _storage.read(key: sendAllowlistKey);
+      if (raw == null) return SendAllowlistSettings.off;
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return SendAllowlistSettings.off;
+      if (decoded is! Map) return SendAllowlistSettings.unreadableOn;
       return SendAllowlistSettings.fromJson(Map<String, dynamic>.from(decoded));
     } catch (_) {
-      return SendAllowlistSettings.off;
+      return SendAllowlistSettings.unreadableOn;
     }
   }
 
