@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../calibration/presentation/station_calibration_card.dart';
 import '../providers/station_profile_provider.dart';
 import '../widgets/uptime_badge.dart';
 import '../widgets/sparkline_chart.dart';
@@ -77,6 +78,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
         _buildLiveDataPanel(context),
         const SizedBox(height: 20),
 
+        // Signed sensor calibration
+        StationCalibrationCard(stationId: profile.id, hideWhenOff: true),
+        const SizedBox(height: 20),
+
         // Impact section
         _buildImpactSection(context),
         const SizedBox(height: 20),
@@ -125,6 +130,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                           fontSize: 13,
                         ),
                       ),
+                      CalibrationBadge(stationId: profile.id),
                     ],
                   ),
                 ),
