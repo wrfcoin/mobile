@@ -16,7 +16,10 @@ import '../providers/wallet_provider.dart';
 enum _ImportType { mnemonic, privateKey }
 
 class ImportWalletScreen extends ConsumerStatefulWidget {
-  const ImportWalletScreen({super.key});
+  const ImportWalletScreen({super.key, this.leading});
+
+  /// The app bar's back button, when there is no screen under this one.
+  final Widget? leading;
 
   @override
   ConsumerState<ImportWalletScreen> createState() => _ImportWalletScreenState();
@@ -199,7 +202,10 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen> {
     final pendingCredentials = _pendingCredentials;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import / Restore Wallet')),
+      appBar: AppBar(
+        leading: widget.leading,
+        title: const Text('Import / Restore Wallet'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
