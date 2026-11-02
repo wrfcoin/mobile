@@ -108,7 +108,10 @@ class _State extends ConsumerState<StationAcceptScreen> {
 
   Future<void> _check() async {
     final sub = _submission;
-    if (sub == null) return;
+    // Hidden behind another tab: wait until it is back on screen.
+    if (sub == null || !mounted || !TickerMode.getValuesNotifier(context).value.enabled) {
+      return;
+    }
     final status = await ref
         .read(stationOwnerServiceProvider)
         .checkTransferApplied(sub);
