@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'sky_astronomy.dart';
@@ -245,9 +246,20 @@ class SkyPose {
   }
 }
 
-/// Sensor smoothing: exponential follow on orientation, faster for big moves so
-/// the map keeps up with the arm, with a dead band so a resting phone stops
-/// drawing altogether.
+/// Sensor smoothing. Two modes, picked by how fast the sensor's answer is
+/// really changing:
+///
+/// - Moving: exponential follow, faster for big moves so the map keeps up with
+///   the arm. No lag beyond that filter.
+/// - Still: the view holds while the sensor stays within [holdDegrees] of it,
+///   so wander from the fused sensor's magnetic correction does not show. Past
+///   that it creeps towards the sensor, in proportion to the gap and never above
+///   [maxCreepDegreesPerSecond]. A true heading correction always arrives, just
+///   gently: all that is ever left unfollowed is the hold band.
+///
+/// Motion is the net change over the last [_windowSeconds], so sample-to-sample
+/// noise, which mostly cancels, doesn't read as movement. A phone turning at
+/// 30 degrees a second crosses the threshold on its first sample.
 class AttitudeSmoother {
   /// Time constant for small motion, in seconds.
   final double tau;
@@ -255,25 +267,90 @@ class AttitudeSmoother {
 
   /// A quarter of a pixel at phone width. Below this nothing is redrawn.
   static const deadBandDegrees = 0.05;
+
+  /// About a pixel at phone width, and well inside the compass's own error.
+  static const holdDegrees = 0.2;
+
+  /// How much of the gap past the hold band is closed each second while still.
+  static const creepPerSecond = 0.5;
+  static const maxCreepDegreesPerSecond = 1.5;
+
+  /// Keeps the creep from slowing forever, so it does end.
+  static const minCreepDegreesPerSecond = 0.05;
+
+  static const _holdLimit = holdDegrees + 1e-6;
   static const _snapDegrees = 60.0;
+  static const _windowSeconds = 0.2;
+
+  /// Net change over the window that starts tracking (2 degrees a second)...
+  static const _startMovingDegrees = 0.4;
+
+  /// ...and the smaller one under which it may stop (1 degree a second).
+  static const _stopMovingDegrees = 0.2;
 
   Quat? current;
+  bool _moving = false;
+  Quat? _lastObserved;
+  double _clock = 0;
+  final _recent = ListQueue<(double, Quat)>();
+
+  /// Records a sensor reading [seconds] after the previous one. [step] does this
+  /// itself for a reading it hasn't seen, so a caller only needs this when
+  /// frames may be stopped while samples still come.
+  void observe(Quat target, double seconds) {
+    _lastObserved = target;
+    _clock += seconds;
+    _recent.addLast((_clock, target));
+    // Keep one reading at or beyond the window, to measure the whole window.
+    while (_recent.length > 2 &&
+        _clock - _recent.elementAt(1).$1 >= _windowSeconds) {
+      _recent.removeFirst();
+    }
+    final change = _recent.first.$2.degreesTo(target);
+    final from = current;
+    if (change >= _startMovingDegrees) {
+      _moving = true;
+    } else if (change < _stopMovingDegrees &&
+        (from == null || from.degreesTo(target) <= _holdLimit)) {
+      // Stay in tracking until caught up, so a finished move lands fully.
+      _moving = false;
+    }
+  }
+
+  /// Whether [target] needs frames from here. False for a phone at rest.
+  bool wantsFrames(Quat target) {
+    final from = current;
+    if (from == null) return true;
+    return from.degreesTo(target) >= (_moving ? deadBandDegrees : _holdLimit);
+  }
 
   /// Moves towards [target]. Returns whether [current] changed.
   bool step(Quat target, double seconds) {
+    if (!identical(target, _lastObserved)) observe(target, seconds);
     final from = current;
     if (from == null) {
       current = target;
       return true;
     }
     final gap = from.degreesTo(target);
-    if (gap < deadBandDegrees) return false;
     if (gap > _snapDegrees) {
       current = target;
       return true;
     }
-    final quick = tau / (1 + gap / 5);
-    current = from.towards(target, 1 - math.exp(-seconds / quick));
+    if (_moving) {
+      if (gap < deadBandDegrees) return false;
+      final quick = tau / (1 + gap / 5);
+      current = from.towards(target, 1 - math.exp(-seconds / quick));
+      return true;
+    }
+    if (gap <= _holdLimit) return false;
+    final speed = ((gap - holdDegrees) * creepPerSecond).clamp(
+      minCreepDegreesPerSecond,
+      maxCreepDegreesPerSecond,
+    );
+    // Stop at the edge of the hold band, so the view comes to rest and frames end.
+    final move = math.min(speed * seconds, gap - holdDegrees);
+    current = from.towards(target, move / gap);
     return true;
   }
 }
