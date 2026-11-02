@@ -67,6 +67,13 @@ class WeatherRepository {
   /// zeros.
   Future<Either<Failure, ForecastModel>> getForecast(
     CoarseLocation location,
+  ) async =>
+      (await getForecastWithDaily(location)).map((result) => result.forecast);
+
+  /// [getForecast] together with the daily list from the same response, so
+  /// showing both costs one call in the rate-limited NOAA zone.
+  Future<Either<Failure, ForecastWithDaily>> getForecastWithDaily(
+    CoarseLocation location,
   ) async {
     try {
       final response = await _dio.get(
@@ -81,12 +88,37 @@ class WeatherRepository {
           ),
         );
       }
-      return Right(forecast);
+      return Right(
+        ForecastWithDaily(
+          forecast: forecast,
+          daily: dailyFromEnvelope(response.data),
+        ),
+      );
     } on DioException catch (e) {
       return Left(_forecastFailure(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
+  }
+
+  /// The hourly periods for [location]. No periods is [NotAvailableFailure].
+  Future<Either<Failure, List<HourlyForecast>>> getHourlyForecast(
+    CoarseLocation location,
+  ) async {
+    final payload = await _getPayload(
+      ApiConstants.weatherForecast(location.pathSegment),
+      ApiConstants.weatherForecastHourlyQuery,
+    );
+    return payload.flatMap((data) {
+      final hours = hourlyFromEnvelope(data);
+      return hours == null
+          ? const Left(
+              NotAvailableFailure(
+                'No hourly forecast is available for your area right now.',
+              ),
+            )
+          : Right(hours);
+    });
   }
 
   /// The latest observation for [location]

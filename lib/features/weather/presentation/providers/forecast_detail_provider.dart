@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/failures.dart';
+import '../../../../core/time/app_clock.dart';
 import '../../data/models/forecast_detail_model.dart';
 import '../../data/repositories/weather_repository_impl.dart';
 import '../../data/weather_location_resolver.dart';
 import '../../domain/models/coarse_location.dart';
+import 'weather_provider.dart';
 
 class ForecastDetailState {
   final ForecastDetail? detail;
@@ -69,6 +71,20 @@ class ForecastDetailNotifier extends Notifier<ForecastDetailState> {
   /// no request and sets [ForecastDetailState.locationUnavailable].
   Future<void> loadLocal() async {
     final generation = ++_generation;
+    // The Weather tab already shows this data. Opening the detail from it
+    // spends no calls in the rate-limited NOAA zone.
+    final shown = ref.read(weatherProvider);
+    final updated = shown.lastUpdated;
+    if (shown.hourly != null &&
+        shown.daily != null &&
+        !shown.isFromCache &&
+        updated != null &&
+        ref.read(appClockProvider)().difference(updated) < weatherStaleAfter) {
+      state = ForecastDetailState(
+        detail: ForecastDetail(hourly: shown.hourly, daily: shown.daily),
+      );
+      return;
+    }
     state = state.copyWith(loading: true, error: null);
     _pendingLocation?.cancel();
     final request = _pendingLocation = _locationResolver.request();

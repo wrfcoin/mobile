@@ -358,6 +358,7 @@ void main() {
       'https://tailnet.test:9444/api/weather/forecast/45.0,-93.3?days=14',
       'https://tailnet.test:9444/api/weather/current/45.0,-93.3',
       'https://tailnet.test:9444/api/weather/alerts/45.0,-93.3',
+      'https://tailnet.test:9444/api/weather/forecast/45.0,-93.3?type=hourly&days=1',
     });
     for (final uri in backend.requests) {
       final text = Uri.decodeFull(uri.toString());
@@ -365,8 +366,8 @@ void main() {
       expect(text, isNot(contains('44.98')), reason: 'no exact latitude');
       expect(text, isNot(contains('93.26')), reason: 'no exact longitude');
       expect(text, isNot(contains('wrf-forecast')));
-      // Only the fixed forecast query; nothing about the device.
-      expect(uri.queryParameters.keys, anyOf(isEmpty, ['days']));
+      // Only the fixed forecast queries; nothing about the device.
+      expect(uri.queryParameters.keys, anyOf(isEmpty, ['days'], ['type', 'days']));
     }
   });
 
@@ -728,7 +729,7 @@ void main() {
         backend: backend,
         connectivity: network,
       );
-      expect(backend.requests, hasLength(3));
+      expect(backend.requests, hasLength(4));
 
       device.permission = 0;
       unawaited(container.read(weatherProvider.notifier).loadLocalWeather());
@@ -738,7 +739,7 @@ void main() {
       network.reconnect();
       await _settle(tester);
 
-      expect(backend.requests, hasLength(3), reason: 'no request after revoke');
+      expect(backend.requests, hasLength(4), reason: 'no request after revoke');
       expect(container.read(weatherProvider).locationNeeded, isTrue);
       expect(find.text(_allowLocation, skipOffstage: false), findsOneWidget);
       expect(find.byType(WeatherCard, skipOffstage: false), findsNothing);
@@ -758,7 +759,7 @@ void main() {
         backend: backend,
         connectivity: network,
       );
-      expect(backend.requests, hasLength(3));
+      expect(backend.requests, hasLength(4));
 
       network.reconnect();
       await _settle(tester);
@@ -767,9 +768,11 @@ void main() {
         '/api/weather/forecast/45.0,-93.3',
         '/api/weather/current/45.0,-93.3',
         '/api/weather/alerts/45.0,-93.3',
+        '/api/weather/forecast/45.0,-93.3', // the hourly strip
         '/api/weather/forecast/45.0,-93.3',
         '/api/weather/current/45.0,-93.3',
         '/api/weather/alerts/45.0,-93.3',
+        '/api/weather/forecast/45.0,-93.3', // the hourly strip
       ]);
     });
 
@@ -788,7 +791,10 @@ void main() {
         backend: backend,
         home: const AlertsScreen(),
       );
-      expect(backend.requests.last.path, '/api/weather/alerts/45.0,-93.3');
+      expect(
+        backend.requests.map((u) => u.path),
+        contains('/api/weather/alerts/45.0,-93.3'),
+      );
 
       device.permission = 0;
       unawaited(container.read(weatherProvider.notifier).loadLocalWeather());
@@ -909,6 +915,7 @@ void main() {
         '/api/weather/forecast/45.0,-93.3',
         '/api/weather/current/45.0,-93.3',
         '/api/weather/alerts/45.0,-93.3',
+        '/api/weather/forecast/45.0,-93.3', // the hourly strip
       ]);
       expect(find.text('Wind Advisory'), findsOneWidget);
     });

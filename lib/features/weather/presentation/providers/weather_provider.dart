@@ -4,6 +4,7 @@ import '../../../../core/errors/failures.dart';
 import '../../../../core/time/app_clock.dart';
 import '../../../../services/offline/offline_data_buffer.dart';
 import '../../data/models/current_conditions_model.dart';
+import '../../data/models/forecast_detail_model.dart';
 import '../../data/models/forecast_model.dart';
 import '../../data/models/alert_model.dart';
 import '../../data/repositories/weather_repository_impl.dart';
@@ -23,6 +24,15 @@ const weatherRetryAfter = Duration(minutes: 5);
 class WeatherState {
   final ForecastModel? forecast;
   final List<AlertModel> alerts;
+
+  /// The days from the response that gave [forecast]. Null when it had none.
+  final List<DailyForecast>? daily;
+
+  /// The hourly periods for [forecast]'s location. Null until loaded and after
+  /// a failed call on an otherwise good refresh.
+  final List<HourlyForecast>? hourly;
+  final bool hourlyLoading;
+  final Failure? hourlyError;
 
   /// The latest observation (humidity, pressure). Null until loaded, and
   /// after a failed `/current` call: its failure never touches [error] or
@@ -67,6 +77,10 @@ class WeatherState {
   const WeatherState({
     this.forecast,
     this.alerts = const [],
+    this.daily,
+    this.hourly,
+    this.hourlyLoading = false,
+    this.hourlyError,
     this.current,
     this.loading = false,
     this.alertsLoading = false,
@@ -82,6 +96,12 @@ class WeatherState {
   WeatherState copyWith({
     ForecastModel? forecast,
     bool clearForecast = false,
+    List<DailyForecast>? daily,
+    List<HourlyForecast>? hourly,
+    bool clearHourly = false,
+    bool? hourlyLoading,
+    Failure? hourlyError,
+    bool clearHourlyError = false,
     List<AlertModel>? alerts,
     CurrentConditions? current,
     bool clearCurrent = false,
@@ -99,6 +119,10 @@ class WeatherState {
   }) {
     return WeatherState(
       forecast: clearForecast ? null : forecast ?? this.forecast,
+      daily: clearForecast ? daily : daily ?? this.daily,
+      hourly: clearForecast || clearHourly ? hourly : hourly ?? this.hourly,
+      hourlyLoading: hourlyLoading ?? this.hourlyLoading,
+      hourlyError: clearHourlyError ? null : hourlyError ?? this.hourlyError,
       alerts: alerts ?? this.alerts,
       current: clearCurrent ? null : current ?? this.current,
       loading: loading ?? this.loading,
@@ -138,6 +162,9 @@ class WeatherNotifier extends Notifier<WeatherState> {
   /// The location key [WeatherState.forecast] and its alerts were loaded for.
   /// As with [_currentFor], another place's weather is never kept on screen.
   String? _forecastFor;
+
+  /// The location of the latest load, for [retryHourly].
+  CoarseLocation? _hourlyLocation;
 
   /// When the latest load started; see [weatherRetryAfter].
   DateTime? _lastAttempt;
@@ -191,6 +218,8 @@ class WeatherNotifier extends Notifier<WeatherState> {
       _forecastFor = null;
       state = state.copyWith(
         clearForecast: true,
+        hourlyLoading: false,
+        clearHourlyError: true,
         alerts: const [],
         alertsLoaded: false,
         clearAlertsError: true,
@@ -204,9 +233,16 @@ class WeatherNotifier extends Notifier<WeatherState> {
     );
     await loadForecast(location);
     if (!_isCurrent(generation)) return;
-    // /current runs beside alerts, so a slow one does not delay them. Each
-    // is generation-guarded on its own.
-    await Future.wait([loadCurrent(location), loadAlerts(location)]);
+    _hourlyLocation = location;
+    // These run beside each other, so a slow one does not delay the others.
+    // Each is generation-guarded on its own. A round that got no new forecast
+    // spends no further call on hourly: the old hours stay with the old
+    // forecast, under its note.
+    await Future.wait([
+      loadCurrent(location),
+      loadAlerts(location),
+      if (state.error == null && !state.isFromCache) loadHourly(location),
+    ]);
   }
 
   /// Loads if the weather on screen is old enough. Keeps it on screen while
@@ -259,9 +295,16 @@ class WeatherNotifier extends Notifier<WeatherState> {
 
     final buffer = _offlineBuffer;
     if (buffer != null) {
+      List<DailyForecast>? daily;
       final result = await buffer.fetchWithCache<ForecastModel>(
         cacheKey: 'weather:forecast:${location.pathSegment}',
-        fetch: () => _repository.getForecast(location),
+        fetch: () async {
+          final fetched = await _repository.getForecastWithDaily(location);
+          return fetched.map((both) {
+            daily = both.daily;
+            return both.forecast;
+          });
+        },
         fromJson: ForecastModel.fromJson,
         toJson: (f) => f.toJson(),
       );
@@ -271,6 +314,7 @@ class WeatherNotifier extends Notifier<WeatherState> {
       state = state.copyWith(
         loading: false,
         forecast: fetched,
+        daily: daily,
         error: result.failure,
         isFromCache: result.isFromCache,
         cachedAt: result.cachedAt,
@@ -283,15 +327,16 @@ class WeatherNotifier extends Notifier<WeatherState> {
       await _persistWidgetForecast();
     } else {
       // Fallback path (e.g. web, or when DB provider is not overridden).
-      final result = await _repository.getForecast(location);
+      final result = await _repository.getForecastWithDaily(location);
       if (!_isCurrent(generation)) return;
       result.fold(
         (failure) => state = state.copyWith(loading: false, error: failure),
-        (forecast) {
+        (both) {
           _forecastFor = location.pathSegment;
           state = state.copyWith(
             loading: false,
-            forecast: forecast,
+            forecast: both.forecast,
+            daily: both.daily,
             isFromCache: false,
             lastUpdated: _now(),
           );
@@ -320,6 +365,38 @@ class WeatherNotifier extends Notifier<WeatherState> {
         state = state.copyWith(error: state.error, current: current);
       },
     );
+  }
+
+  /// Loads the hourly periods. On failure the old ones go, since the forecast
+  /// beside them is new; the section says so and offers [retryHourly].
+  Future<void> loadHourly(CoarseLocation location) async {
+    final generation = _generation;
+    state = state.copyWith(
+      error: state.error,
+      hourlyLoading: true,
+      clearHourlyError: true,
+    );
+    final result = await _repository.getHourlyForecast(location);
+    if (!_isCurrent(generation)) return;
+    result.fold(
+      (failure) => state = state.copyWith(
+        error: state.error,
+        clearHourly: true,
+        hourlyLoading: false,
+        hourlyError: failure,
+      ),
+      (hours) => state = state.copyWith(
+        error: state.error,
+        hourly: hours,
+        hourlyLoading: false,
+      ),
+    );
+  }
+
+  /// The hourly section's Retry: one call, not a whole reload.
+  Future<void> retryHourly() async {
+    final location = _hourlyLocation;
+    if (location != null && !state.hourlyLoading) await loadHourly(location);
   }
 
   Future<void> _persistWidgetForecast() async {

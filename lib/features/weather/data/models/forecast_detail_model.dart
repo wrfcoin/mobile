@@ -6,6 +6,8 @@
 /// humidity %, and precipitation chance a 0–1 fraction.
 library;
 
+import 'forecast_model.dart';
+
 /// One NOAA hourly period (`?type=hourly`).
 class HourlyForecast {
   const HourlyForecast({
@@ -70,5 +72,14 @@ class ForecastDetail {
   const ForecastDetail({this.hourly, this.daily});
 
   final List<HourlyForecast>? hourly;
+  final List<DailyForecast>? daily;
+}
+
+/// The current-conditions forecast and the daily list parsed from one
+/// response. [daily] is null when the response has no usable days.
+class ForecastWithDaily {
+  const ForecastWithDaily({required this.forecast, this.daily});
+
+  final ForecastModel forecast;
   final List<DailyForecast>? daily;
 }

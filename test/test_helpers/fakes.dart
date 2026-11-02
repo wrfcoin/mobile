@@ -20,6 +20,7 @@ import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.da
 import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/alert_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/current_conditions_model.dart';
+import 'package:wrfcoin_mobile/features/weather/data/models/forecast_detail_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/forecast_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/wrf_forecast_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/repositories/weather_repository_impl.dart';
@@ -556,7 +557,13 @@ class FakeWeatherRepository extends WeatherRepository {
     ),
     this.wrfForecast,
     this.current,
+    this.hourly,
+    this.daily,
   }) : super(Dio());
+
+  /// Null answers "not available" without touching the network.
+  final List<HourlyForecast>? hourly;
+  final List<DailyForecast>? daily;
 
   final List<AlertModel> alerts;
   final ForecastModel forecast;
@@ -581,6 +588,23 @@ class FakeWeatherRepository extends WeatherRepository {
     CoarseLocation location,
   ) async {
     return Right(forecast);
+  }
+
+  @override
+  Future<Either<Failure, ForecastWithDaily>> getForecastWithDaily(
+    CoarseLocation location,
+  ) async => (await getForecast(
+    location,
+  )).map((f) => ForecastWithDaily(forecast: f, daily: daily));
+
+  @override
+  Future<Either<Failure, List<HourlyForecast>>> getHourlyForecast(
+    CoarseLocation location,
+  ) async {
+    final hourly = this.hourly;
+    return hourly == null
+        ? const Left(NotAvailableFailure('No hourly forecast.'))
+        : Right(hourly);
   }
 
   @override

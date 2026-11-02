@@ -16,6 +16,7 @@ import '../providers/weather_provider.dart';
 import '../providers/wrf_forecast_provider.dart';
 import '../screens/weather_stories_screen.dart';
 import '../widgets/alerts_unavailable_card.dart';
+import '../widgets/forecast_sections.dart';
 import '../widgets/hdd_cdd_card.dart';
 import '../widgets/location_needed_card.dart';
 import '../widgets/narrative_card.dart';
@@ -277,22 +278,9 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
                         ),
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => context.push(
-                          '/weather/forecast-detail',
-                          extra: state.forecast,
-                        ),
-                        icon: const Icon(Icons.calendar_today, size: 14),
-                        label: const Text('Hourly / Daily forecast'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          textStyle: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
+                    const ForecastSections(),
+                    const SizedBox(height: 8),
 
                     // AQI
                     if (state.forecast!.aqi != null)

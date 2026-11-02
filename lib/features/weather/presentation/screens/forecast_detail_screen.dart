@@ -10,6 +10,7 @@ import '../../../../core/widgets/shimmer_loading.dart';
 import '../../data/models/forecast_detail_model.dart';
 import '../../data/models/forecast_model.dart';
 import '../providers/forecast_detail_provider.dart';
+import '../widgets/condition_icon.dart';
 import '../widgets/forecast_share_action.dart';
 import '../widgets/location_needed_card.dart';
 
@@ -174,7 +175,7 @@ class _HourlyTile extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
           const SizedBox(width: 8),
-          _ConditionIcon(shortForecast: slot.shortForecast),
+          ConditionIcon(shortForecast: slot.shortForecast),
           if (slot.shortForecast != null) ...[
             const SizedBox(width: 6),
             Flexible(
@@ -277,7 +278,7 @@ class _DailyCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                _ConditionIcon(shortForecast: day.shortForecast),
+                ConditionIcon(shortForecast: day.shortForecast),
                 const Spacer(),
                 // Low / high
                 Text(
@@ -328,33 +329,6 @@ class _DailyCard extends StatelessWidget {
 }
 
 // ── Shared widgets ──────────────────────────────────────────────────────────
-
-class _ConditionIcon extends StatelessWidget {
-  final String? shortForecast;
-
-  const _ConditionIcon({required this.shortForecast});
-
-  @override
-  Widget build(BuildContext context) {
-    final text = shortForecast?.toLowerCase() ?? '';
-    final icon = switch (text) {
-      _ when text.contains('thunder') => Icons.thunderstorm,
-      _ when text.contains('snow') || text.contains('sleet') => Icons.ac_unit,
-      _
-          when text.contains('rain') ||
-              text.contains('shower') ||
-              text.contains('drizzle') =>
-        Icons.grain,
-      _ when text.contains('fog') || text.contains('haze') => Icons.blur_on,
-      _ when text.contains('partly') => Icons.wb_cloudy,
-      _ when text.contains('cloud') || text.contains('overcast') => Icons.cloud,
-      _ when text.contains('sunny') || text.contains('clear') => Icons.wb_sunny,
-      _ when text.contains('wind') || text.contains('breezy') => Icons.air,
-      _ => Icons.help_outline,
-    };
-    return Icon(icon, size: 18, color: AppColors.primary);
-  }
-}
 
 class _PrecipChip extends StatelessWidget {
   final double probability;
