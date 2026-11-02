@@ -18,7 +18,7 @@ class SkyProjection {
   static const shortSideFieldDegrees = 60.0;
 
   /// Nothing further than this from the screen centre is drawn.
-  static const _minForward = -0.2;
+  static const minForward = -0.2;
 
   SkyProjection(this.pose, this.size)
     : center = size.center(Offset.zero),
@@ -28,7 +28,7 @@ class SkyProjection {
 
   Offset? project(Vec3 direction) {
     final z = direction.dot(pose.forward);
-    if (z < _minForward) return null;
+    if (z < minForward) return null;
     final k = 2 * scale / (1 + z);
     return Offset(
       center.dx + k * direction.dot(pose.right),

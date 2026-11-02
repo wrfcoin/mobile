@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wrfcoin_mobile/features/sky_view/data/catalog_license.dart';
+import 'package:wrfcoin_mobile/features/sky_view/data/sky_star_catalog.dart';
 import 'package:wrfcoin_mobile/features/sky_view/data/sky_sensors.dart';
 import 'package:wrfcoin_mobile/features/sky_view/domain/sky_attitude.dart';
 import 'package:wrfcoin_mobile/features/sky_view/domain/sky_projection.dart';
@@ -84,6 +85,7 @@ void main() {
     noHttp = _NoHttp();
     HttpOverrides.global = noHttp;
     SharedPreferences.setMockInitialValues({});
+    forgetSkyStarCatalog();
   });
   tearDown(() async {
     HttpOverrides.global = null;
@@ -148,9 +150,7 @@ void main() {
     () async {
       registerSkyCatalogLicense();
       final entries = await LicenseRegistry.licenses
-          .where(
-            (entry) => entry.packages.contains('Yale BSC5 bright-star subset'),
-          )
+          .where((entry) => entry.packages.contains(skyCatalogPackage))
           .toList();
       expect(entries, hasLength(1));
       final notice = entries.single.paragraphs.map((p) => p.text).join('\n');
@@ -159,6 +159,173 @@ void main() {
       expect(notice, contains('THE SOFTWARE IS PROVIDED "AS IS"'));
     },
   );
+
+  group('stars and constellations', () {
+    Future<void> ready(WidgetTester tester) async {
+      _mockPermission(tester, 2);
+      await mount(tester);
+      await enterLocation(tester);
+      await pointUp(tester);
+      await tester.pump(const Duration(milliseconds: 600));
+    }
+
+    Offset labelOnScreen(WidgetTester tester, SkyConstellationLabel label) {
+      final map = painter(tester);
+      final at = SkyProjection(
+        map.pose.value!,
+        tester.getSize(find.byType(CustomPaint).first),
+      ).project(map.frame!.toHorizontal3(label.x, label.y, label.z));
+      return at!;
+    }
+
+    testWidgets('the full catalog loads, and the toggle starts on', (
+      tester,
+    ) async {
+      await ready(tester);
+      final map = painter(tester);
+      expect(map.stars?.catalog.starCount, 5082);
+      expect(map.constellations, isTrue);
+      await tester.tap(find.byTooltip('Hide constellations'));
+      await tester.pump();
+      expect(painter(tester).constellations, isFalse);
+      expect(find.byTooltip('Show constellations'), findsOneWidget);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('sky_view.constellations'), isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('the panel names the constellation holding the ring', (
+      tester,
+    ) async {
+      await ready(tester);
+      final map = painter(tester);
+      final at = map.frame!.toCatalog(map.pose.value!.forward);
+      final expected = map.stars!.catalog.constellationAt(
+        math.atan2(at.y, at.x) * 180 / math.pi,
+        math.asin(at.z) * 180 / math.pi,
+      );
+      expect(expected, isNotNull);
+      expect(find.text('The ring is in ${expected!.name}'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets(
+      'tapping a constellation name gives its name and abbreviation',
+      (tester) async {
+        await ready(tester);
+        final map = painter(tester);
+        final screen = tester.getSize(find.byType(CustomPaint).first);
+        final labels = map.stars!.catalog.labels;
+        // A label on screen that no named object is close to.
+        final projection = SkyProjection(map.pose.value!, screen);
+        SkyConstellationLabel? target;
+        for (final label in labels) {
+          final direction = map.frame!.toHorizontal3(label.x, label.y, label.z);
+          if (direction.z < 0) continue;
+          final at = projection.project(direction);
+          if (at == null ||
+              at.dx < 40 ||
+              at.dx > screen.width - 40 ||
+              at.dy < 100 ||
+              at.dy > screen.height / 2) {
+            continue;
+          }
+          if (skyObjectAt(at, map.fixes, map.pose.value!, screen, reach: 20) !=
+              null) {
+            continue;
+          }
+          target = label;
+          break;
+        }
+        expect(target, isNotNull);
+        await tester.tapAt(labelOnScreen(tester, target!));
+        await tester.pumpAndSettle();
+        final dialog = find.byType(AlertDialog);
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.text(target.constellation.name),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.textContaining(
+              'Abbreviation: ${target.constellation.abbreviation}',
+            ),
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets('tapping an unnamed dot gives its catalog details', (
+      tester,
+    ) async {
+      await ready(tester);
+      final map = painter(tester);
+      final screen = tester.getSize(find.byType(CustomPaint).first);
+      final catalog = map.stars!.catalog;
+      final projection = SkyProjection(map.pose.value!, screen);
+      for (var i = 0; i < catalog.starCount; i++) {
+        final direction = map.frame!.toHorizontal3(
+          catalog.unit[i * 3],
+          catalog.unit[i * 3 + 1],
+          catalog.unit[i * 3 + 2],
+        );
+        if (direction.z < 0) continue;
+        final at = projection.project(direction);
+        if (at == null ||
+            at.dx < 40 ||
+            at.dx > screen.width - 40 ||
+            at.dy < 100 ||
+            at.dy > screen.height / 2) {
+          continue;
+        }
+        if (skyObjectAt(at, map.fixes, map.pose.value!, screen, reach: 20) !=
+                null ||
+            skyConstellationAt(
+                  at,
+                  catalog,
+                  projection,
+                  map.frame!,
+                  map.labels,
+                ) !=
+                null) {
+          continue;
+        }
+        final expected = map.stars!.starAt(at, projection, map.frame!)!;
+        await tester.tapAt(at);
+        await tester.pumpAndSettle();
+        final dialog = find.byType(AlertDialog);
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.text(catalog.designation(expected)),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.textContaining(
+              'Magnitude ${catalog.magnitude(expected).toStringAsFixed(2)}',
+            ),
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox.shrink());
+        return;
+      }
+      fail('no unnamed star on screen in the test sky');
+    });
+  });
 
   group('offline and honest', () {
     testWidgets('opens with no fabricated direction, sky or HTTP', (

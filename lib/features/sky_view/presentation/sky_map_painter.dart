@@ -1,12 +1,13 @@
-import 'dart:math' as math;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../data/sky_catalog.dart';
+import '../data/sky_star_catalog.dart';
 import '../domain/sky_attitude.dart';
+import '../domain/sky_frame.dart';
 import '../domain/sky_moon.dart';
 import '../domain/sky_projection.dart';
+import 'sky_star_layer.dart';
 
 const skyBackground = Color(0xFF050B18);
 const _ground = Color(0xFF17140F);
@@ -14,6 +15,7 @@ const _gridColor = Color(0x2E9FB7D9);
 const _horizonColor = Color(0xFF7FB2A0);
 const _reticleColor = Color(0xCCFFFFFF);
 const _alignColor = Color(0xFFFFC857);
+const _constellationColor = Color(0xB38FB4E0);
 
 const _planetColors = <String, Color>{
   'Mercury': Color(0xFFCFC6B8),
@@ -59,7 +61,7 @@ double skyObjectRadius(SkyFix fix) {
   if (fix.isSolarSystem) {
     return const {'Uranus', 'Neptune'}.contains(fix.object.id) ? 2.2 : 4;
   }
-  return math.max(1.2, 3.6 - 0.85 * fix.object.magnitude);
+  return skyStarRadius(fix.object.magnitude);
 }
 
 /// The nearest above-map object to a tap, within reach of a fingertip.
@@ -83,6 +85,43 @@ SkyFix? skyObjectAt(
     }
   }
   return best;
+}
+
+/// Where a constellation name sits on screen, or null if it is not shown there.
+Rect? _constellationLabelBox(
+  SkyConstellationLabel label,
+  SkyProjection projection,
+  SkyFrame frame,
+  SkyLabelCache labels,
+) {
+  final direction = frame.toHorizontal3(label.x, label.y, label.z);
+  if (direction.z < 0) return null;
+  final at = projection.project(direction);
+  if (at == null) return null;
+  final text = labels.get(label.text, _constellationColor);
+  return Rect.fromLTWH(
+    at.dx - text.width / 2,
+    at.dy - text.height / 2,
+    text.width,
+    text.height,
+  );
+}
+
+/// The constellation whose name is under a tap.
+SkyConstellation? skyConstellationAt(
+  Offset tap,
+  SkyStarCatalog catalog,
+  SkyProjection projection,
+  SkyFrame frame,
+  SkyLabelCache labels,
+) {
+  for (final label in catalog.labels) {
+    final box = _constellationLabelBox(label, projection, frame, labels);
+    if (box != null && box.inflate(6).contains(tap)) {
+      return label.constellation;
+    }
+  }
+  return null;
 }
 
 /// Layout-only label cache, so a redraw does not re-shape text.
@@ -119,11 +158,22 @@ class SkyMapPainter extends CustomPainter {
   final bool aligning;
   final SkyLabelCache labels;
 
+  /// The naked-eye stars and figures, once the catalog has loaded. Without
+  /// them the map still shows [fixes].
+  final SkyStarLayer? stars;
+
+  /// Null until there is a location, and so a sky to place.
+  final SkyFrame? frame;
+  final bool constellations;
+
   SkyMapPainter({
     required this.pose,
     required this.fixes,
     required this.aligning,
     required this.labels,
+    this.stars,
+    this.frame,
+    this.constellations = true,
   }) : super(repaint: pose);
 
   static final _gridPaint = Paint()
@@ -151,7 +201,20 @@ class SkyMapPainter extends CustomPainter {
     _paintGround(canvas, size, projection);
     _paintGrid(canvas, size, projection);
     _paintCompass(canvas, size, projection);
-    _paintObjects(canvas, size, projection);
+    // Fixes empty means the location or the date is gone: draw no sky at all.
+    final layer = stars, placedFrame = fixes.isEmpty ? null : frame;
+    if (layer != null && placedFrame != null) {
+      layer.paint(
+        canvas,
+        projection,
+        placedFrame,
+        constellations: constellations,
+      );
+    }
+    final placed = _paintObjects(canvas, size, projection);
+    if (layer != null && placedFrame != null && constellations) {
+      _paintConstellationNames(canvas, size, projection, placedFrame, placed);
+    }
     _paintReticle(canvas, size);
   }
 
@@ -220,7 +283,27 @@ class SkyMapPainter extends CustomPainter {
     }
   }
 
-  void _paintObjects(Canvas canvas, Size size, SkyProjection projection) {
+  /// After the star names, so a crowded patch gives up the constellation's.
+  void _paintConstellationNames(
+    Canvas canvas,
+    Size size,
+    SkyProjection projection,
+    SkyFrame frame,
+    List<Rect> placed,
+  ) {
+    final screen = Offset.zero & size;
+    for (final label in stars!.catalog.labels) {
+      final box = _constellationLabelBox(label, projection, frame, labels);
+      if (box == null || !screen.overlaps(box) || placed.any(box.overlaps)) {
+        continue;
+      }
+      placed.add(box);
+      labels.get(label.text, _constellationColor).paint(canvas, box.topLeft);
+    }
+  }
+
+  /// Returns the screen boxes it took, for later labels to avoid.
+  List<Rect> _paintObjects(Canvas canvas, Size size, SkyProjection projection) {
     final screen = (Offset.zero & size).inflate(12);
     final placed = <Rect>[
       Rect.fromCircle(center: size.center(Offset.zero), radius: 16),
@@ -270,6 +353,7 @@ class SkyMapPainter extends CustomPainter {
       placed.add(box);
       text.paint(canvas, box.topLeft);
     }
+    return placed;
   }
 
   double _labelRank(SkyFix fix) =>
@@ -296,5 +380,8 @@ class SkyMapPainter extends CustomPainter {
   bool shouldRepaint(SkyMapPainter old) =>
       !identical(old.fixes, fixes) ||
       old.aligning != aligning ||
+      !identical(old.stars, stars) ||
+      !identical(old.frame, frame) ||
+      old.constellations != constellations ||
       !identical(old.pose, pose);
 }
