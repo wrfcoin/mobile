@@ -104,7 +104,6 @@ Future<void> _syncPendingData() async {
 }
 
 /// One upload run: saves its result, and throws unless it did its job.
-@visibleForTesting
 Future<SyncRunResult> runSyncJob(
   Future<SyncRunResult> Function() sync,
   CollectorLocalStore store, {
@@ -166,6 +165,7 @@ Future<void> initializeBackgroundWork() async {
 
 Future<void> registerSensorWorker({
   Duration interval = const Duration(minutes: 15),
+  ExistingPeriodicWorkPolicy policy = ExistingPeriodicWorkPolicy.replace,
 }) async {
   if (kIsWeb) {
     debugPrint('Background sensor worker unavailable on web');
@@ -177,15 +177,16 @@ Future<void> registerSensorWorker({
       sensorTaskName,
       sensorTaskName,
       frequency: interval,
-      // Lane 1: replace any existing registration so interval changes take
-      // effect immediately without needing to cancel first.
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      // A replaced job runs at once. Only a change the user made does that.
+      existingWorkPolicy: policy,
       constraints: Constraints(networkType: NetworkType.notRequired),
     ),
   );
 }
 
-Future<void> registerSyncWorker() async {
+Future<void> registerSyncWorker({
+  ExistingPeriodicWorkPolicy policy = ExistingPeriodicWorkPolicy.replace,
+}) async {
   if (kIsWeb) {
     debugPrint('Background sync worker unavailable on web');
     return;
@@ -196,9 +197,8 @@ Future<void> registerSyncWorker() async {
       syncTaskName,
       syncTaskName,
       frequency: const Duration(minutes: 15),
-      // Lane 1: replace any existing registration so re-enabling collection
-      // always resets the sync schedule cleanly.
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      // A replaced job runs at once. Only a change the user made does that.
+      existingWorkPolicy: policy,
       constraints: Constraints(networkType: NetworkType.connected),
     ),
   );

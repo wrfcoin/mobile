@@ -68,4 +68,32 @@ void main() {
       expect(estimate.detail, contains('pauses below 15%'));
     });
   });
+
+  group('SamplingPolicy timer jitter', () {
+    SensorReadingModel previous(DateTime at) => SensorReadingModel(
+      latitude: 46.8,
+      longitude: -92.1,
+      pressureHpa: 1013,
+      timestamp: at,
+    );
+    bool due(Duration elapsed) {
+      final now = DateTime.utc(2026, 11, 2, 12);
+      return SamplingPolicy.evaluate(
+        baseIntervalMinutes: 15,
+        batteryLevel: 80,
+        previousReading: previous(now.subtract(elapsed)),
+        latitude: 46.8,
+        longitude: -92.1,
+        now: now,
+      ).shouldCollect;
+    }
+
+    test('a run a few seconds short counts as due', () {
+      expect(due(const Duration(minutes: 14, seconds: 58)), isTrue);
+    });
+
+    test('a run clearly early does not', () {
+      expect(due(const Duration(minutes: 13)), isFalse);
+    });
+  });
 }

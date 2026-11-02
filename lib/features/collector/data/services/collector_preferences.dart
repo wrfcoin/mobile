@@ -22,6 +22,14 @@ class CollectorPreferences {
   static const _validationEventsKey = 'collector.validationEvents';
   static const _maxValidationEvents = 40;
 
+  /// Whether collection is on, as saved right now. Another isolate may have
+  /// changed it, so this rereads the file.
+  Future<bool> isCollectingNow() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getBool(_isCollectingKey) ?? false;
+  }
+
   Future<CollectorPreferencesState> load() async {
     final prefs = await SharedPreferences.getInstance();
     return CollectorPreferencesState(
@@ -134,6 +142,19 @@ class CollectorPreferencesState {
     this.lastCommitId,
     this.lastSubmissionStatus,
   });
+
+  CollectorPreferencesState copyWith({bool? isCollecting}) =>
+      CollectorPreferencesState(
+        isCollecting: isCollecting ?? this.isCollecting,
+        intervalMinutes: intervalMinutes,
+        batteryThreshold: batteryThreshold,
+        syncedSubmissionCount: syncedSubmissionCount,
+        rewardTotalsAvailable: rewardTotalsAvailable,
+        earnedRewardWrf: earnedRewardWrf,
+        lastSubmissionId: lastSubmissionId,
+        lastCommitId: lastCommitId,
+        lastSubmissionStatus: lastSubmissionStatus,
+      );
 }
 
 class CollectorValidationEvent {

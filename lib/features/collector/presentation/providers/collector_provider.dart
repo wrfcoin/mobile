@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
+import 'package:geolocator/geolocator.dart' show LocationPermission;
+import 'package:workmanager/workmanager.dart' show ExistingPeriodicWorkPolicy;
 
 import '../../../../core/feature_flags/feature_flags.dart';
 import '../../../../core/preferences/app_preferences.dart';
@@ -17,8 +19,10 @@ import '../../data/services/collection_runner.dart';
 import '../../data/services/collector_preferences.dart';
 import '../../domain/collection_run.dart';
 import '../../data/services/sampling_policy.dart';
+import '../../../../services/background/collection_service.dart';
 import '../../../../services/background/sensor_worker.dart';
 import '../../../../services/background/sync_worker.dart';
+import '../../../../services/location/location_service.dart';
 import '../../../../services/storage/local_db.dart';
 import 'mobile_station_status_provider.dart';
 import '../../../widgets/data/widget_snapshot_store.dart';
@@ -140,6 +144,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
   late AppPreferencesStore _appPreferencesStore;
   late AppLogger _logger;
   late bool _enableConnectivityHardening;
+  late CollectionServiceController _service;
+  late LocationService _location;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -152,6 +158,11 @@ class CollectorNotifier extends Notifier<CollectorState> {
     _enableConnectivityHardening = ref
         .watch(featureFlagsProvider)
         .enableConnectivityHardening;
+    _service = ref.watch(collectionServiceProvider);
+    _location = ref.watch(locationServiceProvider);
+
+    final stopListening = _service.listen(_handleStoppedFromNotification);
+    ref.onDispose(stopListening);
 
     unawaited(_restoreState());
     if (!kIsWeb) {
@@ -176,15 +187,65 @@ class CollectorNotifier extends Notifier<CollectorState> {
       );
       return;
     }
+    if (!await _location.requestPermission()) {
+      state = state.copyWith(
+        syncMessage:
+            'Collection needs location while the app is in use. Allow it, then turn this on again.',
+      );
+      return;
+    }
+    await _service.requestNotificationPermission();
+    final started = await _service.start(
+      intervalMinutes: state.intervalMinutes,
+    );
+    if (started == CollectionServiceStart.failed) {
+      state = state.copyWith(
+        syncMessage: 'Android would not start collection. Try again.',
+      );
+      return;
+    }
     await _scheduleWorkers();
     state = state.copyWith(isCollecting: true, syncMessage: null);
     await _persistPreferences();
   }
 
   Future<void> stopCollecting() async {
+    await _service.stop();
     await cancelCollectionWorkers();
     state = state.copyWith(isCollecting: false, isSyncing: false);
     await _persistPreferences();
+  }
+
+  /// The notification's Stop button already saved this and stopped the work.
+  void _handleStoppedFromNotification() {
+    state = state.copyWith(isCollecting: false, isSyncing: false);
+  }
+
+  /// An automatic reading when the app opens, if collection is on and one is
+  /// due. It reads location without asking, and a failure is only recorded.
+  Future<void> _collectOnAppOpen() async {
+    if (kIsWeb || !state.isCollecting || state.isCollectingNow) return;
+    if (!await _hasCollectionConsent()) return;
+    final result = await CollectionRunner(_repository).collect(
+      source: ReadingSource.appOpen,
+      batteryThreshold: state.batteryThreshold,
+      baseIntervalMinutes: state.intervalMinutes,
+    );
+    await _refreshSyncMetadata(currentReading: result.reading);
+    if (result.isSuccess) await _publishHomeWidgetCollectionSlice(reading: result.reading);
+  }
+
+  /// Opening the app is the one chance to restart a service Android stopped.
+  /// Asks for nothing: without location it stays off.
+  Future<void> _ensureServiceRunning() async {
+    if (kIsWeb || !state.isCollecting) return;
+    if (await _service.isRunning) return;
+    final permission = await _location.checkPermission();
+    if (permission != LocationPermission.whileInUse &&
+        permission != LocationPermission.always) {
+      return;
+    }
+    await _service.start(intervalMinutes: state.intervalMinutes);
   }
 
   Future<void> collectNow() async {
@@ -306,6 +367,15 @@ class CollectorNotifier extends Notifier<CollectorState> {
   /// One lifecycle check; a cancelled signing prompt stays user-rearmed.
   Future<void> handleAppResume() async {
     ref.invalidate(mobileStationStatusProvider);
+    if (state.isCollecting) {
+      if (await _preferences.isCollectingNow()) {
+        await _ensureServiceRunning();
+        await _collectOnAppOpen();
+      } else {
+        // Stopped from the notification while this isolate was asleep.
+        state = state.copyWith(isCollecting: false, isSyncing: false);
+      }
+    }
     if (_signingRefused) return;
     await syncPendingData(fromResume: true);
   }
@@ -432,6 +502,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _persistPreferences();
     if (state.isCollecting) {
       await _scheduleWorkers();
+      await _service.setInterval(minutes);
     }
   }
 
@@ -464,16 +535,26 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _refreshSyncMetadata();
 
     if (preferences.isCollecting && canCollect && !kIsWeb) {
-      await _scheduleWorkers();
+      await _ensureServiceRunning();
+      await _collectOnAppOpen();
+      // Keep the jobs' schedule: replacing them here ran them on every app
+      // start, which is where the reading on opening the app used to come
+      // from. That reading is now the deliberate one above.
+      await _scheduleWorkers(policy: ExistingPeriodicWorkPolicy.update);
     }
   }
 
-  Future<void> _scheduleWorkers() async {
+  Future<void> _scheduleWorkers({
+    ExistingPeriodicWorkPolicy policy = ExistingPeriodicWorkPolicy.replace,
+  }) async {
     final intervalMinutes = await _repository.recommendedIntervalMinutes(
       state.intervalMinutes,
     );
-    await registerSensorWorker(interval: Duration(minutes: intervalMinutes));
-    await registerSyncWorker();
+    await registerSensorWorker(
+      interval: Duration(minutes: intervalMinutes),
+      policy: policy,
+    );
+    await registerSyncWorker(policy: policy);
   }
 
   Future<void> _persistPreferences() {
@@ -519,10 +600,12 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
     if (state.isCollecting) {
       await registerSensorWorker(interval: Duration(minutes: intervalMinutes));
+      await _service.setInterval(intervalMinutes);
     }
   }
 
   Future<void> handleConsentRevoked() async {
+    await _service.stop();
     await cancelCollectionWorkers();
     await Future.wait([
       _repository.db.clearUnsyncedReadings(),

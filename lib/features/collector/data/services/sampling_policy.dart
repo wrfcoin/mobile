@@ -4,6 +4,11 @@ import '../models/sensor_reading_model.dart';
 
 const double defaultMovementThresholdMeters = 50;
 
+/// Timers and jobs fire a little early or late, and a reading is stamped after
+/// its location read. A run this close to due counts as due, or a run a few
+/// seconds short would be skipped and double the gap.
+const Duration intervalTolerance = Duration(minutes: 1);
+
 class SamplingDecision {
   final bool shouldCollect;
   final SamplingDecisionReason reason;
@@ -72,7 +77,7 @@ class SamplingPolicy {
     final elapsed = (now ?? DateTime.now()).difference(
       previousReading.timestamp,
     );
-    if (elapsed >= Duration(minutes: intervalMinutes)) {
+    if (elapsed >= Duration(minutes: intervalMinutes) - intervalTolerance) {
       return SamplingDecision(
         shouldCollect: true,
         reason: SamplingDecisionReason.intervalElapsed,
