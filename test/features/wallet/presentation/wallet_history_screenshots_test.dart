@@ -72,6 +72,12 @@ class _Searching extends TransactionsNotifier {
   );
 }
 
+class _LoadingMore extends TransactionsNotifier {
+  @override
+  Future<TransactionsState> build() async =>
+      const TransactionsState(items: [], hasMore: true, loadingMore: true);
+}
+
 class _Failed extends TransactionsNotifier {
   @override
   Future<TransactionsState> build() async =>
@@ -84,6 +90,7 @@ void main() {
   final states = <String, TransactionsNotifier Function()>{
     'rows': _Rows.new,
     'searching': _Searching.new,
+    'loading-more': _LoadingMore.new,
     'error': _Failed.new,
   };
   for (final state in states.entries) {

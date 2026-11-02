@@ -152,26 +152,32 @@ void main() {
       expect(container.read(transactionsProvider).requireValue.credits, [paid]);
     },
   );
-  test('scan includes initial page in 30-page bound and preserves incomplete history', () async {
-    final repo = RecordingRepository(
-      (call, cursor, token) async => page(cursor: c(call)),
-    );
-    final container = await setup(repo);
-    addTearDown(container.dispose);
-    container.listen(transactionsProvider, (_, _) {});
-    await container.read(transactionsProvider.future);
-    await settle();
-    final state = container.read(transactionsProvider).requireValue;
-    expect(repo.calls, 30);
-    expect(repo.maxActive, 1);
-    expect(state.discoveringCredits, false);
-    expect(state.creditsTruncated, true);
-    expect(state.complete, false);
-    expect(state.hasMore, true, reason: 'Load more carries on from here');
-    expect(state.creditNextCursor, c(30));
-    await settle();
-    expect(repo.calls, 30);
-  });
+  test(
+    'scan includes initial page in its bound and preserves incomplete history',
+    () async {
+      final repo = RecordingRepository(
+        (call, cursor, token) async => page(cursor: c(call)),
+      );
+      final container = await setup(repo);
+      addTearDown(container.dispose);
+      container.listen(transactionsProvider, (_, _) {});
+      await container.read(transactionsProvider.future);
+      await settle();
+      final state = container.read(transactionsProvider).requireValue;
+      expect(repo.calls, TransactionsNotifier.maxCreditDiscoveryPages);
+      expect(repo.maxActive, 1);
+      expect(state.discoveringCredits, false);
+      expect(state.creditsTruncated, true);
+      expect(state.complete, false);
+      expect(state.hasMore, true, reason: 'Load more carries on from here');
+      expect(
+        state.creditNextCursor,
+        c(TransactionsNotifier.maxCreditDiscoveryPages),
+      );
+      await settle();
+      expect(repo.calls, TransactionsNotifier.maxCreditDiscoveryPages);
+    },
+  );
   test(
     'refresh repeats discovery and concurrent refreshes are coalesced',
     () async {

@@ -402,11 +402,38 @@ class WalletScreen extends ConsumerWidget {
                               ),
                             ),
                           ),
+                        if (txState.lastLoadFailed)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              "Couldn't load more just now. Try again in a "
+                              'minute.',
+                              key: Key('wallet-load-more-failed'),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        if (txState.lastLoadFoundNothing)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Nothing new in that stretch of the chain. '
+                              'Load more keeps looking.',
+                              key: Key('wallet-load-more-nothing'),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         if (txState.hasMore) ...[
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
+                              key: const Key('wallet-load-more'),
                               onPressed:
                                   txState.loadingMore ||
                                       txState.discoveringCredits
@@ -415,12 +442,20 @@ class WalletScreen extends ConsumerWidget {
                                         .read(transactionsProvider.notifier)
                                         .loadMore(),
                               child: txState.loadingMore
-                                  ? const SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
+                                  ? const Row(
+                                      key: Key('wallet-load-more-busy'),
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          height: 18,
+                                          width: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Text('Loading…'),
+                                      ],
                                     )
                                   : const Text('Load more'),
                             ),

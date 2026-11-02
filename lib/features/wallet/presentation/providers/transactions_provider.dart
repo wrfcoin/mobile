@@ -33,6 +33,12 @@ class TransactionsState {
   /// The node had more reward records past those read, so this list of paid
   /// rewards may be missing some.
   final bool creditsTruncated;
+
+  /// The last Load more read as far as one tap goes and found nothing new.
+  final bool lastLoadFoundNothing;
+
+  /// The last Load more failed. What's listed stays, and a tap tries again.
+  final bool lastLoadFailed;
   final bool historyUnavailable;
 
   /// False for a bounded window; null when not reported.
@@ -47,6 +53,8 @@ class TransactionsState {
     this.creditNextCursor,
     this.discoveringCredits = false,
     this.creditsTruncated = false,
+    this.lastLoadFoundNothing = false,
+    this.lastLoadFailed = false,
     this.historyUnavailable = false,
     this.complete,
     this.windowStartHeight,
@@ -105,7 +113,17 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
 
   /// Requests spent looking for a wallet's first reward before leaving the rest
   /// to Load more. Each reads [WalletRemoteDataSource.creditPageSize] records.
-  static const maxCreditDiscoveryPages = 30;
+  /// The public edge allows one IP 30 reads a minute across balance, history and
+  /// the other public routes, so this leaves room for them.
+  static const maxCreditDiscoveryPages = 10;
+
+  /// The most reads one tap of Load more makes while looking for a page of rows.
+  /// Held to the same budget as [maxCreditDiscoveryPages].
+  static const maxReadsPerLoad = 10;
+
+  /// A read that is only after reward records: the fewest transactions the edge
+  /// lets it ask for, since it ignores them.
+  static const _creditOnlyLimit = 1;
 
   /// The only cursor the public edge admits: a commit ID.
   static final _pageableCursor = RegExp(r'^[0-9a-f]{64}$');
@@ -189,6 +207,7 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
     String address,
     int generation, {
     required int offset,
+    int limit = pageSize,
     String? creditAfter,
   }) async {
     final previous = _requestTail;
@@ -202,7 +221,7 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
           .getTransactions(
             address,
             offset: offset,
-            limit: pageSize,
+            limit: limit,
             creditAfter: creditAfter,
             cancelToken: _cancelToken,
           );
@@ -236,6 +255,7 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
           address,
           generation,
           offset: 0,
+          limit: _creditOnlyLimit,
           creditAfter: cursor,
         );
       } on _HistoryCancelled {
@@ -312,25 +332,70 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
       final items = _merge(current.items, page.items);
       _transactionHasMore = items.length > current.items.length && page.hasMore;
       // With no cursor the reads repeat the first reward records, so there is
-      // nothing new in them. A read that ends the cursor clears the notice.
+      // nothing new in them.
       final paging = current.creditNextCursor != null;
-      final next = paging ? _nextCursor(page) : null;
+      var credits = paging
+          ? _merge(current.credits, page.credits)
+          : current.credits;
+      var next = paging ? _nextCursor(page) : null;
+      var truncated = paging
+          ? page.creditNextCursor != null
+          : current.creditsTruncated;
+      var complete = page.complete ?? current.complete;
+      var windowStart = page.windowStartHeight ?? current.windowStartHeight;
+
+      TransactionsState build({
+        required bool loadingMore,
+        bool nothing = false,
+      }) => TransactionsState(
+        items: items,
+        credits: credits,
+        hasMore: _transactionHasMore || next != null,
+        loadingMore: loadingMore,
+        creditNextCursor: next,
+        creditsTruncated: truncated,
+        lastLoadFoundNothing: nothing,
+        complete: complete,
+        windowStartHeight: windowStart,
+      );
+      int added() =>
+          items.length -
+          current.items.length +
+          credits.length -
+          current.credits.length;
+
+      // The node reads the whole chain's reward records and keeps this wallet's,
+      // so one read can hold none of them and still have more behind it. A tap
+      // keeps reading until it has a page, or the records end, or its limit.
+      for (
+        var reads = 1;
+        next != null && added() < pageSize && reads < maxReadsPerLoad;
+        reads++
+      ) {
+        state = AsyncData(build(loadingMore: true));
+        final TransactionPage more;
+        try {
+          more = await _fetchPage(
+            address,
+            generation,
+            offset: 0,
+            limit: _creditOnlyLimit,
+            creditAfter: next,
+          );
+        } on _HistoryCancelled {
+          rethrow;
+        } catch (_) {
+          // Keep what this tap found. The next tap carries on from the cursor.
+          break;
+        }
+        credits = _merge(credits, more.credits);
+        next = _nextCursor(more);
+        truncated = more.creditNextCursor != null;
+        complete = more.complete ?? complete;
+        windowStart = more.windowStartHeight ?? windowStart;
+      }
       state = AsyncData(
-        TransactionsState(
-          items: items,
-          credits: paging
-              ? _merge(current.credits, page.credits)
-              : current.credits,
-          hasMore: _transactionHasMore || next != null,
-          loadingMore: false,
-          creditNextCursor: next,
-          creditsTruncated: paging
-              ? page.creditNextCursor != null
-              : current.creditsTruncated,
-          complete: page.complete ?? current.complete,
-          windowStartHeight:
-              page.windowStartHeight ?? current.windowStartHeight,
-        ),
+        build(loadingMore: false, nothing: added() == 0 && next != null),
       );
     } on _HistoryCancelled {
       // Superseded by refresh/disposal.
@@ -338,8 +403,23 @@ class TransactionsNotifier extends AsyncNotifier<TransactionsState> {
       if (_active(generation)) {
         state = const AsyncData(TransactionsState.unavailable);
       }
-    } catch (e, st) {
-      if (_active(generation)) state = AsyncError(e, st);
+    } catch (_) {
+      // A busy edge (429) or a dropped connection must not cost the list.
+      if (_active(generation)) {
+        state = AsyncData(
+          TransactionsState(
+            items: current.items,
+            credits: current.credits,
+            hasMore: current.hasMore,
+            loadingMore: false,
+            creditNextCursor: current.creditNextCursor,
+            creditsTruncated: current.creditsTruncated,
+            lastLoadFailed: true,
+            complete: current.complete,
+            windowStartHeight: current.windowStartHeight,
+          ),
+        );
+      }
     } finally {
       if (_active(generation)) _loadingMore = false;
     }
