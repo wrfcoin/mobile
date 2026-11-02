@@ -23,6 +23,25 @@ class SensorReadings extends Table {
   RealColumn get pressureHpa => real()();
   DateTimeColumn get timestamp => dateTime()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
+
+  /// [ReadingSource.dbValue]. Null: taken before this was recorded.
+  TextColumn get source => text().nullable()();
+
+  /// 'fresh' or 'reused', and when that location was obtained.
+  TextColumn get locationSource => text().nullable()();
+  DateTimeColumn get locationAt => dateTime().nullable()();
+}
+
+/// One row per collection or upload run, empty or not, so a run that saved
+/// nothing leaves evidence and its reason. Holds no location or wallet data.
+class CollectionRuns extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get kind => text()();
+  TextColumn get outcome => text()();
+  TextColumn get detail => text().nullable()();
+  IntColumn get acceptedCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get finishedAt => dateTime()();
 }
 
 class PendingImages extends Table {
@@ -50,13 +69,14 @@ class SyncMetadataEntries extends Table {
     PendingImages,
     SyncMetadataEntries,
     OfflineDataEntries,
+    CollectionRuns,
   ],
 )
 class AppDatabase extends _$AppDatabase implements CollectorLocalStore {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -89,8 +109,57 @@ class AppDatabase extends _$AppDatabase implements CollectorLocalStore {
           );
         }
       }
+      if (from < 5) {
+        await m.addColumn(sensorReadings, sensorReadings.source);
+        await m.addColumn(sensorReadings, sensorReadings.locationSource);
+        await m.addColumn(sensorReadings, sensorReadings.locationAt);
+        await m.createTable(collectionRuns);
+      }
     },
   );
+
+  /// Run rows kept. About two weeks of two runs every 15 minutes.
+  static const maxCollectionRuns = 2500;
+
+  @override
+  Future<void> recordCollectionRun({
+    required String kind,
+    required String outcome,
+    required DateTime startedAt,
+    required DateTime finishedAt,
+    String? detail,
+    int acceptedCount = 0,
+  }) async {
+    await into(collectionRuns).insert(
+      CollectionRunsCompanion.insert(
+        kind: kind,
+        outcome: outcome,
+        detail: Value(detail),
+        acceptedCount: Value(acceptedCount),
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+      ),
+    );
+    await customStatement(
+      'DELETE FROM collection_runs WHERE id <= '
+      '(SELECT MAX(id) FROM collection_runs) - $maxCollectionRuns',
+    );
+  }
+
+  /// Newest first.
+  Future<List<CollectionRun>> getCollectionRuns({
+    int limit = 50,
+    Set<String>? kinds,
+  }) {
+    final query = select(collectionRuns)
+      ..orderBy([
+        (r) => OrderingTerm(expression: r.startedAt, mode: OrderingMode.desc),
+        (r) => OrderingTerm(expression: r.id, mode: OrderingMode.desc),
+      ])
+      ..limit(limit);
+    if (kinds != null) query.where((r) => r.kind.isIn(kinds));
+    return query.get();
+  }
 
   @override
   Future<int> insertReading(SensorReadingsCompanion reading) =>

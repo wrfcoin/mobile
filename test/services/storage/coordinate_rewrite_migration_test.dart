@@ -84,7 +84,7 @@ void main() {
         expect((v * 10).roundToDouble() / 10, v, reason: 'stored $v is not on the 0.1 grid');
       }
     }
-    expect(raw.select('PRAGMA user_version').single.values.single, 4);
+    expect(raw.select('PRAGMA user_version').single.values.single, 5);
     raw.close();
   });
 
@@ -96,6 +96,6 @@ void main() {
     addTearDown(second.close);
     final after = await second.select(second.sensorReadings).get();
     expect(after.map((r) => [r.id, r.latitude, r.longitude]), before.map((r) => [r.id, r.latitude, r.longitude]));
-    expect(second.schemaVersion, 4);
+    expect(second.schemaVersion, 5);
   });
 }

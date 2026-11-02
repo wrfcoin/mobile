@@ -13,7 +13,9 @@ import '../../../../core/feature_flags/feature_flags.dart';
 import '../../../../core/preferences/app_preferences.dart';
 import '../../data/models/sensor_reading_model.dart';
 import '../../data/repositories/collector_repository_impl.dart';
+import '../../data/services/collection_runner.dart';
 import '../../data/services/collector_preferences.dart';
+import '../../domain/collection_run.dart';
 import '../../data/services/sampling_policy.dart';
 import '../../../../services/background/sensor_worker.dart';
 import '../../../../services/background/sync_worker.dart';
@@ -197,7 +199,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
     state = state.copyWith(isCollectingNow: true, syncMessage: null);
     try {
-      final result = await _repository.collectReading(
+      final result = await CollectionRunner(_repository).collect(
+        source: ReadingSource.collectNow,
         batteryThreshold: state.batteryThreshold,
         baseIntervalMinutes: state.intervalMinutes,
         force: true,

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_model.dart';
+import 'package:wrfcoin_mobile/features/collector/domain/collection_run.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
@@ -226,6 +227,7 @@ class _CollectorRepo extends FakeCollectorRepository {
     int batteryThreshold = 15,
     int baseIntervalMinutes = 15,
     bool force = false,
+    ReadingSource source = ReadingSource.collectNow,
   }) async => locationUnavailable
       ? const CollectReadingResult.failure(
           CollectReadingFailureReason.locationUnavailable,
@@ -233,6 +235,7 @@ class _CollectorRepo extends FakeCollectorRepository {
       : super.collectReading(
           batteryThreshold: batteryThreshold,
           baseIntervalMinutes: baseIntervalMinutes,
+          source: source,
           force: force,
         );
 }

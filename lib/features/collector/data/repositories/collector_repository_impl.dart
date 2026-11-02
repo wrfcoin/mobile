@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart' show DioException;
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +15,7 @@ import '../../../../services/crypto/commit_id.dart';
 import '../../../../services/crypto/signed_transfer.dart';
 import '../../../../services/crypto/station_signing.dart';
 import '../../../../services/storage/local_db.dart';
+import '../../domain/collection_run.dart';
 import '../datasources/sensor_data_source.dart';
 import '../datasources/battery_monitor.dart';
 import '../models/sensor_reading_model.dart';
@@ -63,6 +65,7 @@ class CollectorRepository {
     int batteryThreshold = 15,
     int baseIntervalMinutes = 15,
     bool force = false,
+    ReadingSource source = ReadingSource.collectNow,
   }) async {
     final batteryLevel = await batteryMonitor.getBatteryLevel();
     if (await batteryMonitor.shouldPauseCollection(
@@ -126,6 +129,7 @@ class CollectorRepository {
         longitude: location.lng,
         pressureHpa: pressure,
         timestamp: now,
+        source: Value(source.dbValue),
       ),
     );
     await db.upsertSyncMetadata(
@@ -627,6 +631,16 @@ abstract class CollectorLocalStore {
     DateTime? lastSyncAttemptAt,
     String? lastSyncError,
   });
+
+  /// Saves what one collection or upload run ended with.
+  Future<void> recordCollectionRun({
+    required String kind,
+    required String outcome,
+    required DateTime startedAt,
+    required DateTime finishedAt,
+    String? detail,
+    int acceptedCount = 0,
+  });
 }
 
 class NoopCollectorLocalStore implements CollectorLocalStore {
@@ -668,6 +682,16 @@ class NoopCollectorLocalStore implements CollectorLocalStore {
     DateTime? lastSyncAt,
     DateTime? lastSyncAttemptAt,
     String? lastSyncError,
+  }) async {}
+
+  @override
+  Future<void> recordCollectionRun({
+    required String kind,
+    required String outcome,
+    required DateTime startedAt,
+    required DateTime finishedAt,
+    String? detail,
+    int acceptedCount = 0,
   }) async {}
 }
 
