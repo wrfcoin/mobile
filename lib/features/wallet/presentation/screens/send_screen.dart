@@ -64,9 +64,20 @@ Map<String, dynamic> buildSponsoredUserOperation({
   };
 }
 
+/// A Send refused because the allowlist's saved details can't be read.
+const kAllowlistUnreadableRefusal = (
+  title: "Can't read your send allowlist",
+  body:
+      'This phone could not read the saved allowlist details, so the '
+      'allowlist counts as on and this send is stopped. Only contacts you '
+      'already allowed can receive. Open the allowlist to try again, keep it '
+      'on, or turn it off, which waits 24 hours.',
+);
+
 /// Title and detail for a Send the allowlist refuses.
 @visibleForTesting
 ({String title, String body}) allowlistRefusal(AllowlistVerdict verdict) {
+  if (verdict.settingsUnreadable) return kAllowlistUnreadableRefusal;
   final name = verdict.contact?.label;
   return switch (verdict.kind) {
     AllowlistVerdictKind.pending => (
@@ -334,11 +345,20 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   /// change made elsewhere is honoured. Returns true, after telling the
   /// user, when the send must stop.
   Future<bool> _blockedByAllowlist(String to) async {
-    final settings = await ref.read(sendAllowlistProvider.notifier).current();
-    final book = await ref.read(walletSecureStorageProvider).getAddressBook();
-    final verdict = ref
-        .read(sendAllowlistPolicyProvider)
-        .check(to: to, book: book, settings: settings);
+    AllowlistVerdict verdict;
+    try {
+      final settings = await ref.read(sendAllowlistProvider.notifier).current();
+      final book = await ref.read(walletSecureStorageProvider).getAddressBook();
+      verdict = ref
+          .read(sendAllowlistPolicyProvider)
+          .check(to: to, book: book, settings: settings);
+    } catch (_) {
+      // Anything unread stops the send, with a reason rather than silently.
+      verdict = const AllowlistVerdict(
+        AllowlistVerdictKind.notSaved,
+        settingsUnreadable: true,
+      );
+    }
     if (!verdict.blocksSend) return false;
     if (mounted) {
       final refusal = allowlistRefusal(verdict);

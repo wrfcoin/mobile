@@ -255,6 +255,103 @@ void main() {
     );
   });
 
+  group('a saved allowlist that cannot be read', () {
+    const unreadable = SendAllowlistSettings.unreadableOn;
+    final allowedMom = AddressBookEntry(
+      label: 'Mom',
+      address: _mom,
+      allowedFrom: _now.subtract(const Duration(days: 2)),
+    );
+
+    testWidgets('refuses a stranger and says why, on screen and on Send', (
+      tester,
+    ) async {
+      final repo = await _pump(tester, book: const [], allowlist: unreadable);
+      await _fillAndSend(tester, _stranger);
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('allowlist-recipient-blocked')),
+          matching: find.text("Can't read your send allowlist"),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('counts as on'), findsWidgets);
+      expect(find.text('Open allowlist'), findsOneWidget);
+      expect(find.text('Confirm Send'), findsNothing);
+      expect(repo.sendCalls, 0);
+    });
+
+    testWidgets('an already allowed contact still reaches confirmation', (
+      tester,
+    ) async {
+      await _pump(tester, book: [allowedMom], allowlist: unreadable);
+      await _fillAndSend(tester, _mom);
+      expect(find.text('Confirm Send'), findsOneWidget);
+    });
+
+    testWidgets('the first check stops it', (tester) async {
+      final repo = await _pump(
+        tester,
+        book: const [],
+        allowlist: SendAllowlistSettings.off,
+      );
+      _storage.sendAllowlist = unreadable;
+      final feeReads = repo.transferFeeReads;
+      await _fillAndSend(tester, _stranger);
+      expect(find.text('Confirm Send'), findsNothing);
+      expect(repo.sendCalls, 0);
+      expect(repo.transferFeeReads, feeReads);
+    });
+
+    testWidgets('the check after the unlock and the fee read stops it', (
+      tester,
+    ) async {
+      final repo = await _pump(
+        tester,
+        book: const [],
+        allowlist: SendAllowlistSettings.off,
+      );
+      repo.onFeeRead = () => _storage.sendAllowlist = unreadable;
+      await _fillAndSend(tester, _stranger);
+      expect(repo.transferFeeReads, greaterThan(1));
+      expect(find.text('Confirm Send'), findsNothing);
+      expect(repo.sendCalls, 0);
+    });
+
+    testWidgets('the check after the confirmation dialog stops it', (
+      tester,
+    ) async {
+      final repo = await _pump(
+        tester,
+        book: const [],
+        allowlist: SendAllowlistSettings.off,
+      );
+      await _fillAndSend(tester, _stranger);
+      expect(find.text('Confirm Send'), findsOneWidget);
+      _storage.sendAllowlist = unreadable;
+      await _tapConfirm(tester);
+      expect(repo.sendCalls, 0);
+      expect(_storage.pendingSend, isNull);
+      expect(find.textContaining('counts as on'), findsWidgets);
+    });
+
+    testWidgets('contacts that fail to read stop it, with the reason', (
+      tester,
+    ) async {
+      final repo = await _pump(
+        tester,
+        book: const [],
+        allowlist: SendAllowlistSettings.off,
+      );
+      _storage.addressBookReadError = StateError('storage failed');
+      await _fillAndSend(tester, _stranger);
+      expect(find.text('Confirm Send'), findsNothing);
+      expect(find.textContaining('counts as on'), findsOneWidget);
+      expect(repo.sendCalls, 0);
+    });
+  });
+
   group('every check before submit reads fresh from storage', () {
     testWidgets('the first check: on in storage, off on screen', (
       tester,

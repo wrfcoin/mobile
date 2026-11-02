@@ -101,9 +101,11 @@ typedef _Shot = ({String name, Widget screen});
 final _shots = <_Shot>[
   (name: 'contacts', screen: const AddressBookScreen()),
   (name: 'allowlist-pending', screen: const SendAllowlistScreen()),
+  (name: 'allowlist-unreadable', screen: const SendAllowlistScreen()),
   (name: 'view-phrase-confirm', screen: const RecoveryPhraseScreen()),
   (name: 'send-not-allowlisted', screen: const SendScreen()),
   (name: 'send-pending-and-not-allowlisted', screen: const SendScreen()),
+  (name: 'send-allowlist-unreadable', screen: const SendScreen()),
   (name: 'settings-wallet-section', screen: const AppSettingsScreen()),
 ];
 
@@ -132,7 +134,9 @@ void main() {
           );
           final walletStorage = FakeWalletSecureStorage(
             addressBook: _book,
-            sendAllowlist: shot.name == 'allowlist-pending'
+            sendAllowlist: shot.name.contains('unreadable')
+                ? SendAllowlistSettings.unreadableOn
+                : shot.name == 'allowlist-pending'
                 ? SendAllowlistSettings(
                     enabled: true,
                     turnsOffAt: _now.add(const Duration(hours: 23)),
