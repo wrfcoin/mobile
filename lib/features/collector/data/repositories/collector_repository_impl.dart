@@ -148,13 +148,13 @@ class CollectorRepository {
     );
   }
 
-  /// Collect Now reads location and may ask for permission. An automatic
-  /// reading on app open reads it without asking. The service tries a quiet
-  /// read first, and the WorkManager job cannot read location at all, so both
-  /// fall back to the last known cell, labelled as reused and refused once it
-  /// is too old. A reading's location is never sent to the chain: it stays in
-  /// this phone's record, and the attester compares against the station's
-  /// registered location.
+  /// Collect Now reads a rough location and may ask for permission. An
+  /// automatic reading on app open reads it without asking. The service tries
+  /// a quiet read first, and the WorkManager job cannot read location at all,
+  /// so both fall back to the last known cell, labelled as reused and refused
+  /// once it is too old. Only the 0.1 degree cell is ever stored or sent. The
+  /// upload request carries it, the backend checks it is present and drops it,
+  /// and the attester compares against the station's registered location.
   Future<_Located> _locate(ReadingSource source, DateTime now) async {
     if (source == ReadingSource.collectNow || source == ReadingSource.appOpen) {
       final fresh = source == ReadingSource.collectNow

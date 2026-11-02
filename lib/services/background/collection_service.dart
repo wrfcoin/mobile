@@ -37,10 +37,15 @@ const _serviceId = 888;
 /// Sent to the app, when it is open, after the notification's Stop button.
 const collectionStoppedMessage = 'collection_stopped';
 
+<<<<<<< HEAD
 /// Sent to the app, when it is open, after each run.
 const collectionTickMessage = 'collection_tick';
 
 const _notificationTitle = 'WRFCoin is collecting weather data';
+=======
+/// Says plainly what is running, and that it uses rough location.
+const collectionNotificationTitle = 'Collecting weather with your rough location';
+>>>>>>> feat/collect-battery-ask
 
 enum CollectionServiceStart {
   started,
@@ -125,7 +130,7 @@ class CollectionServiceController {
       final result = await FlutterForegroundTask.startService(
         serviceId: _serviceId,
         serviceTypes: const [ForegroundServiceTypes.location],
-        notificationTitle: _notificationTitle,
+        notificationTitle: collectionNotificationTitle,
         notificationText: 'Starting',
         notificationButtons: const [
           NotificationButton(id: _stopButtonId, text: 'Stop'),
@@ -211,7 +216,9 @@ class CollectionServiceController {
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'wrfcoin_collection',
         channelName: 'Weather collection',
-        channelDescription: 'Shown while WRFCoin collects weather readings.',
+        channelDescription:
+            'Shown while WRFCoin collects weather readings using your rough '
+            'location.',
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
         onlyAlertOnce: true,

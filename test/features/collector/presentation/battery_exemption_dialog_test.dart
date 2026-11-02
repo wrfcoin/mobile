@@ -7,6 +7,7 @@ import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_model.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/widgets/battery_exemption_dialog.dart';
 import 'package:wrfcoin_mobile/services/background/collection_service.dart';
@@ -159,5 +160,57 @@ void main() {
     await mount(tester, collecting: false);
     await ask(tester);
     expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  group('the first-time explanation', () {
+    Future<bool?> explain(WidgetTester tester, {required String tap}) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      bool? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                result = await explainBackgroundCollectionOnce(
+                  context,
+                  const CollectorPreferences(),
+                );
+              },
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('go'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('your rough location'), findsOneWidget);
+      expect(find.textContaining('never your exact position'), findsOneWidget);
+      expect(find.textContaining('permanent notification'), findsOneWidget);
+      await tester.tap(find.text(tap));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pumpAndSettle();
+      return result;
+    }
+
+    testWidgets('declining leaves it off, and it shows again', (tester) async {
+      expect(await explain(tester, tap: 'Not now'), isFalse);
+      expect(
+        await const CollectorPreferences().backgroundCollectionExplained(),
+        isFalse,
+      );
+    });
+
+    testWidgets('accepting is remembered', (tester) async {
+      expect(await explain(tester, tap: 'Turn on'), isTrue);
+      expect(
+        await const CollectorPreferences().backgroundCollectionExplained(),
+        isTrue,
+      );
+    });
   });
 }

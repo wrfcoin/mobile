@@ -100,6 +100,10 @@ void main() {
     }
   });
 
+  test('the notification says it uses rough location', () {
+    expect(collectionNotificationTitle, contains('rough location'));
+  });
+
   test('the manifest declares the location service and no background '
       'location', () {
     final manifest = File(

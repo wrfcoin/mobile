@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart' show LocationAccuracy;
 import 'package:wrfcoin_mobile/services/location/location_service.dart';
 
 const _channel = MethodChannel('flutter.baseflow.com/geolocator');
@@ -13,6 +14,7 @@ void main() {
 
   late int permission;
   late List<String> calls;
+  late Object? arguments;
 
   setUp(() {
     permission = 2;
@@ -20,6 +22,7 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
           calls.add(call.method);
+          if (call.method == 'getCurrentPosition') arguments = call.arguments;
           return switch (call.method) {
             'checkPermission' || 'requestPermission' => permission,
             'getCurrentPosition' => Completer<Object?>().future,
@@ -35,6 +38,29 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(result, isNull);
   });
+
+  testWidgets('getRoughPosition gives up at the time limit', (tester) async {
+    Object? result = 'pending';
+    unawaited(LocationService().getRoughPosition().then((p) => result = p));
+    await tester.pump(LocationService.positionTimeLimit);
+    await tester.pump(const Duration(seconds: 1));
+    expect(result, isNull);
+  });
+
+  for (final (name, request) in [
+    ('getRoughPosition', LocationService().getRoughPosition),
+    ('getQuietPosition', LocationService().getQuietPosition),
+  ]) {
+    testWidgets('$name asks only for low accuracy', (tester) async {
+      unawaited(request());
+      await tester.pump(LocationService.positionTimeLimit);
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        (arguments as Map)['accuracy'],
+        LocationAccuracy.low.index,
+      );
+    });
+  }
 
   testWidgets('getQuietPosition gives up at the time limit', (tester) async {
     Object? result = 'pending';

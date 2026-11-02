@@ -21,7 +21,19 @@ class CollectorPreferences {
   static const _lastSubmissionStatusKey = 'collector.lastSubmissionStatus';
   static const _validationEventsKey = 'collector.validationEvents';
   static const _batteryAskedKey = 'collector.batteryExemptionAsked';
+  static const _backgroundExplainedKey = 'collector.backgroundExplained';
   static const _maxValidationEvents = 40;
+
+  /// The first-time explanation is shown until it is accepted.
+  Future<bool> backgroundCollectionExplained() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_backgroundExplainedKey) ?? false;
+  }
+
+  Future<void> markBackgroundCollectionExplained() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_backgroundExplainedKey, true);
+  }
 
   /// The battery question is asked once, whatever the answer was.
   Future<bool> batteryExemptionAsked() async {

@@ -13,6 +13,7 @@ import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_model.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/screens/collector_validation_screen.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/widgets/battery_exemption_dialog.dart';
@@ -144,6 +145,36 @@ void main() {
         find.byType(MaterialApp),
         matchesGoldenFile(
           '../../../../docs/screenshots/background-collection/battery-question-$width.png',
+        ),
+      );
+    });
+
+    testWidgets('first-time explanation $width', skip: !fonts, (tester) async {
+      await mount(
+        tester,
+        Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () => explainBackgroundCollectionOnce(
+                  context,
+                  const CollectorPreferences(),
+                ),
+                child: const Text('go'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('go'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          '../../../../docs/screenshots/background-collection/first-time-explanation-$width.png',
         ),
       );
     });

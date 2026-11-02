@@ -22,6 +22,7 @@ import '../providers/collector_provider.dart';
 import '../providers/mobile_station_status_provider.dart';
 import '../widgets/battery_exemption_dialog.dart';
 import '../widgets/owner_ledger_banner.dart';
+import '../../data/services/collector_preferences.dart';
 import '../../data/services/mobile_station_status_service.dart';
 import '../../../../services/background/sync_worker.dart';
 import '../widgets/sync_status.dart';
@@ -355,6 +356,12 @@ class CollectorDashboard extends ConsumerWidget {
                             ? null
                             : (v) async {
                                 if (v) {
+                                  final accepted =
+                                      await explainBackgroundCollectionOnce(
+                                        context,
+                                        ref.read(collectorPreferencesProvider),
+                                      );
+                                  if (!accepted) return;
                                   await ref
                                       .read(collectorProvider.notifier)
                                       .startCollecting();
