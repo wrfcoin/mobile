@@ -18,7 +18,10 @@ import '../providers/transactions_provider.dart';
 import '../providers/wallet_provider.dart';
 
 class CreateWalletScreen extends ConsumerStatefulWidget {
-  const CreateWalletScreen({super.key});
+  const CreateWalletScreen({super.key, this.leading});
+
+  /// The app bar's back button, when there is no screen under this one.
+  final Widget? leading;
 
   @override
   ConsumerState<CreateWalletScreen> createState() => _CreateWalletScreenState();
@@ -269,7 +272,10 @@ class _CreateWalletScreenState extends ConsumerState<CreateWalletScreen>
         credentials?.mnemonic.split(RegExp(r'\s+')) ?? const [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Wallet')),
+      appBar: AppBar(
+        leading: widget.leading,
+        title: const Text('Create Wallet'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(

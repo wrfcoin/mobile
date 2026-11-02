@@ -2,6 +2,7 @@
 // scroll position. Weather still refreshes when it is old, keeps what it has
 // when a refresh fails, and says how old it is.
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:fpdart/fpdart.dart' show Either, Left;
@@ -20,6 +21,7 @@ import 'package:wrfcoin_mobile/features/settings/presentation/widgets/settings_g
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_page.dart';
 import 'package:wrfcoin_mobile/features/wallet/domain/repositories/wallet_repository.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/create_wallet_screen.dart';
+import 'package:wrfcoin_mobile/features/wallet/presentation/screens/import_wallet_screen.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/forecast_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/recovery_phrase_screen.dart';
@@ -27,6 +29,8 @@ import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.da
 import 'package:wrfcoin_mobile/features/weather/presentation/providers/weather_provider.dart';
 import 'package:wrfcoin_mobile/features/weather/presentation/screens/forecast_dashboard.dart';
 import 'package:wrfcoin_mobile/features/weather/presentation/screens/weather_map_screen.dart';
+import 'package:wrfcoin_mobile/services/notifications/notification_payload_router.dart';
+import 'package:wrfcoin_mobile/services/observability/app_logger.dart';
 import 'package:wrfcoin_mobile/services/storage/local_db.dart';
 
 import '../../test_helpers/app_harness.dart';
@@ -410,21 +414,123 @@ void main() {
     expect(find.byType(ForecastDashboard), findsOneWidget);
   });
 
-  testWidgets('leaving the recovery phrase screen closes it', (tester) async {
-    final router = await pumpApp(tester);
-    router.go('/wallet/create');
-    await pumpFrames(tester);
-    expect(find.byType(CreateWalletScreen), findsOneWidget);
+  group('the screens that hold a recovery phrase', () {
+    final screens = <String, Type>{
+      '/wallet/create': CreateWalletScreen,
+      '/wallet/import': ImportWalletScreen,
+    };
+    Finder kept(Type type) => find.byType(type, skipOffstage: false);
 
-    await tapTab(tester, 'Collect');
-    expect(router.state.uri.path, '/collect');
-    expect(
-      find.byType(CreateWalletScreen, skipOffstage: false),
-      findsNothing,
-      reason: 'not kept mounted behind another tab',
-    );
-    await tapTab(tester, 'Wallet');
-    expect(router.state.uri.path, '/wallet');
+    for (final screen in screens.entries) {
+      final path = screen.key;
+      final type = screen.value;
+
+      for (final size in const [Size(390, 500), Size(1280, 800)]) {
+        testWidgets('$path opens over the shell at ${size.width.toInt()} px, '
+            'with no tab to leave it for', (tester) async {
+          final router = await pumpApp(tester, size: size);
+          router.go(path);
+          await pumpFrames(tester);
+          expect(find.byType(type), findsOneWidget);
+          expect(find.byType(BottomNavigationBar), findsNothing);
+          expect(find.byType(NavigationRail), findsNothing);
+        });
+      }
+
+      for (final open in const ['go', 'push']) {
+        // Every place a notification can land, from every way of opening it.
+        const landings = <String, String>{
+          'alert': '/weather/alerts',
+          'wallet_tx': '/wallet',
+          'collector_sync': '/collect',
+          'proposal': '/govern',
+          'nft_ready': '/profile',
+          'something_new': '/weather',
+        };
+        for (final landing in landings.entries) {
+          testWidgets('$path opened by $open closes when a '
+              '${landing.key} notification jumps away', (tester) async {
+            final router = await pumpApp(tester, size: const Size(390, 844));
+            if (open == 'push') {
+              router.go('/wallet');
+              await pumpFrames(tester);
+              unawaited(router.push(path));
+            } else {
+              router.go(path);
+            }
+            await pumpFrames(tester);
+            expect(find.byType(type), findsOneWidget);
+
+            await NotificationPayloadRouter(
+              router: GoRouterNavigator(router),
+              logger: AppLogger(sinks: const [], verbose: false),
+            ).handlePayload(jsonEncode({'type': landing.key}));
+            await pumpFrames(tester);
+
+            expect(router.state.uri.path, landing.value);
+            expect(find.byType(BottomNavigationBar), findsOneWidget);
+            expect(
+              kept(type),
+              findsNothing,
+              reason: 'not kept mounted behind a tab',
+            );
+
+            await tapTab(tester, 'Wallet');
+            expect(router.state.uri.path, '/wallet');
+            expect(kept(type), findsNothing);
+          });
+        }
+      }
+
+      for (final open in const ['go', 'push']) {
+        testWidgets('$path opened by $open: Back returns to Wallet', (
+          tester,
+        ) async {
+          final router = await pumpApp(tester);
+          if (open == 'push') {
+            router.go('/wallet');
+            await pumpFrames(tester);
+            unawaited(router.push(path));
+          } else {
+            router.go(path);
+          }
+          await pumpFrames(tester);
+          expect(find.byType(BackButton), findsOneWidget);
+
+          await tester.tap(find.byType(BackButton));
+          await pumpFrames(tester);
+          expect(router.state.uri.path, '/wallet');
+          expect(selectedTab(tester), 2);
+          expect(kept(type), findsNothing);
+        });
+      }
+
+      testWidgets('$path opened by go: system Back goes to Wallet, not out', (
+        tester,
+      ) async {
+        final router = await pumpApp(tester);
+        router.go(path);
+        await pumpFrames(tester);
+
+        final handled = await tester.binding.handlePopRoute();
+        await pumpFrames(tester);
+        expect(handled, isTrue);
+        expect(router.state.uri.path, '/wallet');
+        expect(kept(type), findsNothing);
+      });
+
+      testWidgets('$path going home to Wallet closes it', (tester) async {
+        final router = await pumpApp(tester);
+        router.go(path);
+        await pumpFrames(tester);
+        // How the create and import flows finish.
+        tester.element(find.byType(type)).go('/wallet');
+        await pumpFrames(tester);
+        expect(router.state.uri.path, '/wallet');
+        expect(selectedTab(tester), 2);
+        expect(kept(type), findsNothing);
+      });
+    }
   });
 
   group('the guarded phrase backup', () {

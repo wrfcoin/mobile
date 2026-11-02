@@ -178,6 +178,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             _fadePage(key: state.pageKey, child: const RecoveryPhraseScreen()),
       ),
+      // The same for creating and importing a wallet, which hold a phrase. Being
+      // outside the shell also means no tab remembers them: anything that goes
+      // to a tab (a notification, say) closes them for good.
+      GoRoute(
+        path: '/wallet/create',
+        pageBuilder: (context, state) => _fadePage(
+          key: state.pageKey,
+          child: _BackToWallet(
+            builder: (context, leading) => CreateWalletScreen(leading: leading),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/wallet/import',
+        pageBuilder: (context, state) => _fadePage(
+          key: state.pageKey,
+          child: _BackToWallet(
+            builder: (context, leading) => ImportWalletScreen(leading: leading),
+          ),
+        ),
+      ),
       // An indexed stack: every tab keeps its screen, its data and its scroll
       // position while another tab is showing. A branch is built on its first
       // visit, not at launch. Hidden branches run with TickerMode off, which
@@ -426,13 +447,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                   GoRoute(
-                    path: 'create',
-                    pageBuilder: (context, state) => _fadePage(
-                      key: state.pageKey,
-                      child: const CreateWalletScreen(),
-                    ),
-                  ),
-                  GoRoute(
                     path: 'contacts',
                     pageBuilder: (context, state) => _fadePage(
                       key: state.pageKey,
@@ -444,13 +458,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (context, state) => _fadePage(
                       key: state.pageKey,
                       child: const SendAllowlistScreen(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'import',
-                    pageBuilder: (context, state) => _fadePage(
-                      key: state.pageKey,
-                      child: const ImportWalletScreen(),
                     ),
                   ),
                 ],
@@ -572,11 +579,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 /// reload on every visit are fetched again, in place.
 const tabDataStaleAfter = Duration(minutes: 1);
 
-/// Screens holding a recovery phrase. Leaving one by the navigation bar closes
-/// it, as it always did, rather than keeping the phrase in memory and the
-/// screenshot block on behind another tab.
-const _closeWhenLeft = <String>{'/wallet/create', '/wallet/import'};
-
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
 
@@ -601,9 +603,6 @@ class ScaffoldWithNavBar extends ConsumerStatefulWidget {
 class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
   final _leftAt = <int, DateTime>{};
 
-  /// The tab to open once the screen in [_closeWhenLeft] has closed.
-  int? _openAfterClose;
-
   /// The tab More was opened from, where Back on its list returns.
   int? _cameToMoreFrom;
 
@@ -612,15 +611,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
     super.didUpdateWidget(oldWidget);
     final previous = oldWidget.navigationShell.currentIndex;
     final current = widget.navigationShell.currentIndex;
-    final next = _openAfterClose;
-    if (next != null) {
-      _openAfterClose = null;
-      // After its close animation: hidden tabs run no animations, so a screen
-      // still closing would stay mounted until its tab came back.
-      Future<void>.delayed(const Duration(milliseconds: 250), () {
-        if (mounted) widget.navigationShell.goBranch(next);
-      });
-    }
     if (previous == current) return;
     if (current == ScaffoldWithNavBar._moreBranch) _cameToMoreFrom = previous;
     final now = ref.read(appClockProvider)();
@@ -653,12 +643,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
     if (index == current) {
       // The tab you are on: back to its first screen.
       shell.goBranch(index, initialLocation: true);
-      return;
-    }
-    final router = GoRouter.of(context);
-    if (_closeWhenLeft.contains(router.state.uri.path)) {
-      _openAfterClose = index;
-      router.go('/wallet');
       return;
     }
     shell.goBranch(index);
@@ -757,6 +741,30 @@ class _MoreBranchBack extends StatelessWidget {
         context,
         atBottom && toList ? BackButton(onPressed: back) : null,
       ),
+    );
+  }
+}
+
+/// Back from a screen outside the shell that the welcome flow opened with
+/// nothing under it, where Back would close the app: it goes to Wallet. When
+/// the screen was pushed this does nothing and Back is an ordinary pop.
+class _BackToWallet extends StatelessWidget {
+  const _BackToWallet({required this.builder});
+
+  /// Given the app bar's back button, when the screen needs its own.
+  final Widget Function(BuildContext, Widget? leading) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final atBottom = ModalRoute.of(context)?.isFirst ?? false;
+    void back() => context.go('/wallet');
+
+    return PopScope(
+      canPop: !atBottom,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) back();
+      },
+      child: builder(context, atBottom ? BackButton(onPressed: back) : null),
     );
   }
 }
