@@ -432,9 +432,9 @@ class _AuthSessionCoordinator {
           reason: AuthHandoffReason.sessionExpired,
           message:
               'Sign-in is paused: this device\'s secure storage could not be '
-              'read or written. Restart the app and tap "Sign in again". If '
-              'it keeps failing, re-import the wallet from its recovery '
-              'phrase.',
+              'read or written. Restart the app and tap "Sign in again". '
+              'Only if it still fails after a restart, restore the wallet '
+              'from its recovery phrase.',
         );
         return false;
       case LoginPermitStatus.userActionRequired:
@@ -682,7 +682,10 @@ class _AuthSessionCoordinator {
     await _keyManager.clearAuthSession();
     _authHandoff?.requireWalletConnect(
       reason: AuthHandoffReason.unsupportedWallet,
-      message: 'Wallet address does not match its signing key. Re-import this wallet from its recovery phrase to continue.',
+      message:
+          'The wallet saved on this phone does not match its signing key, '
+          'so it cannot sign in. Restoring it from your recovery phrase '
+          'fixes this.',
     );
     return null;
   }

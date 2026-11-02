@@ -92,6 +92,32 @@ class AppSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const _SectionHeading('Wallet'),
+          _EntryCard(
+            children: [
+              _entry(
+                key: const Key('settings-contacts'),
+                Icons.contacts_outlined,
+                'Contacts',
+                'Named addresses, saved on this phone only.',
+                () => context.push('/wallet/contacts'),
+              ),
+              _entry(
+                key: const Key('settings-allowlist'),
+                Icons.verified_user_outlined,
+                'Send allowlist',
+                'Only send to contacts you allowed.',
+                () => context.push('/wallet/allowlist'),
+              ),
+              _entry(
+                key: const Key('settings-recovery-phrase'),
+                Icons.inventory_2_outlined,
+                'Back up recovery phrase',
+                'Only needed to restore on a new phone.',
+                () => context.push('/wallet/recovery-phrase'),
+              ),
+            ],
+          ),
           const _SectionHeading('Alerts & notifications'),
           _EntryCard(
             children: [
@@ -336,8 +362,10 @@ class AppSettingsScreen extends ConsumerWidget {
     IconData icon,
     String title,
     String subtitle,
-    VoidCallback onTap,
-  ) => ListTile(
+    VoidCallback onTap, {
+    Key? key,
+  }) => ListTile(
+    key: key,
     leading: Icon(icon),
     title: Text(title),
     subtitle: Text(subtitle),

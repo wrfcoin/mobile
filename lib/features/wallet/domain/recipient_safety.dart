@@ -33,6 +33,10 @@ class RecipientAssessment {
 
 final _hexAddress = RegExp(r'^0x[a-fA-F0-9]{40}$');
 
+/// Signed transfers and fee estimates accept only core4 hex addresses
+/// (backend `isLaunchAddress`). Shared by Send, the address book and import.
+bool isSendableAddress(String value) => _hexAddress.hasMatch(value.trim());
+
 String _norm(String value) => value.trim().toLowerCase();
 
 /// Classifies [to] using only local knowledge:
