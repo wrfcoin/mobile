@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/repositories/gamification_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/gamification/presentation/screens/leaderboard_screen.dart';
 import 'package:wrfcoin_mobile/features/gamification/presentation/screens/achievements_screen.dart';
+import '../../../test_helpers/fakes.dart';
 
 /// Drives the real repository through a scripted Dio so the screen is tested
 /// against the actual wire shape (backend#1457).
@@ -47,6 +48,7 @@ Widget _screen(
   );
   return ProviderScope(
     overrides: [
+      noWeatherStoriesOverride,
       earningsReadProvider.overrideWith((ref) async => false),
       gamificationRepositoryProvider.overrideWithValue(
         GamificationRepository(dio),

@@ -13,6 +13,7 @@ import 'package:wrfcoin_mobile/features/gamification/presentation/screens/leader
 import 'package:wrfcoin_mobile/features/gamification/presentation/screens/achievements_screen.dart';
 
 import '../../../fixtures/role_earnings_fixture.dart';
+import '../../../test_helpers/fakes.dart';
 
 class Script {
   final List<Object?> capabilities;
@@ -77,6 +78,7 @@ class Script {
     );
     container = ProviderContainer(
       overrides: [
+        noWeatherStoriesOverride,
         roleEarningsRepositoryProvider.overrideWithValue(
           RoleEarningsRepository(dio),
         ),

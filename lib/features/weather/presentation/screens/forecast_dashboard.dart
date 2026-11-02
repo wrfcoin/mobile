@@ -11,15 +11,12 @@ import '../../../../core/time/app_clock.dart';
 import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
-import '../providers/weather_narratives_provider.dart';
 import '../providers/weather_provider.dart';
 import '../providers/wrf_forecast_provider.dart';
-import '../screens/weather_stories_screen.dart';
 import '../widgets/alerts_unavailable_card.dart';
 import '../widgets/forecast_sections.dart';
 import '../widgets/hdd_cdd_card.dart';
 import '../widgets/location_needed_card.dart';
-import '../widgets/narrative_card.dart';
 import '../widgets/weather_card.dart';
 import '../widgets/wrf_forecast_chart.dart';
 import '../widgets/aqi_gauge.dart';
@@ -358,10 +355,6 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
                     const SizedBox(height: 16),
                   ],
 
-                  // Weather stories teaser
-                  _WeatherStoryTeaser(),
-                  const SizedBox(height: 16),
-
                   // Quick actions
                   Row(
                     children: [
@@ -561,62 +554,6 @@ class _WrfBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Teaser card showing the latest 1-2 weather narratives with a
-/// "See all" link to the full [WeatherStoriesScreen].
-class _WeatherStoryTeaser extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final narratives = ref.watch(weatherNarrativesProvider).narratives;
-    if (narratives.isEmpty) return const SizedBox.shrink();
-
-    final preview = narratives.take(2).toList();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.auto_stories,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Your Weather Story',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const WeatherStoriesScreen(),
-                      ),
-                    );
-                  },
-                  child: const Text('See all'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ...preview.map(
-              (n) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: NarrativeCard(narrative: n),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

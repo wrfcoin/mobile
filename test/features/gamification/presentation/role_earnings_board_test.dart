@@ -20,6 +20,7 @@ import 'package:wrfcoin_mobile/features/gamification/presentation/screens/achiev
 
 import '../../../fixtures/role_earnings_fixture.dart';
 import '../../../fixtures/weather_earnings_fixture.dart';
+import '../../../test_helpers/fakes.dart';
 
 Widget screen({
   bool profile = false,
@@ -60,6 +61,7 @@ Widget screen({
   );
   return ProviderScope(
     overrides: [
+      noWeatherStoriesOverride,
       earningsReadProvider.overrideWith((ref) async => true),
       ownEarningsAddressProvider.overrideWith(
         (ref) async => '0x0000000000000000000000000000000000000001',
@@ -107,6 +109,7 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          noWeatherStoriesOverride,
           earningsReadProvider.overrideWith((ref) async => true),
           ownEarningsAddressProvider.overrideWith(
             (ref) async => ref.watch(address),
@@ -165,6 +168,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            noWeatherStoriesOverride,
             roleEarningsRepositoryProvider.overrideWithValue(
               RoleEarningsRepository(dio),
             ),

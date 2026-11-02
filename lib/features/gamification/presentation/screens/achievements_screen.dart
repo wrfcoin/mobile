@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'leaderboard_screen.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
+import '../../../weather/presentation/widgets/weather_story_teaser.dart';
 import '../widgets/role_earnings_board.dart';
 
 class AchievementsScreen extends ConsumerStatefulWidget {
@@ -70,6 +71,10 @@ class _AchievementsScreenState extends ConsumerState<AchievementsScreen>
             child: Column(
               children: [
                 OwnRoleEarningsSummary(),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: WeatherStoryTeaser(),
+                ),
                 Padding(
                   padding: EdgeInsets.all(24),
                   child: Text(
