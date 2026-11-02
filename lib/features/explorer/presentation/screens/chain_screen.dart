@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../wallet/data/models/wallet_model.dart';
@@ -120,7 +121,20 @@ class _ChainScreenState extends ConsumerState<ChainScreen>
   Widget build(BuildContext context) {
     final snapshot = ref.watch(chainSnapshotProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Chain')),
+      appBar: AppBar(
+        title: const Text('Chain'),
+        actions: [
+          Semantics(
+            button: true,
+            label: 'Open producers and bonded nodes',
+            child: IconButton(
+              tooltip: 'Producers and bonded nodes',
+              icon: const Icon(Icons.hub_outlined),
+              onPressed: () => context.push('/wallet/nodes'),
+            ),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(

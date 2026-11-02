@@ -99,3 +99,16 @@ String publicWhen(String? iso, {bool withTime = true}) {
   final format = withTime ? DateFormat('MMM d, y, h:mm a') : DateFormat.yMMMd();
   return format.format(parsed.toLocal());
 }
+
+/// Base units (a digit string, 8 decimals) as exact WRF, like
+/// "1,250.00000305 WRF"; null when [baseUnits] is not a digit string.
+String? publicWrf(String? baseUnits) {
+  if (baseUnits == null || !RegExp(r'^\d{1,39}$').hasMatch(baseUnits)) {
+    return null;
+  }
+  final units = BigInt.parse(baseUnits);
+  final perCoin = BigInt.from(100000000);
+  final whole = publicCount('${units ~/ perCoin}');
+  final fraction = (units % perCoin).toString().padLeft(8, '0');
+  return '$whole.$fraction WRF';
+}
