@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fpdart/fpdart.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/transactions_provider.dart';
@@ -52,18 +51,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Free transfer'), findsNothing);
-    expect(find.text('Fee estimate unavailable'), findsOneWidget);
+    // No wallet is readable here, so no fee is claimed.
+    expect(find.textContaining('none'), findsNothing);
   });
 
   testWidgets('social canonical wallet uses the ordinary send path', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-      estimateGasResult: const Right({
-        'feeBaseUnits': '0',
-        'authoritative': true,
-      }),
-    );
+    final repository = FakeWalletRepository();
     final keyStorage = InMemoryKeyValueStorage();
     await keyStorage.write(
       key: 'wrf_address',
@@ -118,7 +113,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Free transfer'), findsNothing);
-    expect(find.textContaining('Network fee: 0 WRF'), findsWidgets);
+    expect(
+      find.textContaining('Network fee: none reported by the network'),
+      findsWidgets,
+    );
     await tester.tap(find.widgetWithText(TextButton, 'Send'));
     await tester.pumpAndSettle();
 

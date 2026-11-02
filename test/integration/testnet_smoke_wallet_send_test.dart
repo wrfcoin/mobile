@@ -129,7 +129,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Sent successfully'), findsNothing);
-      expect(transport.nonceReads, 1);
+      // Fee on open, fee after the PIN, then the one read the signature uses.
+      expect(transport.nonceReads, 3);
       expect(transport.sends, hasLength(1));
       expect(transport.sends.single.extra['noRetry'], true);
       final body = Map<String, dynamic>.from(
@@ -183,7 +184,8 @@ void main() {
         find.textContaining('Previous transfer still pending'),
       );
       await pumpFrames(tester, frames: 20);
-      expect(transport.nonceReads, 1);
+      // Fee on open, fee after the PIN, then the one read the signature uses.
+      expect(transport.nonceReads, 3);
       expect(transport.sends, hasLength(1));
       expect(find.text('Sent successfully'), findsNothing);
       expect(find.widgetWithText(TextFormField, 'Send to'), findsOneWidget);
@@ -198,7 +200,8 @@ void main() {
     final transport = await enterSend(tester, biometric: false);
     expect(find.text('Authentication required to send'), findsOneWidget);
     expect(find.text('Confirm Send'), findsNothing);
-    expect(transport.nonceReads, 0);
+    // Only the fee read on open; nothing is signed, so no signing read.
+    expect(transport.nonceReads, 1);
     expect(transport.sends, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -265,9 +268,6 @@ class _Transport {
               'hash': _submissionHash,
               'settled': false,
             };
-          } else if (options.method == 'POST' &&
-              path == ApiConstants.walletEstimateGas) {
-            payload = {'feeBaseUnits': '0', 'authoritative': true};
           } else if (options.method == 'GET' &&
               path == ApiConstants.publicBalance(sender.substring(2))) {
             payload = {

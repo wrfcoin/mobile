@@ -3,6 +3,7 @@ import 'package:fpdart/fpdart.dart';
 
 import '../../../../core/errors/failures.dart';
 import '../../../../services/crypto/signed_transfer.dart';
+import '../../data/models/transfer_fee.dart';
 import '../../data/models/wallet_model.dart';
 import '../../data/models/transaction_page.dart';
 
@@ -36,12 +37,7 @@ abstract class WalletRepository {
     String? memo,
   });
 
-  Future<Either<Failure, Map<String, dynamic>>> estimateGas({
-    required String from,
-    required String to,
-    required String amount,
-    String? memo,
-  });
+  Future<Either<Failure, TransferFeeQuote>> getTransferFee(String address);
 
   Future<Either<Failure, Map<String, dynamic>>> sponsorGas({
     required String walletAddress,

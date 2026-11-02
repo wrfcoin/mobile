@@ -7,6 +7,7 @@ import '../../../collector/data/models/station_owner_models.dart'
 import '../../../../services/api/api_client.dart';
 import '../../../../services/crypto/signed_transfer.dart';
 import '../../../../services/crypto/wallet_setup_service.dart';
+import '../models/transfer_fee.dart';
 import '../models/transaction_model.dart';
 import '../models/transaction_page.dart';
 import '../models/wallet_model.dart';
@@ -163,6 +164,15 @@ class WalletRemoteDataSource {
     return nonce;
   }
 
+  /// The network fee from the same owner-bound nonce answer. The edge admits
+  /// only a lowercase address and no query here.
+  Future<TransferFeeQuote> getTransferFee(String address) async {
+    final response = await _dio.get(
+      ApiConstants.walletAccountNonce(address.trim().toLowerCase()),
+    );
+    return TransferFeeQuote.fromNonceResponse(_unwrapMap(response.data));
+  }
+
   /// Submits a client-signed transparent transfer (backend#1197).
   ///
   /// [amountBaseUnits] is an integer base-unit string (see `wrf_units.dart`).
@@ -232,25 +242,6 @@ class WalletRemoteDataSource {
         'to': to,
         'amount': amount,
         'privacyLevel': privacyLevel,
-        // ignore: use_null_aware_elements
-        if (memo != null) 'memo': memo,
-      },
-    );
-    return response.data as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> estimateGas({
-    required String from,
-    required String to,
-    required String amount,
-    String? memo,
-  }) async {
-    final response = await _dio.post(
-      ApiConstants.walletEstimateGas,
-      data: {
-        'from': from,
-        'to': to,
-        'amount': amount,
         // ignore: use_null_aware_elements
         if (memo != null) 'memo': memo,
       },

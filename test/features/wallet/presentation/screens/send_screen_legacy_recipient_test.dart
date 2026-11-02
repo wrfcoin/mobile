@@ -73,10 +73,6 @@ Future<FakeWalletRepository> _pump(
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   final repository = FakeWalletRepository(
-    estimateGasResult: const Right({
-      'feeBaseUnits': '0',
-      'authoritative': true,
-    }),
     sendTransactionResult: const Right({'status': 'submitted'}),
   );
   final signer = await Ed25519TransferSigner.fromSeedHex(_seedHex);

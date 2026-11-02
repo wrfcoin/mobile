@@ -7,6 +7,7 @@ import '../../../../core/errors/failures.dart';
 import '../../domain/repositories/wallet_repository.dart';
 import '../../../../services/crypto/signed_transfer.dart';
 import '../datasources/wallet_remote_datasource.dart';
+import '../models/transfer_fee.dart';
 import '../models/wallet_model.dart';
 import '../models/transaction_page.dart';
 
@@ -136,20 +137,11 @@ class WalletRepositoryImpl implements WalletRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> estimateGas({
-    required String from,
-    required String to,
-    required String amount,
-    String? memo,
-  }) async {
+  Future<Either<Failure, TransferFeeQuote>> getTransferFee(
+    String address,
+  ) async {
     try {
-      final result = await _dataSource.estimateGas(
-        from: from,
-        to: to,
-        amount: amount,
-        memo: memo,
-      );
-      return Right(result);
+      return Right(await _dataSource.getTransferFee(address));
     } on DioException catch (e) {
       return Left(DioErrorMapper.map(e));
     } catch (e) {

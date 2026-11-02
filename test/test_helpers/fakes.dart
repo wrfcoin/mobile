@@ -25,6 +25,7 @@ import 'package:wrfcoin_mobile/features/weather/data/models/wrf_forecast_model.d
 import 'package:wrfcoin_mobile/features/weather/data/repositories/weather_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
 import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.dart';
+import 'package:wrfcoin_mobile/features/wallet/data/models/transfer_fee.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/address_book_entry.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_page.dart';
@@ -146,7 +147,7 @@ class FakeWalletRepository implements WalletRepository {
     this.wallet,
     this.transactions = const <TransactionModel>[],
     this.sendTransactionResult,
-    this.estimateGasResult,
+    this.transferFeeResult,
     this.sponsorGasResult,
     this.submitUserOpResult,
   });
@@ -154,26 +155,22 @@ class FakeWalletRepository implements WalletRepository {
   final WalletModel? wallet;
   final List<TransactionModel> transactions;
   final Either<Failure, Map<String, dynamic>>? sendTransactionResult;
-  final Either<Failure, Map<String, dynamic>>? estimateGasResult;
+  final Either<Failure, TransferFeeQuote>? transferFeeResult;
   final Either<Failure, Map<String, dynamic>>? sponsorGasResult;
   final Either<Failure, Map<String, dynamic>>? submitUserOpResult;
   int sendCalls = 0;
   final List<String> sentAmountBaseUnits = <String>[];
   final List<String> sentTo = <String>[];
-  final List<String> estimateGasAmounts = <String>[];
+  int transferFeeReads = 0;
   int sponsorGasCalls = 0;
   int submitUserOpCalls = 0;
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> estimateGas({
-    required String from,
-    required String to,
-    required String amount,
-    String? memo,
-  }) async {
-    estimateGasAmounts.add(amount);
-    return estimateGasResult ??
-        const Right(<String, dynamic>{'estimatedFee': '0.001'});
+  Future<Either<Failure, TransferFeeQuote>> getTransferFee(
+    String address,
+  ) async {
+    transferFeeReads++;
+    return transferFeeResult ?? const Right(TransferFeeQuote.notReported);
   }
 
   @override

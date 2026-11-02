@@ -3,8 +3,7 @@
 /// 1 WRF = 10^8 base units. This matches core4 `WRF_UNITS_PER_COIN`
 /// (`shared-protocol/src/common/constants.rs`) and backend
 /// `shared/currency.ts` (`WRF_DECIMALS = 8`). The wallet wire contract is
-/// integer base units (backend #1197 for `POST /send`, #1200 for
-/// `POST /wallet/estimate-gas`).
+/// integer base units (backend #1197 for `POST /send`).
 ///
 /// Every conversion here is string and [BigInt] arithmetic. Amounts never pass
 /// through `double`.
