@@ -6,6 +6,7 @@ import '../../../../core/errors/failures.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
+import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../data/repositories/governance_repository_impl.dart';
 import '../providers/proposals_provider.dart';
 import '../widgets/proposal_card.dart';
@@ -53,7 +54,10 @@ class _ProposalListScreenState extends ConsumerState<ProposalListScreen> {
     final proposalsAsync = ref.watch(proposalsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Governance')),
+      appBar: AppBar(
+        title: const Text('Governance'),
+        actions: const [SettingsGearButton()],
+      ),
       body: proposalsAsync.when(
         loading: () => const Padding(
           padding: EdgeInsets.all(16),

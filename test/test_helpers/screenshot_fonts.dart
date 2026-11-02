@@ -12,8 +12,19 @@ const screenshotSizes = <(String, Size)>[
 ///
 ///     SCREENSHOT_FONT_DIR=$FLUTTER/bin/cache/artifacts/material_fonts \
 ///       flutter test --update-goldens <screenshots test>
-Future<void> loadScreenshotFonts() async {
-  final dir = Platform.environment['SCREENSHOT_FONT_DIR']!;
+Future<void> loadScreenshotFonts() =>
+    loadRealFonts(Platform.environment['SCREENSHOT_FONT_DIR']!);
+
+/// The same fonts for layout tests. The default test font draws every letter
+/// as a full square, about 1.8 times as wide as real text, so tab content
+/// that fits on a phone reports overflow at 390 px.
+Future<void> loadFlutterCacheFonts() => loadRealFonts(
+  File(Platform.resolvedExecutable).parent.parent.parent.uri
+      .resolve('material_fonts')
+      .toFilePath(),
+);
+
+Future<void> loadRealFonts(String dir) async {
   Future<ByteData> bytes(String file) async =>
       ByteData.sublistView(File('$dir/$file').readAsBytesSync());
   final roboto = FontLoader('Roboto');

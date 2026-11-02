@@ -16,6 +16,7 @@ import '../../../challenges/data/models/challenge_model.dart';
 import '../../../challenges/data/repositories/challenge_repository.dart';
 import '../../../challenges/presentation/providers/challenges_provider.dart';
 import '../../../challenges/presentation/widgets/challenge_leaderboard_widget.dart';
+import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../providers/collector_provider.dart';
 import '../providers/mobile_station_status_provider.dart';
@@ -69,33 +70,6 @@ class CollectorDashboard extends ConsumerWidget {
             ),
           Semantics(
             button: true,
-            label: 'Open privacy center',
-            child: IconButton(
-              tooltip: 'Privacy center',
-              icon: const Icon(Icons.privacy_tip),
-              onPressed: () => context.push('/profile/privacy'),
-            ),
-          ),
-          Semantics(
-            button: true,
-            label: 'Open sensor settings',
-            child: IconButton(
-              tooltip: 'Sensor settings',
-              icon: const Icon(Icons.settings),
-              onPressed: () => context.push('/collect/settings'),
-            ),
-          ),
-          Semantics(
-            button: true,
-            label: 'Open collector validation log',
-            child: IconButton(
-              tooltip: 'Collector validation',
-              icon: const Icon(Icons.bug_report_outlined),
-              onPressed: () => context.push('/collect/validation'),
-            ),
-          ),
-          Semantics(
-            button: true,
             label: 'Open field diagnostics mode',
             child: IconButton(
               tooltip: 'Field mode',
@@ -103,6 +77,7 @@ class CollectorDashboard extends ConsumerWidget {
               onPressed: () => context.push('/collect/field-mode'),
             ),
           ),
+          const SettingsGearButton(),
         ],
       ),
       body: ResponsiveListView(

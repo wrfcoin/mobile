@@ -24,7 +24,11 @@ void main() {
     await tester.tap(find.byTooltip('Settings'));
     await pumpFrames(tester);
 
+    await tester.ensureVisible(find.text('Light'));
+    await pumpFrames(tester);
     await tester.tap(find.text('Light'));
+    await pumpFrames(tester);
+    await tester.ensureVisible(find.text('Imperial'));
     await pumpFrames(tester);
     await tester.tap(find.text('Imperial'));
     await pumpFrames(tester);

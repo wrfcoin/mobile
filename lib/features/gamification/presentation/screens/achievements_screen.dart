@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'leaderboard_screen.dart';
+import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../widgets/role_earnings_board.dart';
 
 class AchievementsScreen extends ConsumerStatefulWidget {
@@ -36,15 +37,6 @@ class _AchievementsScreenState extends ConsumerState<AchievementsScreen>
         actions: [
           Semantics(
             button: true,
-            label: 'Open settings',
-            child: IconButton(
-              tooltip: 'Settings',
-              icon: const Icon(Icons.tune),
-              onPressed: () => context.push('/profile/settings'),
-            ),
-          ),
-          Semantics(
-            button: true,
             label: 'Open weekly competition',
             child: IconButton(
               tooltip: 'Weekly competition',
@@ -61,6 +53,7 @@ class _AchievementsScreenState extends ConsumerState<AchievementsScreen>
               onPressed: () => context.push('/profile/deserts'),
             ),
           ),
+          const SettingsGearButton(),
         ],
         bottom: TabBar(
           controller: _tabController,
