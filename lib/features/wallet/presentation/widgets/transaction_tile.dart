@@ -115,8 +115,9 @@ class TransactionTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    // Follows the theme: the fixed near-white vanished on light.
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),

@@ -12,6 +12,10 @@ class TransactionPage {
 
   /// Paid ledger events have no settlement time and are paged separately.
   final List<TransactionModel> credits;
+
+  /// The node has more reward records past the ones it read for this page, so
+  /// this wallet's list may be missing some. They can't be fetched: the public
+  /// edge doesn't admit the backend's credit cursor.
   final String? creditNextCursor;
 
   /// `false` when the backend says the window is partial; null when the

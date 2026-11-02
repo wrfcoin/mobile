@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // End-to-end wallet history: a real WalletRemoteDataSource and
 // WalletRepositoryImpl behind the real transactions provider and
 // WalletScreen, with Dio answering the backend#1199 contract
@@ -180,30 +182,25 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets(
-    'Earnings shows discovery progress and the bounded-history notice',
-    (tester) async {
-      final backend = _Backend(
-        (o) =>
-            Response(requestOptions: o, data: _window([], offset: 0, total: 0)),
-      );
-      await _pumpWallet(
-        tester,
-        backend,
-        transactions: const TransactionsState(
-          items: [],
-          hasMore: true,
-          loadingMore: false,
-          discoveringCredits: true,
-          complete: false,
-        ),
-      );
-      expect(find.text('Earnings'), findsOneWidget);
-      expect(find.text('Checking earnings history…'), findsOneWidget);
-      expect(find.text('Showing recent activity only'), findsOneWidget);
-      expect(backend.historyRequests, isEmpty);
-    },
-  );
+  testWidgets('Earnings shows the bounded-history notice', (tester) async {
+    final backend = _Backend(
+      (o) =>
+          Response(requestOptions: o, data: _window([], offset: 0, total: 0)),
+    );
+    await _pumpWallet(
+      tester,
+      backend,
+      transactions: const TransactionsState(
+        items: [],
+        hasMore: true,
+        loadingMore: false,
+        complete: false,
+      ),
+    );
+    expect(find.text('Earnings'), findsOneWidget);
+    expect(find.text('Showing recent activity only'), findsOneWidget);
+    expect(backend.historyRequests, isEmpty);
+  });
 
   testWidgets(
     'transaction row and details convert base-unit value and fee to WRF',
@@ -291,17 +288,17 @@ void main() {
     },
   );
 
-  testWidgets('second page requests offset=20 and appends without duplicates', (
+  testWidgets('second page requests offset=50 and appends without duplicates', (
     tester,
   ) async {
     final all = [
-      for (var i = 0; i < 25; i++)
+      for (var i = 0; i < 55; i++)
         _item('0xtx$i', from: _other, height: 1300 + i),
     ];
     final backend = _Backend((o) {
       // Like the real backend: only limit/offset are read, page is ignored.
       final offset = int.tryParse(o.uri.queryParameters['offset'] ?? '') ?? 0;
-      final limit = int.tryParse(o.uri.queryParameters['limit'] ?? '') ?? 25;
+      final limit = int.tryParse(o.uri.queryParameters['limit'] ?? '') ?? 55;
       return Response(
         requestOptions: o,
         statusCode: 200,
@@ -314,7 +311,7 @@ void main() {
     });
     final container = await _pumpWallet(tester, backend);
 
-    expect(find.byType(TransactionTile), findsNWidgets(20));
+    expect(find.byType(TransactionTile), findsNWidgets(50));
     expect(find.text('Load more'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Load more'));
@@ -323,7 +320,7 @@ void main() {
 
     expect(backend.historyRequests, hasLength(2));
     expect(backend.historyRequests[0].queryParameters['offset'], '0');
-    expect(backend.historyRequests[1].queryParameters['offset'], '20');
+    expect(backend.historyRequests[1].queryParameters['offset'], '50');
 
     final hashes = container
         .read(transactionsProvider)
@@ -331,10 +328,10 @@ void main() {
         .items
         .map((tx) => tx.hash)
         .toList();
-    expect(hashes, hasLength(25));
-    expect(hashes.toSet(), hasLength(25));
-    expect(find.byType(TransactionTile), findsNWidgets(25));
-    expect(find.text('Load more'), findsNothing, reason: '25 of 25 loaded');
+    expect(hashes, hasLength(55));
+    expect(hashes.toSet(), hasLength(55));
+    expect(find.byType(TransactionTile), findsNWidgets(55));
+    expect(find.text('Load more'), findsNothing, reason: '55 of 55 loaded');
   });
 
   testWidgets(
@@ -439,47 +436,29 @@ void main() {
     expect(find.text('+1.5 WRF'), findsOneWidget);
   });
 
-  testWidgets('empty credit pages advance and duplicate events render once', (
+  testWidgets('duplicate reward rows render once, and no other page is read', (
     tester,
   ) async {
-    final backend = _Backend((o) {
-      final after = o.uri.queryParameters['creditAfter'];
-      return Response(
+    final backend = _Backend(
+      (o) => Response(
         requestOptions: o,
         data: {
           ..._window([], offset: 0, total: 0),
           'schemaVersion': 2,
-          'creditItems': after == null
-              ? []
-              : [
-                  credit('forecast:one', 'forecast_reward', '100000001'),
-                  credit('forecast:one', 'forecast_reward', '100000001'),
-                ],
-          'creditNextCursor': after == null ? 'commit&first' : null,
+          'creditItems': [
+            credit('forecast:one', 'forecast_reward', '100000001'),
+            credit('forecast:one', 'forecast_reward', '100000001'),
+          ],
+          'creditNextCursor': 'commit&first',
         },
-      );
-    });
-    final container = await _pumpWallet(tester, backend);
-    expect(
-      backend.historyRequests.last.queryParameters['creditAfter'],
-      'commit&first',
+      ),
     );
+    await _pumpWallet(tester, backend);
+    expect(backend.historyRequests, hasLength(1));
     expect(find.text('+1.00000001 WRF'), findsOneWidget);
     expect(find.byKey(const ValueKey('forecast:one')), findsOneWidget);
+    expect(find.byKey(const Key('wallet-credits-truncated')), findsOneWidget);
     expect(find.text('Load more'), findsNothing);
-    final refreshed = container.read(transactionsProvider.notifier).refresh();
-    await _settle(tester);
-    await refreshed;
-    await _settle(tester);
-    expect(
-      backend
-          .historyRequests[backend.historyRequests.length - 2]
-          .queryParameters
-          .containsKey('creditAfter'),
-      isFalse,
-    );
-    expect(find.text('Load more'), findsNothing);
-    expect(find.byKey(const ValueKey('forecast:one')), findsOneWidget);
   });
 
   testWidgets(
@@ -670,4 +649,214 @@ void main() {
       expect(find.text('+1 WRF'), findsNothing);
     },
   );
+
+  group('the public edge', () {
+    // ~/r888/ct101-web4/build/edge/public_onboarding.caddy,
+    // @public_readonly_wallet_transactions. Anything else gets a 404.
+    final admitted = RegExp(r'^limit=([1-9]|[1-4][0-9]|50)&offset=[0-9]{1,6}$');
+    final path = RegExp(r'^/wallet/0x[0-9A-Fa-f]{40}/transactions$');
+
+    testWidgets('admits every history read, first page and load more', (
+      tester,
+    ) async {
+      final backend = _Backend((o) {
+        final offset = int.parse(o.uri.queryParameters['offset']!);
+        return Response(
+          requestOptions: o,
+          data: {
+            ..._window(
+              [
+                for (var i = 0; i < 50; i++)
+                  _item('0x$offset-$i', from: _other),
+              ],
+              offset: offset,
+              total: 120,
+            ),
+            'schemaVersion': 2,
+            'creditItems': <Map<String, dynamic>>[],
+            'creditNextCursor': 'more',
+          },
+        );
+      });
+      final container = await _pumpWallet(tester, backend);
+      unawaited(container.read(transactionsProvider.notifier).loadMore());
+      await _settle(tester);
+
+      expect(backend.historyRequests, hasLength(2));
+      expect(backend.historyRequests.first.query, 'limit=50&offset=0');
+      expect(backend.historyRequests.last.query, 'limit=50&offset=50');
+      for (final uri in backend.historyRequests) {
+        expect(uri.query, matches(admitted));
+        expect(uri.path, matches(path));
+      }
+    });
+
+    for (final (name, status, body) in <(String, int, Object?)>[
+      ('edge 404', 404, 'Not found'),
+      ('server error', 500, null),
+      ('answer with no list', 200, '<html>not json</html>'),
+      ('object with no list', 200, const {'ok': true}),
+    ]) {
+      testWidgets('$name shows an error with Retry, not an empty history', (
+        tester,
+      ) async {
+        var fail = true;
+        final backend = _Backend(
+          (o) => fail
+              ? Response(requestOptions: o, statusCode: status, data: body)
+              : Response(
+                  requestOptions: o,
+                  data: _window(
+                    [_item('0xok', from: _other)],
+                    offset: 0,
+                    total: 1,
+                  ),
+                ),
+        );
+        await _pumpWallet(tester, backend);
+        // Past the provider's retries of a failure that may pass.
+        await tester.pump(const Duration(minutes: 2));
+        await _settle(tester);
+
+        expect(find.byKey(const Key('wallet-history-error')), findsOneWidget);
+        expect(find.text('No activity in this page'), findsNothing);
+        expect(find.textContaining('0 total'), findsNothing);
+
+        fail = false;
+        await tester.tap(find.text('Retry'));
+        await _settle(tester);
+        expect(find.byKey(const Key('wallet-history-error')), findsNothing);
+        expect(find.byType(TransactionTile), findsOneWidget);
+      });
+    }
+
+    testWidgets('a real empty list still says so', (tester) async {
+      final backend = _Backend(
+        (o) =>
+            Response(requestOptions: o, data: _window([], offset: 0, total: 0)),
+      );
+      await _pumpWallet(tester, backend);
+      expect(find.text('No activity in this page'), findsOneWidget);
+      expect(find.byKey(const Key('wallet-history-error')), findsNothing);
+    });
+  });
+
+  // The exact rows backend historyItem(tx, 2) builds from core4's
+  // address_transaction_read_summary and paid_credit_summary.
+  testWidgets('real v2 rows: transfer, faucet, operation and reward', (
+    tester,
+  ) async {
+    Map<String, dynamic> row({
+      required String txId,
+      required int height,
+      required String? type,
+      required String? from,
+      required String? to,
+      required String? amount,
+      required String direction,
+      required String? kind,
+    }) => {
+      'txId': txId,
+      'blockHeight': height,
+      'type': kind ?? type,
+      'from': from,
+      'to': to,
+      'amount': amount,
+      'amountBaseUnits': amount,
+      'eventId': 'transaction:$txId',
+      'timestamp': null,
+      'direction': direction,
+      'counterparty': direction == 'sent' ? to : from,
+      'kind': kind,
+      'settlement': 'included',
+    };
+    final sentId = List.filled(64, 'a').join();
+    final backend = _Backend(
+      (o) => Response(
+        requestOptions: o,
+        data: {
+          'schemaVersion': 2,
+          'items': [
+            row(
+              txId: sentId,
+              height: 11768,
+              type: 'Transfer',
+              from: _own,
+              to: _other,
+              amount: '50000000',
+              direction: 'sent',
+              kind: 'transfer',
+            ),
+            row(
+              txId: List.filled(64, 'b').join(),
+              height: 11000,
+              type: 'Transfer',
+              from: _other,
+              to: _own,
+              amount: '100000000000',
+              direction: 'received',
+              kind: 'transfer',
+            ),
+            row(
+              txId: List.filled(64, 'c').join(),
+              height: 11500,
+              type: 'ContributionCommit',
+              from: _own,
+              to: null,
+              amount: null,
+              direction: 'unknown',
+              kind: null,
+            ),
+          ],
+          'creditItems': [
+            {
+              'txId': null,
+              'blockHeight': null,
+              'type': 'weather_reward',
+              'from': null,
+              'to': _own,
+              'amount': '12500000',
+              'amountBaseUnits': '12500000',
+              'eventId': 'contribution:${List.filled(64, 'd').join()}',
+              'timestamp': null,
+              'direction': 'received',
+              'counterparty': null,
+              'kind': 'weather_reward',
+              'settlement': 'paid',
+            },
+          ],
+          'creditNextCursor': 'more',
+          'creditTotal': null,
+          'windowStartHeight': 1,
+          'source': 'core4',
+          'complete': false,
+          'limit': 50,
+          'offset': 0,
+          'totalInWindow': 3,
+        },
+      ),
+    );
+    final container = await _pumpWallet(tester, backend);
+    final state = container.read(transactionsProvider).requireValue;
+
+    final sent = state.items.first;
+    expect(sent.hash, sentId);
+    expect(sent.blockNumber, 11768);
+    expect(sent.direction, 'outgoing');
+    expect(sent.value, '50000000');
+    expect(sent.to, _other);
+    expect(sent.settlement, 'included');
+    expect(state.items[1].direction, 'incoming');
+    expect(state.items[1].value, '100000000000');
+    expect(state.items[2].value, isNull);
+    expect(state.items[2].type, 'ContributionCommit');
+    expect(state.credits.single.value, '12500000');
+    expect(state.credits.single.type, 'weather_reward');
+
+    expect(find.text('-0.5 WRF'), findsOneWidget);
+    expect(find.text('+1000 WRF'), findsOneWidget);
+    expect(find.text('+0.125 WRF'), findsOneWidget);
+    expect(find.text('Paid rewards'), findsOneWidget);
+    expect(find.byKey(const Key('wallet-credits-truncated')), findsOneWidget);
+  });
 }
