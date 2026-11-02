@@ -11,13 +11,8 @@ import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/preferences/app_preferences.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/wrf_units.dart';
-import '../../../../core/widgets/app_snackbars.dart';
 import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
-import '../../../../services/crypto/key_manager.dart';
-import '../../../../services/crypto/collect_key_store.dart';
-import '../../../collector/data/services/station_registration_service.dart';
-import '../../../../services/crypto/wallet_secure_storage.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../data/models/transaction_model.dart';
 import '../providers/pending_send_provider.dart';
@@ -243,18 +238,6 @@ class WalletScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _confirmEmergencyWipe(context, ref),
-                    icon: const Icon(Icons.delete_forever),
-                    label: const Text('Emergency Wipe'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -507,112 +490,6 @@ class WalletScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _confirmEmergencyWipe(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final shouldWipe =
-        await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) {
-            final confirmationController = TextEditingController();
-            var canConfirm = false;
-
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return AlertDialog(
-                  title: const Text('Emergency wipe'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'This will erase the collect key, weather-station registration, wallet, recovery metadata, address book, and active session data from this device.',
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: confirmationController,
-                        decoration: const InputDecoration(
-                          labelText: 'Type WIPE to confirm',
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            canConfirm = value.trim().toUpperCase() == 'WIPE';
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: canConfirm
-                          ? () => Navigator.of(dialogContext).pop(true)
-                          : null,
-                      child: const Text('Wipe now'),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        ) ??
-        false;
-
-    if (!shouldWipe) return;
-
-    // Stop before touching wallet data if the collect namespace cannot be
-    // erased. Keeping the wallet lets the user retry the failed wipe.
-    try {
-      await ref.read(collectKeyWiperProvider).wipe();
-    } catch (_) {
-      if (!context.mounted) return;
-      AppSnackbars.error(
-        context,
-        const SecurityFailure(
-          'Emergency wipe stopped: the collect key could not be erased. Wallet data was kept; try again.',
-        ),
-      );
-      return;
-    }
-
-    try {
-      final cleared = await ref
-          .read(sharedPreferencesProvider)
-          .remove(StationRegistrationService.registeredStationKey);
-      if (!cleared) throw StateError('Registration cleanup failed');
-      // Keep the address/metadata until key deletion succeeds: a failed
-      // key wipe must not leave a private key without its wallet address.
-      await ref.read(keyManagerProvider).deleteAll();
-      await ref.read(walletSecureStorageProvider).clearWalletData();
-    } catch (_) {
-      if (!context.mounted) return;
-      AppSnackbars.error(
-        context,
-        const SecurityFailure(
-          'Emergency wipe incomplete: the collect key was erased, but wallet cleanup did not finish. Try again.',
-        ),
-      );
-      return;
-    }
-
-    ref.invalidate(walletProvider);
-    ref.invalidate(transactionsProvider);
-    ref.invalidate(backupConfirmedProvider);
-    ref.invalidate(addressBookProvider);
-    ref.invalidate(socialWalletProvider);
-    ref.invalidate(pendingSendProvider);
-    ref.read(authHandoffControllerProvider).clear();
-
-    if (!context.mounted) return;
-    AppSnackbars.success(context, 'Wallet wiped from this device');
-    context.go('/wallet');
   }
 }
 

@@ -8,6 +8,8 @@ import '../../../../core/preferences/app_preferences.dart';
 import '../../../../services/crypto/station_signing.dart';
 import '../../../collector/presentation/screens/station_submit_token_screen.dart';
 import '../../../onboarding/presentation/providers/onboarding_controller.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../wallet/presentation/emergency_wipe.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../widgets/diagnostics_card.dart';
 
@@ -272,6 +274,28 @@ class AppSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+          // Last on the page and set apart, so nobody meets it by accident.
+          const SizedBox(height: 32),
+          const Divider(),
+          const _SectionHeading('Privacy: danger area'),
+          Card(
+            key: const Key('settings-danger-area'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: AppColors.error),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.delete_forever, color: AppColors.error),
+              title: const Text(
+                'Emergency Wipe',
+                style: TextStyle(color: AppColors.error),
+              ),
+              subtitle: const Text(
+                'Erase this wallet and its keys from this device.',
+              ),
+              onTap: () => confirmEmergencyWipe(context, ref),
+            ),
           ),
         ],
       ),

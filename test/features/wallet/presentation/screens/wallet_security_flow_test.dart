@@ -6,6 +6,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
+import 'package:wrfcoin_mobile/core/localization/app_localizations.dart';
+import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
+import 'package:wrfcoin_mobile/features/settings/presentation/screens/app_settings_screen.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/address_book_entry.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
@@ -236,6 +239,9 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          appPreferencesStoreProvider.overrideWithValue(
+            TestAppPreferencesStore(const AppPreferences()),
+          ),
           apiClientProvider.overrideWithValue(
             ApiClient(dio: Dio(BaseOptions(baseUrl: 'http://localhost'))),
           ),
@@ -257,9 +263,15 @@ void main() {
           walletSecureStorageProvider.overrideWithValue(walletStorage),
         ],
         child: MaterialApp.router(
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           routerConfig: GoRouter(
-            initialLocation: '/wallet',
+            initialLocation: '/settings',
             routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => const AppSettingsScreen(),
+              ),
               GoRoute(
                 path: '/wallet',
                 builder: (context, state) => const WalletScreen(),

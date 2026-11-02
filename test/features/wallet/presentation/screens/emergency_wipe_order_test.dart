@@ -8,7 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
+import 'package:wrfcoin_mobile/core/localization/app_localizations.dart';
+import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/station_registration_service.dart';
+import 'package:wrfcoin_mobile/features/settings/presentation/screens/app_settings_screen.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/wallet_screen.dart';
@@ -117,8 +120,12 @@ void main() {
           .setMockMethodCallHandler(_channel, null);
     });
     final router = GoRouter(
-      initialLocation: '/wallet',
+      initialLocation: '/settings',
       routes: [
+        GoRoute(
+          path: '/settings',
+          builder: (_, _) => const AppSettingsScreen(),
+        ),
         GoRoute(path: '/wallet', builder: (_, _) => const WalletScreen()),
       ],
     );
@@ -127,6 +134,9 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(marker),
+          appPreferencesStoreProvider.overrideWithValue(
+            TestAppPreferencesStore(const AppPreferences()),
+          ),
           apiClientProvider.overrideWithValue(ApiClient(dio: Dio())),
           walletRepositoryProvider.overrideWithValue(
             FakeWalletRepository(
@@ -141,7 +151,11 @@ void main() {
           ),
           walletSecureStorageProvider.overrideWithValue(walletData),
         ],
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(
+          routerConfig: router,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+        ),
       ),
     );
     await frames(tester);
@@ -233,7 +247,7 @@ void main() {
       expect(find.text('Wallet wiped from this device'), findsNothing);
       walletKeys.fail = false;
       // The failure snackbar can cover the retry action as content grows.
-      ScaffoldMessenger.of(tester.element(find.byType(WalletScreen)))
+      ScaffoldMessenger.of(tester.element(find.byType(AppSettingsScreen)))
           .removeCurrentSnackBar();
       await tester.pump();
       await tester.ensureVisible(find.text('Emergency Wipe'));
