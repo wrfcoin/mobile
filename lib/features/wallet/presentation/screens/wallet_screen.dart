@@ -15,6 +15,7 @@ import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../data/models/transaction_model.dart';
+import '../providers/passkey_wallet_provider.dart';
 import '../providers/pending_send_provider.dart';
 import '../providers/transactions_provider.dart';
 import '../widgets/transaction_history_unavailable_card.dart';
@@ -122,47 +123,55 @@ class WalletScreen extends ConsumerWidget {
           if (wallet == null) {
             return ResponsiveCenter(
               maxContentWidth: 520,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (authHandoff.message != null) ...[
-                    AuthHandoffBanner(handoff: authHandoff),
+              // Scrolls because three choices don't fit a short window.
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (authHandoff.message != null) ...[
+                      AuthHandoffBanner(handoff: authHandoff),
+                      const SizedBox(height: 12),
+                    ],
+                    const Icon(
+                      Icons.account_balance_wallet,
+                      size: 64,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No Wallet Found',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Create or import a wallet to get started',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => context.push('/wallet/create'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Wallet'),
+                      ),
+                    ),
                     const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.push('/wallet/import'),
+                        icon: const Icon(Icons.download),
+                        label: const Text('Import / Restore Wallet'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const _PasskeyWalletEntry(),
                   ],
-                  const Icon(
-                    Icons.account_balance_wallet,
-                    size: 64,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No Wallet Found',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Create or import a wallet to get started',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => context.push('/wallet/create'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Wallet'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => context.push('/wallet/import'),
-                      icon: const Icon(Icons.download),
-                      label: const Text('Import / Restore Wallet'),
-                    ),
-                  ),
-                ],
+                ),
               ),
             );
           }
@@ -236,6 +245,8 @@ class WalletScreen extends ConsumerWidget {
                     label: const Text('Get Testnet Tokens'),
                   ),
                 ),
+                const SizedBox(height: 12),
+                const _PasskeyWalletEntry(),
                 // Dark-launched until a backend exists (mobile#268).
                 if (ref.watch(featureFlagsProvider).enableCarbonLottery) ...[
                   const SizedBox(height: 12),
@@ -549,6 +560,33 @@ class _BackupReminderCard extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// The way to a passkey wallet, which lives on wrfcoin.com. A saved address
+/// reads as view only, never as a wallet this app can use.
+class _PasskeyWalletEntry extends ConsumerWidget {
+  const _PasskeyWalletEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final saved = ref.watch(passkeyAddressProvider).asData?.value;
+    return Card(
+      key: const Key('wallet-passkey-entry'),
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: const Icon(Icons.fingerprint),
+        title: const Text('Passkey wallet'),
+        subtitle: Text(
+          saved == null
+              ? 'Opens wrfcoin.com in a browser tab'
+              : 'View only · ${saved.substring(0, 6)}…'
+                    '${saved.substring(saved.length - 4)}',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push('/wallet/passkey'),
+      ),
     );
   }
 }
