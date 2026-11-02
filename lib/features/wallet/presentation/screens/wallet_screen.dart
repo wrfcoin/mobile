@@ -20,6 +20,7 @@ import '../../../collector/data/services/station_registration_service.dart';
 import '../../../../services/crypto/wallet_secure_storage.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../data/models/transaction_model.dart';
+import '../providers/pending_send_provider.dart';
 import '../providers/transactions_provider.dart';
 import '../widgets/transaction_history_unavailable_card.dart';
 import '../providers/wallet_provider.dart';
@@ -28,6 +29,7 @@ import '../widgets/auth_handoff_banner.dart';
 import '../widgets/balance_card.dart';
 import '../widgets/testnet_notice.dart';
 import '../widgets/not_signed_in_card.dart';
+import '../widgets/pending_send_card.dart';
 import '../widgets/transaction_tile.dart';
 
 const String _notReported = 'Not reported';
@@ -162,6 +164,7 @@ class WalletScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
+              await ref.read(pendingSendProvider.notifier).check();
               await ref.read(walletProvider.notifier).refresh();
               await ref.read(transactionsProvider.notifier).refresh();
             },
@@ -180,6 +183,10 @@ class WalletScreen extends ConsumerWidget {
                   pendingTransactions: wallet.pendingTransactions,
                 ),
                 const SizedBox(height: 12),
+                if (ref.watch(pendingSendProvider).send != null) ...[
+                  const PendingSendCard(),
+                  const SizedBox(height: 12),
+                ],
                 backupAsync.when(
                   loading: () => const SizedBox.shrink(),
                   error: (_, _) => const SizedBox.shrink(),
@@ -584,6 +591,7 @@ class WalletScreen extends ConsumerWidget {
     ref.invalidate(backupConfirmedProvider);
     ref.invalidate(addressBookProvider);
     ref.invalidate(socialWalletProvider);
+    ref.invalidate(pendingSendProvider);
     ref.read(authHandoffControllerProvider).clear();
 
     if (!context.mounted) return;

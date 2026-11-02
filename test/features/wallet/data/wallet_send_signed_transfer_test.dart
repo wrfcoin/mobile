@@ -303,4 +303,90 @@ void main() {
       expect(recorder.requests.map((r) => r.method), ['GET']);
     }
   });
+
+  group('following a send', () {
+    test(
+      'the record is written with the signed nonce before the post',
+      () async {
+        final recorder = _Recorder();
+        final seen = <String>[];
+        await WalletRemoteDataSource(recorder.dio()).sendTransaction(
+          from: from,
+          to: to,
+          amountBaseUnits: '100',
+          signer: signer,
+          onBeforeSubmit: (nonce) async {
+            seen.add(nonce);
+            expect(recorder.requests.where((r) => r.method == 'POST'), isEmpty);
+          },
+        );
+        expect(seen, ['5']);
+        expect(
+          recorder.requests.where((r) => r.method == 'POST'),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('no nonce read means no record and no post', () async {
+      final recorder = _Recorder()..nonceStatus = 503;
+      var called = false;
+      await expectLater(
+        WalletRemoteDataSource(recorder.dio()).sendTransaction(
+          from: from,
+          to: to,
+          amountBaseUnits: '100',
+          signer: signer,
+          onBeforeSubmit: (_) async => called = true,
+        ),
+        throwsA(isA<DioException>()),
+      );
+      expect(called, isFalse);
+    });
+
+    test(
+      'history is read with the exact query the public edge admits',
+      () async {
+        final recorder = _Recorder()
+          ..nonceResponse = const <String, dynamic>{
+            'items': <Map<String, dynamic>>[],
+          };
+        await WalletRemoteDataSource(
+          recorder.dio(),
+        ).findIncludedBlock('0xABCDEF0000000000000000000000000000000001', 'aa');
+        final request = recorder.requests.single;
+        expect(
+          request.uri.toString(),
+          '/wallet/0xabcdef0000000000000000000000000000000001/transactions'
+          '?limit=50&offset=0',
+        );
+        expect(request.queryParameters, isEmpty);
+      },
+    );
+
+    test('a send is found in history by its id, 0x or not, any case', () async {
+      final id = List.filled(64, 'a').join();
+      Future<int?> find(String hash, Object? rowId, Object? height) {
+        final recorder = _Recorder()
+          ..nonceResponse = <String, dynamic>{
+            'items': [
+              {'txId': List.filled(64, 'b').join(), 'blockHeight': 1},
+              {'txId': rowId, 'blockHeight': height},
+            ],
+          };
+        return WalletRemoteDataSource(recorder.dio())
+            .findIncludedBlock(from, hash);
+      }
+
+      expect(await find(id, id, 42), 42);
+      expect(await find('0x$id', id.toUpperCase(), 42), 42);
+      expect(await find(id, '0x$id', 42), 42);
+      expect(await find(id, List.filled(64, 'c').join(), 42), isNull);
+      expect(
+        await find(id, id, null),
+        isNull,
+        reason: 'a row with no block is not an inclusion',
+      );
+    });
+  });
 }

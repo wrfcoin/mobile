@@ -79,6 +79,7 @@ class WalletNotifier extends AsyncNotifier<WalletModel?> {
     required String to,
     required String amountBaseUnits,
     required Ed25519TransferSigner signer,
+    Future<void> Function(String nonce)? onBeforeSubmit,
   }) async {
     final repo = ref.read(walletRepositoryProvider);
     final result = await repo.sendTransaction(
@@ -86,6 +87,7 @@ class WalletNotifier extends AsyncNotifier<WalletModel?> {
       to: to,
       amountBaseUnits: amountBaseUnits,
       signer: signer,
+      onBeforeSubmit: onBeforeSubmit,
     );
 
     // Preserve the submission response. Refresh reads must not hide its
