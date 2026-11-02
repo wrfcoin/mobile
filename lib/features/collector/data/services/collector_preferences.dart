@@ -20,7 +20,19 @@ class CollectorPreferences {
   static const _lastCommitIdKey = 'collector.lastCommitId';
   static const _lastSubmissionStatusKey = 'collector.lastSubmissionStatus';
   static const _validationEventsKey = 'collector.validationEvents';
+  static const _batteryAskedKey = 'collector.batteryExemptionAsked';
   static const _maxValidationEvents = 40;
+
+  /// The battery question is asked once, whatever the answer was.
+  Future<bool> batteryExemptionAsked() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_batteryAskedKey) ?? false;
+  }
+
+  Future<void> markBatteryExemptionAsked() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_batteryAskedKey, true);
+  }
 
   /// Whether collection is on, as saved right now. Another isolate may have
   /// changed it, so this rereads the file.

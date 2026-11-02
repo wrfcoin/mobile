@@ -216,6 +216,20 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _persistPreferences();
   }
 
+  /// Whether to ask about battery limits now: collection just turned on,
+  /// Android's limits apply, and this was never asked.
+  Future<bool> shouldAskBatteryExemption() async {
+    if (!state.isCollecting) return false;
+    if (await _preferences.batteryExemptionAsked()) return false;
+    return await _service.isBatteryLimited == true;
+  }
+
+  /// Records the answer, so the question never comes back.
+  Future<void> answerBatteryExemption({required bool allow}) async {
+    await _preferences.markBatteryExemptionAsked();
+    if (allow) await _service.requestBatteryExemption();
+  }
+
   /// The notification's Stop button already saved this and stopped the work.
   void _handleStoppedFromNotification() {
     state = state.copyWith(isCollecting: false, isSyncing: false);

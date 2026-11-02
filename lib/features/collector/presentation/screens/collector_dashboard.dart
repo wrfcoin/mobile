@@ -20,6 +20,7 @@ import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../providers/collector_provider.dart';
 import '../providers/mobile_station_status_provider.dart';
+import '../widgets/battery_exemption_dialog.dart';
 import '../widgets/owner_ledger_banner.dart';
 import '../../data/services/mobile_station_status_service.dart';
 import '../../../../services/background/sync_worker.dart';
@@ -343,11 +344,17 @@ class CollectorDashboard extends ConsumerWidget {
                         value: state.isCollecting,
                         onChanged: kIsWeb || !canCollect
                             ? null
-                            : (v) {
+                            : (v) async {
                                 if (v) {
-                                  ref
+                                  await ref
                                       .read(collectorProvider.notifier)
                                       .startCollecting();
+                                  if (context.mounted) {
+                                    await askBatteryExemptionOnce(
+                                      context,
+                                      ref.read(collectorProvider.notifier),
+                                    );
+                                  }
                                 } else {
                                   ref
                                       .read(collectorProvider.notifier)

@@ -86,6 +86,30 @@ class CollectionServiceController {
     }
   }
 
+  /// Whether Android's battery limits apply to this app. Null when unknown.
+  Future<bool?> get isBatteryLimited async {
+    if (!_supported) return null;
+    try {
+      return !await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// The system's own "let this app ignore battery limits" dialog.
+  Future<void> requestBatteryExemption() async {
+    if (!_supported) return;
+    try {
+      await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      return;
+    }
+  }
+
   /// Starts the service, or does nothing if it is running. Call only while
   /// the app is on screen and location is granted.
   Future<CollectionServiceStart> start({required int intervalMinutes}) async {
