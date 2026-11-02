@@ -440,9 +440,7 @@ void main() {
     expect(find.text('+1.5 WRF'), findsOneWidget);
   });
 
-  testWidgets('duplicate reward rows render once, and no other page is read', (
-    tester,
-  ) async {
+  testWidgets('a cursor the edge would refuse is never sent', (tester) async {
     final backend = _Backend(
       (o) => Response(
         requestOptions: o,
@@ -657,7 +655,11 @@ void main() {
   group('the public edge', () {
     // ~/r888/ct101-web4/build/edge/public_onboarding.caddy,
     // @public_readonly_wallet_transactions. Anything else gets a 404.
-    final admitted = RegExp(r'^limit=([1-9]|[1-4][0-9]|50)&offset=[0-9]{1,6}$');
+    final admitted = RegExp(
+      r'^limit=([1-9]|[1-4][0-9]|50)&offset=[0-9]{1,6}'
+      r'(&creditLimit=([1-9]|[1-9][0-9]|100))?(&creditAfter=[0-9a-f]{64})?$',
+    );
+    final cursor = 'ab' * 32;
     final path = RegExp(r'^/wallet/0x[0-9A-Fa-f]{40}/transactions$');
 
     testWidgets('admits every history read, first page and load more', (
@@ -677,8 +679,8 @@ void main() {
               total: 120,
             ),
             'schemaVersion': 2,
-            'creditItems': <Map<String, dynamic>>[],
-            'creditNextCursor': 'more',
+            'creditItems': [credit('forecast:$offset', 'forecast_reward', '1')],
+            'creditNextCursor': cursor,
           },
         );
       });
@@ -687,8 +689,14 @@ void main() {
       await _settle(tester);
 
       expect(backend.historyRequests, hasLength(2));
-      expect(backend.historyRequests.first.query, 'limit=50&offset=0');
-      expect(backend.historyRequests.last.query, 'limit=50&offset=50');
+      expect(
+        backend.historyRequests.first.query,
+        'limit=50&offset=0&creditLimit=100',
+      );
+      expect(
+        backend.historyRequests.last.query,
+        'limit=50&offset=50&creditLimit=100&creditAfter=$cursor',
+      );
       for (final uri in backend.historyRequests) {
         expect(uri.query, matches(admitted));
         expect(uri.path, matches(path));

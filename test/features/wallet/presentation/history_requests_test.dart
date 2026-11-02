@@ -29,13 +29,11 @@ const operation = TransactionModel(
   type: 'ContributionCommit',
 );
 TransactionPage page({
-  bool more = false,
   List<TransactionModel> credits = const [],
   List<TransactionModel> items = const [operation],
 }) => TransactionPage(
   items: items,
   credits: credits,
-  creditNextCursor: more ? 'next' : null,
   offset: 0,
   limit: 20,
   complete: false,
@@ -56,6 +54,7 @@ class RecordingRepository extends FakeWalletRepository {
     String address, {
     int offset = 0,
     int limit = 20,
+    String? creditAfter,
     CancelToken? cancelToken,
   }) async {
     final call = ++calls;
@@ -113,18 +112,6 @@ void main() {
       expect(repo.active, 0);
     },
   );
-
-  test('more reward records never trigger another read', () async {
-    final repo = RecordingRepository((call, token) async => page(more: true));
-    final container = await setup(repo);
-    addTearDown(container.dispose);
-    container.listen(transactionsProvider, (_, _) {});
-    final state = await container.read(transactionsProvider.future);
-    await settle();
-    expect(repo.calls, 1);
-    expect(state.creditsTruncated, true);
-    expect(state.hasMore, false, reason: 'Load more is for transactions only');
-  });
 
   test('no more reward records: nothing is said to be missing', () async {
     final repo = RecordingRepository(

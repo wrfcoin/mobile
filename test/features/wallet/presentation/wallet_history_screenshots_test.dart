@@ -61,6 +61,17 @@ class _Rows extends TransactionsNotifier {
   );
 }
 
+class _Searching extends TransactionsNotifier {
+  @override
+  Future<TransactionsState> build() async => const TransactionsState(
+    items: [],
+    hasMore: true,
+    loadingMore: false,
+    discoveringCredits: true,
+    creditsTruncated: true,
+  );
+}
+
 class _Failed extends TransactionsNotifier {
   @override
   Future<TransactionsState> build() async =>
@@ -72,6 +83,7 @@ class _Failed extends TransactionsNotifier {
 void main() {
   final states = <String, TransactionsNotifier Function()>{
     'rows': _Rows.new,
+    'searching': _Searching.new,
     'error': _Failed.new,
   };
   for (final state in states.entries) {
