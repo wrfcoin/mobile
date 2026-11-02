@@ -233,8 +233,7 @@ void main() {
   testWidgets('sends the display amount as signed integer base units', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '1.5');
 
     expect(repository.sendCalls, 1);
@@ -245,8 +244,7 @@ void main() {
   testWidgets('Send accepts comma decimal and signs exact base units', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '1,25');
 
     expect(find.text('Invalid amount'), findsNothing);
@@ -258,8 +256,7 @@ void main() {
   testWidgets('ambiguous comma amount explains refusal and sends nothing', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '1,000');
 
     expect(
@@ -272,8 +269,7 @@ void main() {
   });
 
   testWidgets('mixed separators are refused by the Send form', (tester) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '1,250.5');
 
     expect(find.text('Invalid amount'), findsOneWidget);
@@ -284,8 +280,7 @@ void main() {
   testWidgets('smallest unit converts exactly (no floating point)', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '0.00000001');
 
     expect(repository.sentAmountBaseUnits, ['1']);
@@ -294,8 +289,7 @@ void main() {
   testWidgets('more than 8 decimals is rejected, never rounded or sent', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '1.000000001');
 
     expect(find.text('Invalid amount'), findsOneWidget);
@@ -303,8 +297,7 @@ void main() {
   });
 
   testWidgets('non-hex recipient is rejected before signing', (tester) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(
       tester,
       repository,
@@ -319,8 +312,7 @@ void main() {
   testWidgets('failed biometric unlock of the signing key sends nothing', (
     tester,
   ) async {
-    final repository = FakeWalletRepository(
-    );
+    final repository = FakeWalletRepository();
     await _pumpAndSend(tester, repository, amount: '1', authenticate: false);
 
     expect(find.text('Authentication required to send'), findsOneWidget);

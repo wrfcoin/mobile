@@ -13,6 +13,7 @@ import 'package:wrfcoin_mobile/features/wallet/data/models/address_book_entry.da
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/import_wallet_screen.dart';
+import 'package:wrfcoin_mobile/features/wallet/presentation/providers/passkey_wallet_provider.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/wallet_screen.dart';
 import 'package:wrfcoin_mobile/services/api/api_client.dart';
 import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
@@ -234,6 +235,10 @@ void main() {
       await registeredPrefsFor(collectStore),
     );
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      PasskeyAddressNotifier.storageKey,
+      '0x59b3000000000000000000000000000000f057a1',
+    );
 
     await tester.pumpWidget(
       ProviderScope(
@@ -305,6 +310,7 @@ void main() {
     expect(await keyStorage.read(key: 'wrf_address'), isNull);
     expect(await keyStorage.read(key: 'wrf_mnemonic'), isNull);
     expect(await keyStorage.read(key: 'wrf_private_key'), isNull);
+    expect(prefs.getString(PasskeyAddressNotifier.storageKey), isNull);
     expect(find.text('No Wallet Found'), findsOneWidget);
   });
 }

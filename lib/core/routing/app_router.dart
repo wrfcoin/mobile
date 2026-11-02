@@ -57,6 +57,7 @@ import '../../features/gamification/presentation/screens/leaderboard_screen.dart
 import '../../features/field_diagnostics/presentation/screens/field_mode_screen.dart';
 import '../feature_flags/build_flags.dart';
 import '../feature_flags/feature_flags.dart';
+import '../../features/wallet/presentation/screens/passkey_wallet_screen.dart';
 import '../../features/onboarding/presentation/providers/onboarding_controller.dart';
 import '../../features/onboarding/presentation/providers/welcome_controller.dart';
 import '../../features/onboarding/presentation/screens/onboarding_tour_screen.dart';
@@ -146,6 +147,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/wallet/contacts',
         '/wallet/allowlist',
         '/wallet/recovery-phrase',
+        // A public address and a browser tab: no session is involved.
+        '/wallet/passkey',
       };
 
       if (walletConnectPaths.contains(state.matchedLocation)) {
@@ -399,6 +402,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (context, state) => _fadePage(
                       key: state.pageKey,
                       child: const SendScreen(),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'passkey',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: const PasskeyWalletScreen(),
                     ),
                   ),
                   GoRoute(

@@ -10,6 +10,7 @@ import '../../../services/crypto/collect_key_store.dart';
 import '../../../services/crypto/key_manager.dart';
 import '../../../services/crypto/wallet_secure_storage.dart';
 import '../../collector/data/services/station_registration_service.dart';
+import 'providers/passkey_wallet_provider.dart';
 import 'providers/pending_send_provider.dart';
 import 'providers/transactions_provider.dart';
 import 'providers/wallet_provider.dart';
@@ -36,7 +37,7 @@ Future<void> confirmEmergencyWipe(BuildContext context, WidgetRef ref) async {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'This will erase the collect key, weather-station registration, wallet, recovery metadata, contacts, send allowlist, and active session data from this device.',
+                      'This will erase the collect key, weather-station registration, wallet, recovery metadata, contacts, send allowlist, saved passkey address, and active session data from this device.',
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -97,6 +98,7 @@ Future<void> confirmEmergencyWipe(BuildContext context, WidgetRef ref) async {
     // key wipe must not leave a private key without its wallet address.
     await ref.read(keyManagerProvider).deleteAll();
     await ref.read(walletSecureStorageProvider).clearWalletData();
+    await ref.read(passkeyAddressProvider.notifier).remove();
   } catch (_) {
     if (!context.mounted) return;
     AppSnackbars.error(
