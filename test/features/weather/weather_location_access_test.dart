@@ -299,6 +299,7 @@ void main() {
         _forecastAtFresh,
         _currentAtFresh,
         _alertsAtFresh,
+        _forecastAtFresh, // the hourly strip
       ]);
       expect(find.text(_allowLocationMessage), findsNothing);
     });
@@ -367,6 +368,7 @@ void main() {
         _forecastAtFresh,
         _currentAtFresh,
         _alertsAtFresh,
+        _forecastAtFresh, // the hourly strip
       ]);
     });
 
@@ -407,6 +409,7 @@ void main() {
         _forecastAtFresh,
         _currentAtFresh,
         _alertsAtFresh,
+        _forecastAtFresh, // the hourly strip
       ]);
     });
 
@@ -425,6 +428,7 @@ void main() {
         '/api/weather/forecast/40.7,-74.0',
         '/api/weather/current/40.7,-74.0',
         '/api/weather/alerts/40.7,-74.0',
+        '/api/weather/forecast/40.7,-74.0', // the hourly strip
       ]);
       for (final uri in backend.requests) {
         final text = Uri.decodeFull(uri.toString());
@@ -444,6 +448,7 @@ void main() {
         '/api/weather/forecast/40.7,-74.0',
         '/api/weather/current/40.7,-74.0',
         '/api/weather/alerts/40.7,-74.0',
+        '/api/weather/forecast/40.7,-74.0', // the hourly strip
       ]);
     });
 
@@ -478,6 +483,7 @@ void main() {
         _forecastAtFresh,
         _currentAtFresh,
         _alertsAtFresh,
+        _forecastAtFresh, // the hourly strip
       ]);
     });
 
@@ -503,6 +509,7 @@ void main() {
         _forecastAtFresh,
         _currentAtFresh,
         _alertsAtFresh,
+        _forecastAtFresh, // the hourly strip
       ]);
     });
   });
