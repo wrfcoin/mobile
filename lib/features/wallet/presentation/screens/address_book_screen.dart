@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -16,11 +17,50 @@ import '../../domain/send_allowlist.dart';
 import '../providers/wallet_security_provider.dart';
 import '../widgets/safety_notice.dart';
 
+/// A picked file that can't be a contacts file; [message] is for the user.
+class ContactsFileRejected implements Exception {
+  const ContactsFileRejected(this.message);
+
+  final String message;
+
+  static const notContacts = ContactsFileRejected(
+    'This is not a WRFCoin contacts file.',
+  );
+}
+
+/// Checks a picked file before its contents are decoded: the name, then the
+/// size, then strict UTF-8. Reads bytes, not [XFile.readAsString], which on
+/// Android treats each byte as a character.
+Future<String> readContactsFile(XFile file) async {
+  if (!file.name.toLowerCase().endsWith('.json')) {
+    throw const ContactsFileRejected(
+      'Choose a WRFCoin contacts file. Its name ends in .json.',
+    );
+  }
+  if (await file.length() > addressBookImportMaxBytes) {
+    throw const ContactsFileRejected('This file is too large.');
+  }
+  final bytes = await file.readAsBytes();
+  if (bytes.length > addressBookImportMaxBytes) {
+    throw const ContactsFileRejected('This file is too large.');
+  }
+  try {
+    final text = utf8.decode(bytes);
+    return text.startsWith('\uFEFF') ? text.substring(1) : text;
+  } on FormatException {
+    throw ContactsFileRejected.notContacts;
+  }
+}
+
 /// Opens and shares contacts files. Overridden in tests.
 class ContactsFileGateway {
   const ContactsFileGateway();
 
-  /// The text of a file the user picks, or null if they cancel.
+  /// The text of a file the user picks, or null if they cancel. Throws
+  /// [ContactsFileRejected] for a file that fails [readContactsFile].
+  ///
+  /// The type group only asks the system picker to filter. Android leaves that
+  /// to the picker and whichever file app it opens, so nothing here relies on it.
   Future<String?> pickFile() async {
     final file = await openFile(
       acceptedTypeGroups: const [
@@ -32,7 +72,7 @@ class ContactsFileGateway {
         ),
       ],
     );
-    return file?.readAsString();
+    return file == null ? null : readContactsFile(file);
   }
 
   /// Hands [json] to the system share sheet as a .json file.
@@ -146,36 +186,33 @@ class AddressBookScreen extends ConsumerWidget {
 
   Future<void> _import(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
-    final String? raw;
+    void say(String text) =>
+        messenger.showSnackBar(SnackBar(content: Text(text)));
     try {
-      raw = await ref.read(contactsFileGatewayProvider).pickFile();
-    } catch (_) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('That file could not be opened.')),
+      final raw = await ref.read(contactsFileGatewayProvider).pickFile();
+      if (raw == null) return;
+      final result = importAddressBook(
+        raw,
+        existing: await ref.read(addressBookProvider.future),
+        ownLegacyAlias: await ref.read(keyManagerProvider).getOwnLegacyAlias(),
       );
-      return;
-    }
-    if (raw == null) return;
-    final existing = await ref.read(addressBookProvider.future);
-    final alias = await ref.read(keyManagerProvider).getOwnLegacyAlias();
-    final result = importAddressBook(
-      raw,
-      existing: existing,
-      ownLegacyAlias: alias,
-    );
-    if (result.error == null && result.added.isNotEmpty) {
+      if (result.error != null) return say(result.error!);
+      if (!context.mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => _ImportPreview(result: result),
+      );
+      if (confirmed != true) return;
       await ref.read(addressBookProvider.notifier).addAll(result.added);
+      say(
+        '${result.summary}. Imported contacts are not allowed for sending '
+        'until you allow them.',
+      );
+    } on ContactsFileRejected catch (e) {
+      say(e.message);
+    } catch (_) {
+      say('That file could not be opened.');
     }
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          result.error == null && result.added.isNotEmpty
-              ? '${result.summary}. Imported contacts are not allowed for '
-                    'sending until you allow them.'
-              : result.summary,
-        ),
-      ),
-    );
   }
 
   Future<void> _editContact(
@@ -195,6 +232,99 @@ class AddressBookScreen extends ConsumerWidget {
       );
     }
   }
+}
+
+/// What an import would do, before anything is saved.
+class _ImportPreview extends StatelessWidget {
+  const _ImportPreview({required this.result});
+
+  final AddressBookImportResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final added = result.added;
+    final skipped = <String>[
+      if (result.duplicates > 0) '${result.duplicates} already saved',
+      if (result.invalid > 0) '${result.invalid} with a bad name or address',
+      if (result.blocked > 0) '${result.blocked} receive-only',
+    ];
+    return AlertDialog(
+      key: const Key('contacts-import-preview'),
+      title: Text(
+        added.isEmpty
+            ? 'Nothing to add'
+            : 'Add ${added.length} contact${added.length == 1 ? '' : 's'}?',
+      ),
+      content: SizedBox(
+        width: 480,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            if (added.isNotEmpty) ...[
+              const Text(
+                'Check each address. They are not allowed for sending until '
+                'you allow them.',
+              ),
+              const SizedBox(height: 8),
+              for (final entry in added) _PreviewRow(entry: entry),
+            ],
+            if (result.nameClashes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SafetyNotice(
+                key: const Key('contacts-import-name-clashes'),
+                tone: SafetyTone.caution,
+                title: 'Not added: name already used',
+                body:
+                    'You already have a contact with each of these names and '
+                    'a different address. Saved contacts never change.',
+                children: [
+                  for (final entry in result.nameClashes)
+                    _PreviewRow(entry: entry),
+                ],
+              ),
+            ],
+            if (skipped.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Also skipped: ${skipped.join(', ')}.'),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(added.isEmpty ? 'Close' : 'Cancel'),
+        ),
+        if (added.isNotEmpty)
+          FilledButton(
+            key: const Key('contacts-import-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Add ${added.length}'),
+          ),
+      ],
+    );
+  }
+}
+
+class _PreviewRow extends StatelessWidget {
+  const _PreviewRow({required this.entry});
+
+  final AddressBookEntry entry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(entry.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        SelectableText(
+          entry.address,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ContactTile extends StatelessWidget {

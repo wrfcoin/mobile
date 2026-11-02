@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import 'package:wrfcoin_mobile/features/wallet/data/models/pending_send.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transfer_fee.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/wallet/domain/address_book_transfer.dart';
 import 'package:wrfcoin_mobile/features/wallet/domain/send_allowlist.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/pending_send_provider.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/transactions_provider.dart';
@@ -96,10 +98,27 @@ Future<void> _loadFonts() async {
   )..addFont(bytes('MaterialIcons-Regular.otf'))).load();
 }
 
+/// A file with one new contact, one name already used, and one bad row.
+class _PreviewFile extends ContactsFileGateway {
+  const _PreviewFile();
+
+  @override
+  Future<String?> pickFile() async => jsonEncode({
+    'format': addressBookFileFormat,
+    'version': 1,
+    'contacts': [
+      {'name': 'Sam', 'address': _stranger},
+      {'name': 'Mom', 'address': '0x4444444444444444444444444444444444444444'},
+      {'name': 'Bad', 'address': 'nope'},
+    ],
+  });
+}
+
 typedef _Shot = ({String name, Widget screen});
 
 final _shots = <_Shot>[
   (name: 'contacts', screen: const AddressBookScreen()),
+  (name: 'contacts-import-preview', screen: const AddressBookScreen()),
   (name: 'allowlist-pending', screen: const SendAllowlistScreen()),
   (name: 'view-phrase-confirm', screen: const RecoveryPhraseScreen()),
   (name: 'send-not-allowlisted', screen: const SendScreen()),
@@ -159,6 +178,9 @@ void main() {
                 pendingSendClockProvider.overrideWithValue(() => _now),
                 walletSecureStorageProvider.overrideWithValue(walletStorage),
                 allowlistClockProvider.overrideWithValue(() => _now),
+                contactsFileGatewayProvider.overrideWithValue(
+                  const _PreviewFile(),
+                ),
                 biometricServiceProvider.overrideWithValue(biometric),
                 keyManagerProvider.overrideWithValue(
                   KeyManager(biometric: biometric, storage: storage),
@@ -188,6 +210,12 @@ void main() {
           );
           await tester.pumpAndSettle();
 
+          if (shot.name == 'contacts-import-preview') {
+            await tester.tap(find.byKey(const Key('contacts-menu')));
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Import from file'));
+            await tester.pumpAndSettle();
+          }
           if (shot.name == 'view-phrase-confirm') {
             await tester.enterText(
               find.byKey(const Key('recovery-confirm-field')),
