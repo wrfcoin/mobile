@@ -37,6 +37,9 @@ const _serviceId = 888;
 /// Sent to the app, when it is open, after the notification's Stop button.
 const collectionStoppedMessage = 'collection_stopped';
 
+/// Sent to the app, when it is open, after each run.
+const collectionTickMessage = 'collection_tick';
+
 const _notificationTitle = 'WRFCoin is collecting weather data';
 
 enum CollectionServiceStart {
@@ -164,12 +167,17 @@ class CollectionServiceController {
     }
   }
 
+  /// Whether this platform has the service at all.
+  bool get supported => _supported;
+
   /// Calls [onStopped] when the notification's Stop button is used while the
-  /// app is open. Returns a function that removes the listener.
-  void Function() listen(void Function() onStopped) {
+  /// app is open, and [onTick] after each run. Returns a function that
+  /// removes the listener.
+  void Function() listen(void Function() onStopped, {void Function()? onTick}) {
     if (!_supported) return () {};
     void callback(Object data) {
       if (data == collectionStoppedMessage) onStopped();
+      if (data == collectionTickMessage) onTick?.call();
     }
 
     try {
@@ -337,6 +345,7 @@ class _CollectionTaskHandler extends TaskHandler {
         await FlutterForegroundTask.stopService();
       } else {
         await FlutterForegroundTask.updateService(notificationText: text);
+        FlutterForegroundTask.sendDataToMain(collectionTickMessage);
       }
     } catch (error) {
       // Stay alive for the next tick. CollectionRunner saved the reason.

@@ -10,10 +10,12 @@ import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_mod
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/domain/collection_run.dart';
+import 'package:wrfcoin_mobile/features/collector/domain/collection_status.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
 import 'package:wrfcoin_mobile/services/background/collection_service.dart';
 import 'package:wrfcoin_mobile/services/location/location_service.dart';
 import 'package:wrfcoin_mobile/services/observability/app_logger.dart';
+import 'package:wrfcoin_mobile/services/storage/local_db.dart';
 
 import '../../../test_helpers/fakes.dart';
 
@@ -48,7 +50,10 @@ class _Service extends CollectionServiceController {
   }
 
   @override
-  void Function() listen(void Function() onStopped) {
+  void Function() listen(
+    void Function() onStopped, {
+    void Function()? onTick,
+  }) {
     stopped = onStopped;
     return () {};
   }
@@ -107,6 +112,15 @@ class _ConsentStore extends AppPreferencesStore {
     ),
   );
 }
+
+CollectionRun _run(String outcome) => CollectionRun(
+  id: 1,
+  kind: ReadingSource.service.dbValue,
+  outcome: outcome,
+  acceptedCount: 0,
+  startedAt: DateTime.utc(2026, 11, 2),
+  finishedAt: DateTime.utc(2026, 11, 2),
+);
 
 void main() {
   late _Service service;
@@ -223,6 +237,53 @@ void main() {
       await notifier.handleAppResume();
       expect(notifier.state.isCollecting, isFalse);
       expect(service.starts, starts);
+    });
+  });
+
+  group('what the card is told', () {
+    test('a restarted service is reported as having stopped', () async {
+      final notifier = await build(collecting: true);
+      expect(notifier.state.serviceRunning, isTrue);
+      expect(notifier.state.serviceRestartedAt, isNotNull);
+    });
+
+    test('a running service is not', () async {
+      service.running = true;
+      final notifier = await build(collecting: true);
+      expect(notifier.state.serviceRunning, isTrue);
+      expect(notifier.state.serviceRestartedAt, isNull);
+    });
+
+    test('Android refusing a restart is reported', () async {
+      service.startResult = CollectionServiceStart.failed;
+      final notifier = await build(collecting: true);
+      expect(notifier.state.serviceRunning, isFalse);
+      expect(notifier.state.serviceIssue, CollectionServiceIssue.startRefused);
+    });
+
+    test('revoked location is reported', () async {
+      location.granted = false;
+      final notifier = await build(collecting: true);
+      expect(
+        notifier.state.serviceIssue,
+        CollectionServiceIssue.noLocationPermission,
+      );
+    });
+
+    test('a not-due run is not the last thing to report', () async {
+      final store = repo.db as FakeCollectorLocalStore;
+      store.collectionRuns = [_run(CollectionOutcome.notDue), _run('x')];
+      final notifier = await build();
+      expect(notifier.state.lastRunOutcome, 'x');
+    });
+
+    test('a turned-on toggle clears an old restart note', () async {
+      final notifier = await build(collecting: true);
+      await notifier.stopCollecting();
+      expect(notifier.state.serviceRestartedAt, isNull);
+      await notifier.startCollecting();
+      expect(notifier.state.serviceRestartedAt, isNull);
+      expect(notifier.state.isCollecting, isTrue);
     });
   });
 

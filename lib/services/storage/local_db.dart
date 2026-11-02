@@ -147,6 +147,21 @@ class AppDatabase extends _$AppDatabase implements CollectorLocalStore {
   }
 
   /// Newest first.
+  @override
+  Future<List<SensorReading>> getRecentReadings({int limit = 10}) {
+    return (select(sensorReadings)
+          ..orderBy([
+            (row) => OrderingTerm(
+              expression: row.timestamp,
+              mode: OrderingMode.desc,
+            ),
+          ])
+          ..limit(limit))
+        .get();
+  }
+
+  /// Newest first.
+  @override
   Future<List<CollectionRun>> getCollectionRuns({
     int limit = 50,
     Set<String>? kinds,

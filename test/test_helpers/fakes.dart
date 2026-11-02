@@ -816,6 +816,18 @@ class FakeCollectorLocalStore implements CollectorLocalStore {
   @override
   Future<SensorReading?> getLatestLocatedReading() async => latestReading;
 
+  List<CollectionRun> collectionRuns = const [];
+
+  @override
+  Future<List<SensorReading>> getRecentReadings({int limit = 10}) async =>
+      latestReading == null ? const [] : [latestReading!];
+
+  @override
+  Future<List<CollectionRun>> getCollectionRuns({
+    int limit = 50,
+    Set<String>? kinds,
+  }) async => collectionRuns;
+
   @override
   Future<void> recordCollectionRun({
     required String kind,

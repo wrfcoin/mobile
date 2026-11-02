@@ -18,6 +18,7 @@ import '../../data/repositories/collector_repository_impl.dart';
 import '../../data/services/collection_runner.dart';
 import '../../data/services/collector_preferences.dart';
 import '../../domain/collection_run.dart';
+import '../../domain/collection_status.dart';
 import '../../data/services/sampling_policy.dart';
 import '../../../../services/background/collection_service.dart';
 import '../../../../services/background/sensor_worker.dart';
@@ -59,6 +60,15 @@ class CollectorState {
   final String? lastCommitId;
   final String? lastSubmissionStatus;
 
+  // What the Collect card reports, from what really happened.
+  final bool serviceSupported;
+  final bool serviceRunning;
+  final CollectionServiceIssue? serviceIssue;
+  final DateTime? serviceRestartedAt;
+  final DateTime? lastReadingAt;
+  final String? lastRunOutcome;
+  final DateTime? lastRunAt;
+
   const CollectorState({
     this.isCollecting = false,
     this.isCollectingNow = false,
@@ -78,6 +88,13 @@ class CollectorState {
     this.lastSubmissionId,
     this.lastCommitId,
     this.lastSubmissionStatus,
+    this.serviceSupported = false,
+    this.serviceRunning = false,
+    this.serviceIssue,
+    this.serviceRestartedAt,
+    this.lastReadingAt,
+    this.lastRunOutcome,
+    this.lastRunAt,
   });
 
   CollectorState copyWith({
@@ -99,6 +116,13 @@ class CollectorState {
     Object? lastSubmissionId = _noChange,
     Object? lastCommitId = _noChange,
     Object? lastSubmissionStatus = _noChange,
+    bool? serviceSupported,
+    bool? serviceRunning,
+    Object? serviceIssue = _noChange,
+    Object? serviceRestartedAt = _noChange,
+    Object? lastReadingAt = _noChange,
+    Object? lastRunOutcome = _noChange,
+    Object? lastRunAt = _noChange,
   }) {
     return CollectorState(
       isCollecting: isCollecting ?? this.isCollecting,
@@ -133,6 +157,23 @@ class CollectorState {
       lastSubmissionStatus: identical(lastSubmissionStatus, _noChange)
           ? this.lastSubmissionStatus
           : lastSubmissionStatus as String?,
+      serviceSupported: serviceSupported ?? this.serviceSupported,
+      serviceRunning: serviceRunning ?? this.serviceRunning,
+      serviceIssue: identical(serviceIssue, _noChange)
+          ? this.serviceIssue
+          : serviceIssue as CollectionServiceIssue?,
+      serviceRestartedAt: identical(serviceRestartedAt, _noChange)
+          ? this.serviceRestartedAt
+          : serviceRestartedAt as DateTime?,
+      lastReadingAt: identical(lastReadingAt, _noChange)
+          ? this.lastReadingAt
+          : lastReadingAt as DateTime?,
+      lastRunOutcome: identical(lastRunOutcome, _noChange)
+          ? this.lastRunOutcome
+          : lastRunOutcome as String?,
+      lastRunAt: identical(lastRunAt, _noChange)
+          ? this.lastRunAt
+          : lastRunAt as DateTime?,
     );
   }
 }
@@ -161,7 +202,10 @@ class CollectorNotifier extends Notifier<CollectorState> {
     _service = ref.watch(collectionServiceProvider);
     _location = ref.watch(locationServiceProvider);
 
-    final stopListening = _service.listen(_handleStoppedFromNotification);
+    final stopListening = _service.listen(
+      _handleStoppedFromNotification,
+      onTick: () => unawaited(_refreshSyncMetadata()),
+    );
     ref.onDispose(stopListening);
 
     unawaited(_restoreState());
@@ -205,14 +249,26 @@ class CollectorNotifier extends Notifier<CollectorState> {
       return;
     }
     await _scheduleWorkers();
-    state = state.copyWith(isCollecting: true, syncMessage: null);
+    state = state.copyWith(
+      isCollecting: true,
+      syncMessage: null,
+      serviceIssue: null,
+      serviceRestartedAt: null,
+    );
     await _persistPreferences();
+    await _refreshServiceState();
   }
 
   Future<void> stopCollecting() async {
     await _service.stop();
     await cancelCollectionWorkers();
-    state = state.copyWith(isCollecting: false, isSyncing: false);
+    state = state.copyWith(
+      isCollecting: false,
+      isSyncing: false,
+      serviceRunning: false,
+      serviceIssue: null,
+      serviceRestartedAt: null,
+    );
     await _persistPreferences();
   }
 
@@ -232,7 +288,20 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
   /// The notification's Stop button already saved this and stopped the work.
   void _handleStoppedFromNotification() {
-    state = state.copyWith(isCollecting: false, isSyncing: false);
+    state = state.copyWith(
+      isCollecting: false,
+      isSyncing: false,
+      serviceRunning: false,
+      serviceIssue: null,
+      serviceRestartedAt: null,
+    );
+  }
+
+  Future<void> _refreshServiceState() async {
+    state = state.copyWith(
+      serviceSupported: _service.supported,
+      serviceRunning: state.isCollecting && await _service.isRunning,
+    );
   }
 
   /// An automatic reading when the app opens, if collection is on and one is
@@ -253,13 +322,31 @@ class CollectorNotifier extends Notifier<CollectorState> {
   /// Asks for nothing: without location it stays off.
   Future<void> _ensureServiceRunning() async {
     if (kIsWeb || !state.isCollecting) return;
-    if (await _service.isRunning) return;
+    if (await _service.isRunning) {
+      await _refreshServiceState();
+      return;
+    }
     final permission = await _location.checkPermission();
     if (permission != LocationPermission.whileInUse &&
         permission != LocationPermission.always) {
+      state = state.copyWith(
+        serviceIssue: CollectionServiceIssue.noLocationPermission,
+      );
+      await _refreshServiceState();
       return;
     }
-    await _service.start(intervalMinutes: state.intervalMinutes);
+    final started = await _service.start(
+      intervalMinutes: state.intervalMinutes,
+    );
+    state = state.copyWith(
+      serviceIssue: started == CollectionServiceStart.failed
+          ? CollectionServiceIssue.startRefused
+          : null,
+      serviceRestartedAt: started == CollectionServiceStart.started
+          ? DateTime.now()
+          : state.serviceRestartedAt,
+    );
+    await _refreshServiceState();
   }
 
   Future<void> collectNow() async {
@@ -387,7 +474,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
         await _collectOnAppOpen();
       } else {
         // Stopped from the notification while this isolate was asleep.
-        state = state.copyWith(isCollecting: false, isSyncing: false);
+        _handleStoppedFromNotification();
       }
     }
     if (_signingRefused) return;
@@ -547,6 +634,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
     );
     if (kIsWeb) return;
     await _refreshSyncMetadata();
+    await _refreshServiceState();
 
     if (preferences.isCollecting && canCollect && !kIsWeb) {
       await _ensureServiceRunning();
@@ -593,7 +681,20 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _refreshStaleReadingsCount();
     final metadata = await _repository.getSyncMetadata();
     final count = await _repository.getUnsyncedCount();
+    final latest = await _repository.db.getRecentReadings(limit: 1);
+    // The newest collection try that had something to say. A run that was
+    // simply not due says nothing about whether collection works.
+    final runs = await _repository.db.getCollectionRuns(
+      limit: 8,
+      kinds: {for (final source in ReadingSource.values) source.dbValue},
+    );
+    final lastRun = runs
+        .where((run) => run.outcome != CollectionOutcome.notDue)
+        .firstOrNull;
     state = state.copyWith(
+      lastReadingAt: latest.isEmpty ? null : latest.first.timestamp,
+      lastRunOutcome: lastRun?.outcome,
+      lastRunAt: lastRun?.startedAt,
       currentReading: currentReading ?? state.currentReading,
       pendingSyncCount: count,
       lastSyncAt: metadata?.lastSyncAt,
@@ -767,6 +868,25 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
 final collectorProvider = NotifierProvider<CollectorNotifier, CollectorState>(
   CollectorNotifier.new,
+);
+
+/// What the Collect card says right now.
+CollectionStatus collectionStatusOf(
+  CollectorState state, {
+  required String Function(DateTime) formatTime,
+  DateTime? now,
+}) => describeCollection(
+  isCollecting: state.isCollecting,
+  serviceSupported: state.serviceSupported,
+  serviceRunning: state.serviceRunning,
+  issue: state.serviceIssue,
+  serviceRestartedAt: state.serviceRestartedAt,
+  lastReadingAt: state.lastReadingAt,
+  lastRunOutcome: state.lastRunOutcome,
+  lastRunAt: state.lastRunAt,
+  intervalMinutes: state.intervalMinutes,
+  now: now ?? DateTime.now(),
+  formatTime: formatTime,
 );
 
 final batteryImpactEstimateProvider = Provider<BatteryImpactEstimate>((ref) {

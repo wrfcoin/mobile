@@ -53,6 +53,15 @@ class CollectorDashboard extends ConsumerWidget {
         : null;
     final featuredChallenge = challengesState?.selectedChallenge;
     final batteryImpact = ref.watch(batteryImpactEstimateProvider);
+    final status = collectionStatusOf(
+      state,
+      formatTime: (value) => AppFormatters.formatDateTime(
+        context,
+        appPreferences,
+        value,
+        includeDate: !DateUtils.isSameDay(value, DateTime.now()),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -308,11 +317,15 @@ class CollectorDashboard extends ConsumerWidget {
                   Row(
                     children: [
                       Icon(
-                        Icons.sensors,
+                        status.isProblem
+                            ? Icons.warning_amber_rounded
+                            : Icons.sensors,
                         size: 32,
-                        color: state.isCollecting
-                            ? AppColors.success
-                            : AppColors.textSecondary,
+                        color: !state.isCollecting
+                            ? AppColors.textSecondary
+                            : status.isProblem
+                            ? AppColors.warning
+                            : AppColors.success,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -320,18 +333,14 @@ class CollectorDashboard extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              state.isCollecting
-                                  ? 'Collecting Data'
-                                  : 'Collection Paused',
+                              status.title,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             Text(
-                              state.isCollecting
-                                  ? 'Every ${state.intervalMinutes} minutes'
-                                  : 'Tap to start collecting',
+                              status.detail,
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 13,

@@ -200,7 +200,7 @@ void main() {
       expectInOrder(tester, [
         find.text('Current Readings'),
         find.text('Collect Now'),
-        find.text('Collecting Data'),
+        find.byType(Switch),
         find.text('Sync Progress & Rewards'),
         find.text(SyncWorker.earningWindowMessage),
         find.text('Forecast duels'),

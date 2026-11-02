@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../services/storage/local_db.dart';
+import '../../data/repositories/collector_repository_impl.dart';
 import '../../data/services/collector_preferences.dart';
 import '../providers/collector_provider.dart';
 
@@ -16,11 +18,21 @@ class CollectorValidationScreen extends ConsumerStatefulWidget {
 class _CollectorValidationScreenState
     extends ConsumerState<CollectorValidationScreen> {
   late Future<List<CollectorValidationEvent>> _eventsFuture;
+  late Future<(List<SensorReading>, List<CollectionRun>)> _historyFuture;
 
   @override
   void initState() {
     super.initState();
     _eventsFuture = _loadEvents();
+    _historyFuture = _loadHistory();
+  }
+
+  Future<(List<SensorReading>, List<CollectionRun>)> _loadHistory() async {
+    final store = ref.read(collectorRepositoryProvider).db;
+    return (
+      await store.getRecentReadings(limit: 20),
+      await store.getCollectionRuns(limit: 40),
+    );
   }
 
   Future<List<CollectorValidationEvent>> _loadEvents() {
@@ -30,6 +42,7 @@ class _CollectorValidationScreenState
   Future<void> _refresh() async {
     setState(() {
       _eventsFuture = _loadEvents();
+      _historyFuture = _loadHistory();
     });
   }
 
@@ -73,6 +86,48 @@ class _CollectorValidationScreenState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            FutureBuilder<(List<SensorReading>, List<CollectionRun>)>(
+              future: _historyFuture,
+              builder: (context, snapshot) {
+                final (readings, runs) =
+                    snapshot.data ?? (const <SensorReading>[], const <CollectionRun>[]);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _HistoryCard(
+                      title: 'Recent readings',
+                      empty: 'No readings saved.',
+                      rows: [
+                        for (final reading in readings)
+                          (
+                            _formatDateTime(reading.timestamp),
+                            [
+                              reading.source ?? 'from before sources',
+                              if (reading.locationSource != null)
+                                '${reading.locationSource} location',
+                              reading.synced ? 'uploaded' : 'waiting',
+                            ].join(', '),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _HistoryCard(
+                      title: 'Recent runs',
+                      empty: 'No runs recorded.',
+                      rows: [
+                        for (final run in runs)
+                          (
+                            _formatDateTime(run.startedAt),
+                            '${run.kind}: ${run.outcome}'
+                                '${run.acceptedCount > 0 ? ' (${run.acceptedCount})' : ''}',
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                );
+              },
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -255,6 +310,60 @@ class _SummaryRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A short log, readable on any build of the app.
+class _HistoryCard extends StatelessWidget {
+  const _HistoryCard({
+    required this.title,
+    required this.empty,
+    required this.rows,
+  });
+
+  final String title;
+  final String empty;
+  final List<(String, String)> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            if (rows.isEmpty)
+              Text(
+                empty,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            for (final (time, what) in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      time,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(what),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

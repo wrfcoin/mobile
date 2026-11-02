@@ -24,7 +24,10 @@ class _Service extends CollectionServiceController {
   @override
   Future<void> requestBatteryExemption() async => requests++;
   @override
-  void Function() listen(void Function() onStopped) => () {};
+  void Function() listen(
+    void Function() onStopped, {
+    void Function()? onTick,
+  }) => () {};
 }
 
 class _Location extends LocationService {}

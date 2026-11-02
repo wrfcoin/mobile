@@ -672,6 +672,15 @@ abstract class CollectorLocalStore {
     String? lastSyncError,
   });
 
+  /// Newest first.
+  Future<List<SensorReading>> getRecentReadings({int limit = 10});
+
+  /// Newest first.
+  Future<List<CollectionRun>> getCollectionRuns({
+    int limit = 50,
+    Set<String>? kinds,
+  });
+
   /// Saves what one collection or upload run ended with.
   Future<void> recordCollectionRun({
     required String kind,
@@ -710,6 +719,16 @@ class NoopCollectorLocalStore implements CollectorLocalStore {
 
   @override
   Future<SensorReading?> getLatestLocatedReading() async => null;
+
+  @override
+  Future<List<SensorReading>> getRecentReadings({int limit = 10}) async =>
+      const [];
+
+  @override
+  Future<List<CollectionRun>> getCollectionRuns({
+    int limit = 50,
+    Set<String>? kinds,
+  }) async => const [];
 
   @override
   Future<List<SensorReading>> getReadingHistory({int limit = 5000}) async =>
