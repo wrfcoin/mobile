@@ -1,6 +1,44 @@
 import 'package:flutter/material.dart';
 
+import '../../data/services/collector_preferences.dart';
 import '../providers/collector_provider.dart';
+
+/// What turning collection on does, before it does it. Returns false if the
+/// user would rather not. Shown until accepted once.
+Future<bool> explainBackgroundCollectionOnce(
+  BuildContext context,
+  CollectorPreferences preferences,
+) async {
+  if (await preferences.backgroundCollectionExplained()) return true;
+  if (!context.mounted) return false;
+  final accepted = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Collect with the app closed?'),
+      content: const Text(
+        'WRFCoin takes a weather reading about every 15 minutes and uploads '
+        'it, even with the app closed.\n\n'
+        'It uses your rough location, about 11 km. Only that rough area is '
+        'stored or sent with your readings, never your exact position.\n\n'
+        'A small permanent notification shows while this runs, with a Stop '
+        'button. It uses more battery.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Turn on'),
+        ),
+      ],
+    ),
+  );
+  if (accepted != true) return false;
+  await preferences.markBackgroundCollectionExplained();
+  return true;
+}
 
 /// Asks once whether Android's battery limits may be lifted for collection.
 /// Either answer is final: the app never asks again, and collection runs
