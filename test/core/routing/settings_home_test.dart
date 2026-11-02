@@ -353,7 +353,7 @@ void main() {
     await pumpFrames(tester);
     expect(find.text('Alert Settings'), findsNothing);
     // The other quick action in that row stays.
-    expect(find.byIcon(Icons.view_in_ar), findsOneWidget);
+    expect(find.text('Sky View'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
