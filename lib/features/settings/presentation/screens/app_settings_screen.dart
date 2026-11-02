@@ -65,9 +65,15 @@ class AppSettingsScreen extends ConsumerWidget {
               ),
               _entry(
                 Icons.swap_horiz,
-                'Transfer or accept a station',
-                'Give your station away or accept one.',
+                'Transfer a station',
+                'Give your station to a new owner.',
                 () => context.push('/collect/station-transfer'),
+              ),
+              _entry(
+                Icons.move_to_inbox_outlined,
+                'Accept a station',
+                'Take over a station someone is giving you.',
+                () => context.push('/collect/station-accept'),
               ),
               _entry(
                 Icons.verified_outlined,

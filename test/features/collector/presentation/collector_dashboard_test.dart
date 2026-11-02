@@ -10,10 +10,15 @@ import 'package:wrfcoin_mobile/core/localization/app_localizations.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/challenges/data/repositories/challenge_repository.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_model.dart';
+import 'package:wrfcoin_mobile/features/collector/data/models/station_owner_models.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
+import 'package:wrfcoin_mobile/features/collector/data/services/mobile_station_status_service.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
+import 'package:wrfcoin_mobile/features/collector/presentation/providers/mobile_station_status_provider.dart';
+import 'package:wrfcoin_mobile/features/collector/presentation/providers/station_owner_providers.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/screens/collector_dashboard.dart';
+import 'package:wrfcoin_mobile/features/collector/presentation/widgets/owner_ledger_banner.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
@@ -57,6 +62,9 @@ void main() {
     required int pendingCount,
     SyncMetadataEntry? syncMetadata,
     WalletModel? wallet,
+    bool canCollect = true,
+    MobileStationStatus? stationStatus,
+    OwnerLedger? ledger,
   }) async {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
     await const CollectorPreferences().save(preferencesState);
@@ -96,10 +104,10 @@ void main() {
           ),
           appPreferencesStoreProvider.overrideWithValue(
             TestAppPreferencesStore(
-              const AppPreferences(
+              AppPreferences(
                 consent: ConsentSettings(
-                  sensorCollection: true,
-                  preciseLocation: true,
+                  sensorCollection: canCollect,
+                  preciseLocation: canCollect,
                 ),
               ),
             ),
@@ -112,6 +120,12 @@ void main() {
           challengeRepositoryProvider.overrideWithValue(
             FakeChallengeRepository(),
           ),
+          if (stationStatus != null)
+            mobileStationStatusProvider.overrideWith(
+              (ref, owner) async => stationStatus,
+            ),
+          if (ledger != null)
+            ownerStationLedgerProvider.overrideWith((ref) async => ledger),
           keyManagerProvider.overrideWithValue(
             KeyManager(
               biometric: BiometricService(client: FakeLocalAuthClient()),
@@ -132,6 +146,196 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }
+
+  // The ledger read only starts once the station status has loaded.
+  Future<void> settleStatus(WidgetTester tester) async {
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
+  void expectInOrder(WidgetTester tester, List<Finder> sections) {
+    final tops = [for (final f in sections) tester.getTopLeft(f).dy];
+    for (var i = 1; i < tops.length; i++) {
+      expect(
+        tops[i],
+        greaterThan(tops[i - 1]),
+        reason: '${sections[i]} should come after ${sections[i - 1]}',
+      );
+    }
+  }
+
+  OwnerLedger ledgerFrozen({int? frozenSince}) => OwnerLedger(
+    owner: 'wrf1wallet',
+    ownerCommitment: 'c',
+    isOwner: true,
+    ownerNonce: 0,
+    frozenSinceHeight: frozenSince,
+    ownerDeactivated: false,
+    pendingRecovery: null,
+    rewardsSuspended: false,
+    consentActive: true,
+    actionsActive: true,
+    observedAtHeight: 100,
+    settledHeight: 100,
+  );
+
+  group('section order', () {
+    testWidgets('readings and Collect Now open the page; battery and the '
+        'upload window notice sit lower', (tester) async {
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: true,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+        ),
+        pendingCount: 0,
+        wallet: const WalletModel(address: 'wrf1wallet', balance: '0'),
+        stationStatus: const MobileStationStatus(MobileStationPhase.onChain),
+        ledger: ledgerFrozen(),
+      );
+      await settleStatus(tester);
+
+      expectInOrder(tester, [
+        find.text('Current Readings'),
+        find.text('Collect Now'),
+        find.text('Collecting Data'),
+        find.text('Sync Progress & Rewards'),
+        find.text(SyncWorker.earningWindowMessage),
+        find.text('Forecast duels'),
+        find.text('Battery Impact'),
+      ]);
+      // On a healthy station nothing sits above the readings.
+      final scrollTop = tester.getTopLeft(find.byType(ListView)).dy;
+      expect(
+        tester.getTopLeft(find.text('Current Readings')).dy - scrollTop,
+        lessThan(48),
+      );
+    });
+
+    testWidgets('the Station ownership card is gone from an on-chain station', (
+      tester,
+    ) async {
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: true,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+        ),
+        pendingCount: 0,
+        wallet: const WalletModel(address: 'wrf1wallet', balance: '0'),
+        stationStatus: const MobileStationStatus(MobileStationPhase.onChain),
+        ledger: ledgerFrozen(),
+      );
+      await settleStatus(tester);
+
+      // The banner shares the card's old condition, so the branch really ran.
+      expect(find.byType(OwnerLedgerBanner), findsOneWidget);
+      expect(find.text('Station ownership'), findsNothing);
+      for (final label in ['Security', 'Transfer', 'Accept']) {
+        expect(find.widgetWithText(TextButton, label), findsNothing);
+      }
+    });
+
+    testWidgets('missing consent and an unregistered station stay above the '
+        'readings', (tester) async {
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: false,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+        ),
+        pendingCount: 0,
+        canCollect: false,
+        wallet: const WalletModel(address: 'wrf1wallet', balance: '0'),
+        stationStatus: const MobileStationStatus(MobileStationPhase.none),
+      );
+      await settleStatus(tester);
+
+      expectInOrder(tester, [
+        find.text('Review'),
+        find.textContaining('Register your phone as a weather station'),
+        find.text('Current Readings'),
+      ]);
+    });
+
+    testWidgets('a frozen station warning stays above the readings', (
+      tester,
+    ) async {
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: true,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+        ),
+        pendingCount: 0,
+        wallet: const WalletModel(address: 'wrf1wallet', balance: '0'),
+        stationStatus: const MobileStationStatus(MobileStationPhase.onChain),
+        ledger: ledgerFrozen(frozenSince: 90),
+      );
+      await settleStatus(tester);
+
+      expectInOrder(tester, [
+        find.textContaining('This station is frozen'),
+        find.text('Current Readings'),
+      ]);
+    });
+
+    testWidgets('removed readings stay above the readings; the routine '
+        'window notice does not', (tester) async {
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: true,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+        ),
+        pendingCount: 0,
+        syncMetadata: SyncMetadataEntry(
+          id: 1,
+          syncTableName: staleReadingsNoticeTableName,
+          pendingCount: 2,
+        ),
+      );
+      await settleStatus(tester);
+
+      expectInOrder(tester, [
+        find.text(SyncWorker.staleReadingsNotice(2)),
+        find.text('Current Readings'),
+        find.text(SyncWorker.earningWindowMessage),
+      ]);
+    });
+
+    testWidgets('a sync failure shows inside the readings card, above Collect '
+        'Now', (tester) async {
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: true,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+        ),
+        pendingCount: 1,
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CollectorDashboard)),
+      );
+      final notifier = container.read(collectorProvider.notifier);
+      // ignore: invalid_use_of_protected_member
+      notifier.state = notifier.state.copyWith(syncMessage: 'Sync failed.');
+      await tester.pump();
+
+      expectInOrder(tester, [
+        find.text('Current Readings'),
+        find.text('Sync failed.'),
+        find.text('Collect Now'),
+      ]);
+    });
+  });
 
   testWidgets('offers Share proof card only for a real commit id', (
     tester,
