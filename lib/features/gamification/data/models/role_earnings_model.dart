@@ -25,6 +25,12 @@ enum EarningsPeriod {
 
 enum EarningsStatus { available, unsupported, unavailable }
 
+/// The backend still answers `unsupported` for the node role because it has no
+/// node board. That is not the same as nodes going unpaid, so the phone does
+/// not repeat "not implemented": bonded nodes are paid.
+const String kNodePaymentsNotice =
+    'Bonded nodes are paid. This list does not show node payments yet.';
+
 Map<String, dynamic> object(dynamic value) {
   if (value is! Map) throw const FormatException('Invalid earnings contract');
   return Map<String, dynamic>.from(value);
@@ -117,7 +123,7 @@ class RolePaidSummary {
   }
   String get message => switch (status) {
     EarningsStatus.available => '$amount WRF',
-    EarningsStatus.unsupported => 'Node payments are not implemented yet',
+    EarningsStatus.unsupported => kNodePaymentsNotice,
     EarningsStatus.unavailable => 'Paid-event coverage unavailable',
   };
 }
@@ -151,6 +157,50 @@ class RoleEarningsRow {
     }
     return RoleEarningsRow(j['rank'], key, address, name, amount, j['isYou']);
   }
+
+  /// One row of `GET /weather/leaderboard?metric=earnings`.
+  ///
+  /// The amount comes from the exact `earningsBaseUnits` string, never from the
+  /// `value` double. A row that cannot be proven fails the whole board. The
+  /// address is shown as served: short, except on the viewer's own row.
+  factory RoleEarningsRow.parseWeather(dynamic value) {
+    final j = object(value);
+    final rank = j['rank'], isYou = j['isYou'], key = j['profileKey'];
+    final address = text(j['walletAddress']), name = text(j['displayName']);
+    final amount = paidDisplay(j['earningsBaseUnits']);
+    final shortForm = RegExp(r'^[0-9a-zA-Z]{6}…[0-9a-fA-F]{4}$');
+    final fullForm = RegExp(r'^(0x|wrf)[0-9a-fA-F]{40}$');
+    if (rank is! int ||
+        rank < 1 ||
+        isYou is! bool ||
+        (key != null &&
+            (key is! String || !RegExp(r'^c_[0-9a-f]{24}$').hasMatch(key))) ||
+        !(shortForm.hasMatch(address) ||
+            (isYou && fullForm.hasMatch(address))) ||
+        RegExp(r'0x[0-9a-fA-F]{40}|[0-9a-fA-F]{64}').hasMatch(name) ||
+        !_sameWrfAmount(j['earningsWrf'], amount)) {
+      throw const FormatException('Invalid weather earnings row');
+    }
+    return RoleEarningsRow(
+      rank,
+      key as String? ?? '',
+      address,
+      name,
+      amount,
+      isYou,
+    );
+  }
+
+  /// `earningsWrf` drops trailing zeros; [exact] always has eight decimals.
+  static bool _sameWrfAmount(dynamic served, String exact) {
+    if (served is! String ||
+        !RegExp(r'^(0|[1-9][0-9]*)(\.[0-9]{1,8})?$').hasMatch(served)) {
+      return false;
+    }
+    final parts = served.split('.');
+    final fraction = parts.length == 2 ? parts[1] : '';
+    return '${parts[0]}.${fraction.padRight(8, '0')}' == exact;
+  }
 }
 
 class RoleLeaderboard {
@@ -159,13 +209,61 @@ class RoleLeaderboard {
   final EarningsStatus status;
   final List<RoleEarningsRow> rows;
   final EarningsCoverage? coverage;
+
+  /// True when each amount is a lifetime total and [period] only ranks rows,
+  /// so the screen must not present the amount as earned in that period.
+  final bool lifetimeAmounts;
   const RoleLeaderboard(
     this.role,
     this.period,
     this.status,
     this.rows,
-    this.coverage,
-  );
+    this.coverage, {
+    this.lifetimeAmounts = false,
+  });
+
+  /// The Weather data tab, from `GET /weather/leaderboard?metric=earnings`.
+  ///
+  /// All or nothing, like the web: an `unavailable` marker or any contract
+  /// mismatch throws, so a short list can never look complete. Only a clean
+  /// answer with no entries is an empty board.
+  factory RoleLeaderboard.parseWeather(dynamic value, EarningsPeriod period) {
+    final j = object(value);
+    final units = object(j['amountUnits']);
+    final fields = object(units['fields']);
+    final unavailable = j['unavailable'];
+    if (j['success'] != true ||
+        j['metric'] != 'earnings' ||
+        j['period'] != period.wire ||
+        j['earningsScope'] != 'lifetime' ||
+        (unavailable is List && unavailable.isNotEmpty) ||
+        units['denomination'] != 'WRF' ||
+        units['baseUnitDecimals'] != 8 ||
+        units['baseUnitsPerUnit'] != '100000000' ||
+        units['available'] != true ||
+        fields['entries[].earningsBaseUnits'] != 'base_units' ||
+        fields['entries[].earningsWrf'] != 'display_units' ||
+        j['entries'] is! List) {
+      throw const FormatException('Weather earnings unavailable');
+    }
+    final rows = (j['entries'] as List)
+        .map(RoleEarningsRow.parseWeather)
+        .toList();
+    final keys = rows.map((r) => r.profileKey).where((k) => k.isNotEmpty);
+    if (rows.length > 30 ||
+        keys.toSet().length != keys.length ||
+        rows.indexed.any((r) => r.$2.rank != r.$1 + 1)) {
+      throw const FormatException('Invalid ranking');
+    }
+    return RoleLeaderboard(
+      EarningsRole.contribution,
+      period,
+      EarningsStatus.available,
+      List.unmodifiable(rows),
+      null,
+      lifetimeAmounts: true,
+    );
+  }
   factory RoleLeaderboard.parse(
     dynamic value,
     EarningsRole role,
