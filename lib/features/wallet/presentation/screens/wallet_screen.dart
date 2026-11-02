@@ -315,6 +315,7 @@ class WalletScreen extends ConsumerWidget {
                             ),
                           ),
                         if (txState.items.isEmpty &&
+                            !txState.discoveringCredits &&
                             _unrepeatedCredits(txState).isEmpty)
                           const Padding(
                             padding: EdgeInsets.all(24),
