@@ -196,8 +196,8 @@ class _TrendChip extends StatelessWidget {
             ),
             TextSpan(
               text: value,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
             ),

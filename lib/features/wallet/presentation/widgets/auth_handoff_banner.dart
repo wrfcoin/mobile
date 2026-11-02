@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/auth/auth_handoff.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../services/api/api_client.dart';
 import '../providers/wallet_provider.dart';
 
@@ -60,7 +59,8 @@ class _AuthHandoffBannerState extends ConsumerState<AuthHandoffBanner> {
                 Expanded(
                   child: Text(
                     message,
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    // The card is pale amber in both themes.
+                    style: TextStyle(color: Colors.amber.shade900),
                   ),
                 ),
                 IconButton(

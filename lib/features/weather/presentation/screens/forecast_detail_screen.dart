@@ -161,9 +161,9 @@ class _HourlyTile extends StatelessWidget {
         child: Center(
           child: Text(
             timeLabel,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -274,7 +274,7 @@ class _DailyCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: isToday
                           ? AppColors.primary
-                          : AppColors.textPrimary,
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),

@@ -10,6 +10,9 @@ class AppColors {
   static const error = Color(0xFFFF6B6B);
   static const warning = Color(0xFFFFD93D);
   static const success = Color(0xFF51CF66);
+  /// Near-white, for surfaces that stay dark in both themes (the dark theme
+  /// itself, a share card, a tooltip). Text on a themed surface uses
+  /// `colorScheme.onSurface`, or it vanishes in light mode.
   static const textPrimary = Color(0xFFF0F6FC);
   static const textSecondary = Color(0xFF9DA5AD);
   static const textMuted = Color(0xFF484F58);
