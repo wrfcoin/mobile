@@ -216,8 +216,9 @@ void main() {
     expect(find.byTooltip('Privacy center'), findsNothing);
     expect(find.byTooltip('Sensor settings'), findsNothing);
     expect(find.byTooltip('Collector validation'), findsNothing);
+    // Field mode lives in Settings now (#29); its route stays.
+    expect(find.byTooltip('Field mode'), findsNothing);
     // Not part of the move.
-    expect(find.byTooltip('Field mode'), findsOneWidget);
     expect(find.byTooltip('Challenges'), findsOneWidget);
   });
 
