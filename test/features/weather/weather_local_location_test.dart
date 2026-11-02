@@ -355,7 +355,7 @@ void main() {
 
     expect(device.calls, isNot(contains('requestPermission')));
     expect(backend.requests.map((u) => u.toString()).toSet(), {
-      'https://tailnet.test:9444/api/weather/forecast/45.0,-93.3',
+      'https://tailnet.test:9444/api/weather/forecast/45.0,-93.3?days=14',
       'https://tailnet.test:9444/api/weather/current/45.0,-93.3',
       'https://tailnet.test:9444/api/weather/alerts/45.0,-93.3',
     });
@@ -365,7 +365,8 @@ void main() {
       expect(text, isNot(contains('44.98')), reason: 'no exact latitude');
       expect(text, isNot(contains('93.26')), reason: 'no exact longitude');
       expect(text, isNot(contains('wrf-forecast')));
-      expect(uri.queryParameters, isEmpty);
+      // Only the fixed forecast query; nothing about the device.
+      expect(uri.queryParameters.keys, anyOf(isEmpty, ['days']));
     }
   });
 
