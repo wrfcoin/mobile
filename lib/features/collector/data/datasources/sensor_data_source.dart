@@ -32,7 +32,7 @@ class SensorDataSource {
   /// Reads the current GPS location with privacy anonymization
   /// (rounded to the 0.1 degree grid, ~11 km).
   Future<({double lat, double lng})?> readLocation() async {
-    final position = await _locationService.getCurrentPosition();
+    final position = await _locationService.getRoughPosition();
     if (position == null) return null;
 
     return (

@@ -61,7 +61,7 @@ class LocationService {
 
   /// How long a location request may take. Without a limit the call never
   /// returns when Android withholds location.
-  static const positionTimeLimit = Duration(seconds: 30);
+  static const positionTimeLimit = Duration(seconds: 20);
 
   Future<Position?> getCurrentPosition() async {
     try {
@@ -80,8 +80,20 @@ class LocationService {
     }
   }
 
-  /// A rough position for the collection service. Never shows a permission
-  /// dialog, because there may be no screen to show it on.
+  /// A rough position for Collect: low accuracy is all the 0.1 degree grid
+  /// needs. May show the permission dialog.
+  Future<Position?> getRoughPosition() async {
+    try {
+      if (!await requestPermission()) return null;
+      return await _roughFix();
+    } catch (e) {
+      debugPrint('Failed to get position: $e');
+      return null;
+    }
+  }
+
+  /// [getRoughPosition] for the collection service and automatic readings:
+  /// never shows a permission dialog, because there may be no screen.
   Future<Position?> getQuietPosition() async {
     try {
       final permission = await checkPermission();
@@ -89,17 +101,19 @@ class LocationService {
           permission != LocationPermission.always) {
         return null;
       }
-      return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: positionTimeLimit,
-        ),
-      );
+      return await _roughFix();
     } catch (e) {
       debugPrint('Failed to get position: $e');
       return null;
     }
   }
+
+  Future<Position> _roughFix() => Geolocator.getCurrentPosition(
+    locationSettings: const LocationSettings(
+      accuracy: LocationAccuracy.low,
+      timeLimit: positionTimeLimit,
+    ),
+  );
 
   /// Rounds a coordinate to the 0.1 degree grid (~11 km) before it is stored, shown, logged or
   /// submitted (owner ruling 2026-09-30, the same grid as the Weather tab and the station cell).
