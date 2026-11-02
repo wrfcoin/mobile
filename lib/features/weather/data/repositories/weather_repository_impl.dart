@@ -60,6 +60,9 @@ class WeatherRepository {
 
   /// Current forecast for [location] (`GET /weather/forecast/:lat,lon`).
   ///
+  /// The public edge admits only its exact queries here, and answers 404 to
+  /// a request with none, so the query is part of the route.
+  ///
   /// An envelope without forecast periods is unavailable, never a model of
   /// zeros.
   Future<Either<Failure, ForecastModel>> getForecast(
@@ -68,6 +71,7 @@ class WeatherRepository {
     try {
       final response = await _dio.get(
         ApiConstants.weatherForecast(location.pathSegment),
+        queryParameters: ApiConstants.weatherForecastDailyQuery,
       );
       final forecast = forecastFromEnvelope(response.data);
       if (forecast == null) {
@@ -79,7 +83,7 @@ class WeatherRepository {
       }
       return Right(forecast);
     } on DioException catch (e) {
-      return Left(DioErrorMapper.map(e));
+      return Left(_forecastFailure(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -141,6 +145,15 @@ class WeatherRepository {
     return Right(ForecastDetail(hourly: hours, daily: days));
   }
 
+  /// A 404 here means no forecast is reachable; the edge's bare "Not found"
+  /// says nothing useful to a person.
+  static Failure _forecastFailure(DioException e) =>
+      e.response?.statusCode == 404
+      ? const NotAvailableFailure(
+          'No forecast is available for your area right now.',
+        )
+      : DioErrorMapper.map(e);
+
   Future<Either<Failure, Object?>> _getPayload(
     String path,
     Map<String, Object> query,
@@ -149,7 +162,7 @@ class WeatherRepository {
       final response = await _dio.get(path, queryParameters: query);
       return Right(response.data);
     } on DioException catch (e) {
-      return Left(DioErrorMapper.map(e));
+      return Left(_forecastFailure(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
