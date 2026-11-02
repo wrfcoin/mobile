@@ -24,6 +24,7 @@ import 'package:wrfcoin_mobile/features/weather/domain/models/coarse_location.da
 import 'package:wrfcoin_mobile/features/weather/presentation/providers/weather_narratives_provider.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/repositories/wallet_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/wallet/domain/repositories/wallet_repository.dart';
 import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
 import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
 import 'package:wrfcoin_mobile/services/crypto/wallet_secure_storage.dart';
@@ -78,6 +79,10 @@ Future<Widget> buildTestApp({
       description: 'Gusty winds expected',
     ),
   ],
+  // Replace the harness's fixed weather, for tests that count or fail calls.
+  WeatherRepository? weatherRepository,
+  WeatherLocationResolver? weatherLocationResolver,
+  WalletRepository? walletRepository,
   // Appended after the harness overrides, e.g. a recording data source.
   List<Override> extraOverrides = const <Override>[],
   // A stored wallet session. Only tests about the loaded wallet tab need
@@ -132,23 +137,27 @@ Future<Widget> buildTestApp({
       ),
       challengeRepositoryProvider.overrideWithValue(FakeChallengeRepository()),
       weatherLocationResolverProvider.overrideWithValue(
-        FixedWeatherLocationResolver(CoarseLocation.round(37.775, -122.419)),
+        weatherLocationResolver ??
+            FixedWeatherLocationResolver(
+              CoarseLocation.round(37.775, -122.419),
+            ),
       ),
       weatherRepositoryProvider.overrideWithValue(
-        FakeWeatherRepository(
-          forecast:
-              forecast ??
-              const ForecastModel(
-                temperature: 20,
-                humidity: 55,
-                pressure: 1013.25,
-                windSpeed: 18,
-                precipitation: 4,
-                location: 'San Francisco',
-                timestamp: '2026-03-10T13:30:00Z',
-              ),
-          alerts: alerts,
-        ),
+        weatherRepository ??
+            FakeWeatherRepository(
+              forecast:
+                  forecast ??
+                  const ForecastModel(
+                    temperature: 20,
+                    humidity: 55,
+                    pressure: 1013.25,
+                    windSpeed: 18,
+                    precipitation: 4,
+                    location: 'San Francisco',
+                    timestamp: '2026-03-10T13:30:00Z',
+                  ),
+              alerts: alerts,
+            ),
       ),
       governanceRepositoryProvider.overrideWithValue(
         FakeGovernanceRepository(
@@ -186,17 +195,18 @@ Future<Widget> buildTestApp({
         ),
       ),
       walletRepositoryProvider.overrideWithValue(
-        FakeWalletRepository(
-          transactions: const [
-            TransactionModel(
-              hash: '0x1',
-              timestamp: '2026-03-10T00:00:00Z',
-              from: 'wrf1234567890abcdef1234',
-              to: 'wrf0000000000000000000000',
-              value: '10',
+        walletRepository ??
+            FakeWalletRepository(
+              transactions: const [
+                TransactionModel(
+                  hash: '0x1',
+                  timestamp: '2026-03-10T00:00:00Z',
+                  from: 'wrf1234567890abcdef1234',
+                  to: 'wrf0000000000000000000000',
+                  value: '10',
+                ),
+              ],
             ),
-          ],
-        ),
       ),
       walletSecureStorageProvider.overrideWithValue(FakeWalletSecureStorage()),
       keyManagerProvider.overrideWithValue(

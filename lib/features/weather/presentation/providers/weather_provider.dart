@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/failures.dart';
+import '../../../../core/time/app_clock.dart';
 import '../../../../services/offline/offline_data_buffer.dart';
 import '../../data/models/current_conditions_model.dart';
 import '../../data/models/forecast_model.dart';
@@ -9,6 +10,15 @@ import '../../data/repositories/weather_repository_impl.dart';
 import '../../data/weather_location_resolver.dart';
 import '../../domain/models/coarse_location.dart';
 import '../../../widgets/data/widget_snapshot_store.dart';
+
+/// Weather older than this is fetched again the next time the tab is on
+/// screen. Every load is three calls in the rate-limited NOAA zone, so a tab
+/// switch alone never makes one.
+const weatherStaleAfter = Duration(minutes: 10);
+
+/// How long after a load, successful or not, an automatic one may start.
+/// Pull to refresh and Retry do not wait.
+const weatherRetryAfter = Duration(minutes: 5);
 
 class WeatherState {
   final ForecastModel? forecast;
@@ -41,6 +51,11 @@ class WeatherState {
   final bool isFromCache;
   final DateTime? cachedAt;
 
+  /// When [forecast] was fetched: the cache time if it came from the cache.
+  /// A failed refresh leaves it alone, so it always says how old [forecast]
+  /// really is.
+  final DateTime? lastUpdated;
+
   /// Why there is no usable location: permission is missing, location is
   /// off, or no fix arrived. Null when there is one. No weather request was
   /// made without one.
@@ -60,11 +75,13 @@ class WeatherState {
     this.alertsLoaded = false,
     this.isFromCache = false,
     this.cachedAt,
+    this.lastUpdated,
     this.locationUnavailable,
   });
 
   WeatherState copyWith({
     ForecastModel? forecast,
+    bool clearForecast = false,
     List<AlertModel>? alerts,
     CurrentConditions? current,
     bool clearCurrent = false,
@@ -76,11 +93,12 @@ class WeatherState {
     bool? alertsLoaded,
     bool? isFromCache,
     DateTime? cachedAt,
+    DateTime? lastUpdated,
     LocationUnavailableReason? locationUnavailable,
     bool clearLocationUnavailable = false,
   }) {
     return WeatherState(
-      forecast: forecast ?? this.forecast,
+      forecast: clearForecast ? null : forecast ?? this.forecast,
       alerts: alerts ?? this.alerts,
       current: clearCurrent ? null : current ?? this.current,
       loading: loading ?? this.loading,
@@ -90,6 +108,9 @@ class WeatherState {
       alertsLoaded: alertsLoaded ?? this.alertsLoaded,
       isFromCache: isFromCache ?? this.isFromCache,
       cachedAt: cachedAt ?? this.cachedAt,
+      lastUpdated: clearForecast
+          ? lastUpdated
+          : lastUpdated ?? this.lastUpdated,
       // Only location resolution changes it; a load result never does.
       locationUnavailable: clearLocationUnavailable
           ? null
@@ -113,6 +134,15 @@ class WeatherNotifier extends Notifier<WeatherState> {
   /// different key clears it, so one place's humidity and pressure never
   /// sit beside another place's forecast.
   String? _currentFor;
+
+  /// The location key [WeatherState.forecast] and its alerts were loaded for.
+  /// As with [_currentFor], another place's weather is never kept on screen.
+  String? _forecastFor;
+
+  /// When the latest load started; see [weatherRetryAfter].
+  DateTime? _lastAttempt;
+
+  DateTime _now() => ref.read(appClockProvider)();
 
   @override
   WeatherState build() {
@@ -142,6 +172,7 @@ class WeatherNotifier extends Notifier<WeatherState> {
   /// [WeatherState.locationUnavailable].
   Future<void> loadLocalWeather() async {
     final generation = ++_generation;
+    _lastAttempt = _now();
     state = state.copyWith(loading: true, alertsLoading: true, error: null);
     _pendingLocation?.cancel();
     final request = _pendingLocation = _locationResolver.request();
@@ -151,8 +182,20 @@ class WeatherNotifier extends Notifier<WeatherState> {
     final location = result.location;
     if (location == null) {
       _currentFor = null;
+      _forecastFor = null;
       state = WeatherState(locationUnavailable: result.reason);
       return;
+    }
+    final moved = _forecastFor != null && location.pathSegment != _forecastFor;
+    if (moved) {
+      _forecastFor = null;
+      state = state.copyWith(
+        clearForecast: true,
+        alerts: const [],
+        alertsLoaded: false,
+        clearAlertsError: true,
+        isFromCache: false,
+      );
     }
     state = state.copyWith(
       error: state.error,
@@ -164,6 +207,48 @@ class WeatherNotifier extends Notifier<WeatherState> {
     // /current runs beside alerts, so a slow one does not delay them. Each
     // is generation-guarded on its own.
     await Future.wait([loadCurrent(location), loadAlerts(location)]);
+  }
+
+  /// Loads if the weather on screen is old enough. Keeps it on screen while
+  /// loading, and does nothing while a load is running.
+  Future<void> refreshIfStale() async {
+    if (!_mayLoadNow) return;
+    final updated = state.lastUpdated;
+    if (updated != null && _now().difference(updated) < weatherStaleAfter) {
+      return;
+    }
+    await loadLocalWeather();
+  }
+
+  /// The Weather tab came back on screen, or the app came back to the front.
+  /// Fresh weather stays as it is unless the permission or the place changed,
+  /// which a cheap look at the platform can tell without a fresh fix.
+  Future<void> onVisible() async {
+    final generation = _generation;
+    final seen = await _locationResolver.peek();
+    if (!_isCurrent(generation) || _isLoading) return;
+    final reason = seen?.reason;
+    final location = seen?.location;
+    final changed =
+        (seen == null && state.locationNeeded) ||
+        (reason != null && reason != state.locationUnavailable) ||
+        (location != null &&
+            (state.locationNeeded ||
+                (_forecastFor != null &&
+                    location.pathSegment != _forecastFor)));
+    if (changed) {
+      await loadLocalWeather();
+    } else {
+      await refreshIfStale();
+    }
+  }
+
+  bool get _isLoading => state.loading || state.alertsLoading;
+
+  bool get _mayLoadNow {
+    if (_isLoading) return false;
+    final attempt = _lastAttempt;
+    return attempt == null || _now().difference(attempt) >= weatherRetryAfter;
   }
 
   bool _isCurrent(int generation) => ref.mounted && generation == _generation;
@@ -181,12 +266,19 @@ class WeatherNotifier extends Notifier<WeatherState> {
         toJson: (f) => f.toJson(),
       );
       if (!_isCurrent(generation)) return;
+      final fetched = result.valueOrNull;
+      if (fetched != null) _forecastFor = location.pathSegment;
       state = state.copyWith(
         loading: false,
-        forecast: result.valueOrNull,
+        forecast: fetched,
         error: result.failure,
         isFromCache: result.isFromCache,
         cachedAt: result.cachedAt,
+        lastUpdated: fetched == null
+            ? null
+            : result.isFromCache
+            ? result.cachedAt
+            : _now(),
       );
       await _persistWidgetForecast();
     } else {
@@ -195,24 +287,31 @@ class WeatherNotifier extends Notifier<WeatherState> {
       if (!_isCurrent(generation)) return;
       result.fold(
         (failure) => state = state.copyWith(loading: false, error: failure),
-        (forecast) => state = state.copyWith(
-          loading: false,
-          forecast: forecast,
-          isFromCache: false,
-        ),
+        (forecast) {
+          _forecastFor = location.pathSegment;
+          state = state.copyWith(
+            loading: false,
+            forecast: forecast,
+            isFromCache: false,
+            lastUpdated: _now(),
+          );
+        },
       );
       await _persistWidgetForecast();
     }
   }
 
   /// Loads humidity and pressure. A failure leaves them null ("Not
-  /// available") and touches nothing else, so the forecast still shows.
+  /// available") and touches nothing else, so the forecast still shows. The
+  /// exception is a refresh that failed altogether: the old reading then stays
+  /// with the old forecast, under its "last updated" note.
   Future<void> loadCurrent(CoarseLocation location) async {
     final generation = _generation;
     final result = await _repository.getCurrentConditions(location);
     if (!_isCurrent(generation)) return;
     result.fold(
       (_) {
+        if (state.error != null && _currentFor == location.pathSegment) return;
         _currentFor = null;
         state = state.copyWith(error: state.error, clearCurrent: true);
       },

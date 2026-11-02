@@ -125,6 +125,24 @@ class WeatherLocationResolver {
     }
   }
 
+  /// A cheap look for a change, with no fresh fix: the permission and service
+  /// state, then the platform's cached position. Null when that cannot say.
+  /// Never throws.
+  Future<WeatherLocationResult?> peek() async {
+    try {
+      final blocked = await _permissionAndServicesGate();
+      if (blocked != null) return blocked;
+      final position = await _lastKnown();
+      if (position == null) return null;
+      return WeatherLocationResult.located(
+        CoarseLocation.round(position.latitude, position.longitude),
+      );
+    } catch (e) {
+      debugPrint('Weather location peek unavailable: ${e.runtimeType}');
+      return null;
+    }
+  }
+
   /// Checks permission and location-service state. Returns the matching
   /// unavailable result if either is missing, else null.
   Future<WeatherLocationResult?> _permissionAndServicesGate() async {

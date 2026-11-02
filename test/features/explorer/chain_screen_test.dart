@@ -290,6 +290,31 @@ void main() {
     expect(backend.summaryCalls, covered);
   });
 
+  testWidgets('no polling while another tab shows, and it resumes after', (tester) async {
+    final backend = _Backend(summary: _ok(), blocks: _blocks());
+    final onScreen = ValueNotifier<bool>(true);
+    addTearDown(onScreen.dispose);
+    await _pump(
+      tester,
+      backend,
+      wrap: (child) => ValueListenableBuilder<bool>(
+        valueListenable: onScreen,
+        builder: (_, enabled, _) => TickerMode(enabled: enabled, child: child),
+      ),
+    );
+    onScreen.value = false;
+    await tester.pump(const Duration(milliseconds: 50));
+    final hidden = backend.summaryCalls;
+    await tester.pump(const Duration(seconds: 35));
+    expect(backend.summaryCalls, hidden);
+
+    onScreen.value = true;
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(backend.summaryCalls, greaterThan(hidden));
+  });
+
   testWidgets('pull to refresh re-reads summary and blocks', (tester) async {
     final backend = _Backend(summary: _ok(), blocks: _blocks());
     await _pump(tester, backend);

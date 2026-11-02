@@ -45,6 +45,7 @@ class _ChainScreenState extends ConsumerState<ChainScreen>
   bool _foreground = true;
   late final ChainReadScope _scope;
   bool _covered = false;
+  bool _onScreen = true;
 
   @override
   void initState() {
@@ -73,11 +74,18 @@ class _ChainScreenState extends ConsumerState<ChainScreen>
     final covered = ModalRoute.of(context)?.isCurrent == false;
     if (covered && !_covered) _scope.cancelAndRenew();
     _covered = covered;
+    // Another tab showing: this screen stays mounted, so stop reading.
+    final onScreen = TickerMode.valuesOf(context).enabled;
+    if (!onScreen && _onScreen) _scope.cancelAndRenew();
+    _onScreen = onScreen;
   }
 
   /// Every refresh path goes through this: mounted, foreground and visible.
   bool get _canRefresh =>
-      mounted && _foreground && ModalRoute.of(context)?.isCurrent != false;
+      mounted &&
+      _foreground &&
+      _onScreen &&
+      ModalRoute.of(context)?.isCurrent != false;
 
   /// Polling runs only while the app is in the foreground and this page is
   /// mounted: any other lifecycle state cancels the timer.

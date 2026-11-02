@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/time/app_clock.dart';
 import '../../../../core/widgets/app_error_widget.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
@@ -28,20 +31,76 @@ class ForecastDashboard extends ConsumerStatefulWidget {
 }
 
 class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
+  /// While on screen: re-reads the note's age, and refreshes once the weather
+  /// is old enough. Off screen nothing runs and nothing is fetched.
+  static const _tick = Duration(minutes: 1);
+
+  /// Whether this tab is showing. Off behind another tab or a pushed screen.
+  bool? _onScreen;
+  Timer? _ticker;
+  late final AppLifecycleListener _lifecycle;
+
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (_onScreen != true) return;
+        _startTicking();
+        ref.read(weatherProvider.notifier).onVisible();
+      },
+      onHide: _stopTicking,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final onScreen = TickerMode.valuesOf(context).enabled;
+    if (onScreen == _onScreen) return;
+    final first = _onScreen == null;
+    _onScreen = onScreen;
+    if (!onScreen) {
+      _stopTicking();
+      return;
+    }
+    _startTicking();
     // No WRF request: the backend publishes no WRF output yet, so the WRF
     // section shows its unavailable card until a server response exists.
-    Future.microtask(
-      () => ref.read(weatherProvider.notifier).loadLocalWeather(),
-    );
+    Future.microtask(() {
+      if (!mounted) return;
+      final notifier = ref.read(weatherProvider.notifier);
+      first ? notifier.refreshIfStale() : notifier.onVisible();
+      // The note's age moved on while the tab was hidden.
+      setState(() {});
+    });
+  }
+
+  void _startTicking() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(_tick, (_) {
+      ref.read(weatherProvider.notifier).refreshIfStale();
+      setState(() {});
+    });
+  }
+
+  void _stopTicking() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  @override
+  void dispose() {
+    _stopTicking();
+    _lifecycle.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(weatherProvider);
     final wrfState = ref.watch(wrfForecastProvider);
+    final now = ref.watch(appClockProvider)();
 
     return Scaffold(
       appBar: AppBar(
@@ -77,7 +136,9 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
           const SettingsGearButton(),
         ],
       ),
-      body: state.loading
+      // The spinner is for a first load only: a refresh keeps what is on screen,
+      // and the note below says it is updating.
+      body: state.loading && state.forecast == null
           ? const ResponsiveCenter(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -125,7 +186,7 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
                             child: Text(
                               state.cachedAt != null
                                   ? 'Offline — showing data cached at '
-                                        '${_formatCacheTime(state.cachedAt!)}'
+                                        '${_formatUpdatedTime(state.cachedAt!, now)}'
                                   : 'Offline — showing cached data',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
@@ -200,6 +261,8 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
 
                   // Current conditions
                   if (state.forecast != null) ...[
+                    if (!state.isFromCache)
+                      _FreshnessNote(state: state, now: now),
                     Semantics(
                       button: true,
                       label: 'View detailed forecast',
@@ -330,8 +393,74 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
   }
 }
 
-String _formatCacheTime(DateTime dt) {
-  return DateFormat('HH:mm').format(dt.toLocal());
+/// The time alone today, with the date on any other day.
+String _formatUpdatedTime(DateTime dt, DateTime now) {
+  final local = dt.toLocal();
+  final today = now.toLocal();
+  final sameDay =
+      local.year == today.year &&
+      local.month == today.month &&
+      local.day == today.day;
+  return DateFormat(sameDay ? 'HH:mm' : 'MMM d, HH:mm').format(local);
+}
+
+/// How old the weather on screen is, so old weather never reads as current.
+class _FreshnessNote extends StatelessWidget {
+  final WeatherState state;
+  final DateTime now;
+
+  const _FreshnessNote({required this.state, required this.now});
+
+  @override
+  Widget build(BuildContext context) {
+    final updated = state.lastUpdated;
+    if (updated == null) return const SizedBox.shrink();
+    final age = now.difference(updated);
+    final time = _formatUpdatedTime(updated, now);
+    final failed = state.error != null;
+    final stale = age >= weatherStaleAfter;
+    final String text;
+    if (failed) {
+      text = "Couldn't refresh. Last updated $time (${_formatAge(age)}).";
+    } else if (state.loading) {
+      text = 'Updating… Last updated $time.';
+    } else if (stale) {
+      text = 'Last updated $time (${_formatAge(age)}).';
+    } else {
+      text = 'Updated $time';
+    }
+    final warn = failed || stale;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(
+            failed ? Icons.cloud_off : Icons.schedule,
+            size: 14,
+            color: warn ? AppColors.warning : AppColors.textMuted,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: warn ? AppColors.textSecondary : AppColors.textMuted,
+                fontSize: 12,
+                fontWeight: warn ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatAge(Duration age) {
+  if (age.inMinutes < 1) return 'just now';
+  if (age.inMinutes < 60) return '${age.inMinutes} min ago';
+  if (age.inHours < 24) return '${age.inHours} h ago';
+  return '${age.inDays} d ago';
 }
 
 class _QuickAction extends StatelessWidget {
