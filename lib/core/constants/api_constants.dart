@@ -307,4 +307,9 @@ class ApiConstants {
   static String duelAccept(String id) => '/duels/$id/accept';
   static String duelForecast(String id) => '/duels/$id/forecast';
   static String duelRecord(String id) => '/duels/$id/record';
+
+  // Station calibration certificates (backend calibration-certificate-routes.ts).
+  // Public read; the edge admits only the alias form, with no query.
+  static String calibrationCertificate(String alias) =>
+      '/calibration-certificates/station/$alias';
 }

@@ -256,6 +256,12 @@ class _CollectorStationSection extends ConsumerWidget {
               () => context.push('/weather/alert-settings'),
             ),
             tile(
+              Icons.verified_outlined,
+              'Calibration certificates',
+              "Check any station's signed sensor calibration.",
+              () => context.push('/collect/calibration'),
+            ),
+            tile(
               Icons.security,
               'Station security',
               'Freeze, deactivate or recover your station.',

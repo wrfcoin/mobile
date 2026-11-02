@@ -22,6 +22,7 @@ import '../../features/collector/presentation/screens/station_profile_screen.dar
 import '../../features/collector/presentation/screens/station_recovery_screen.dart';
 import '../../features/collector/presentation/screens/station_security_screen.dart';
 import '../../features/collector/presentation/screens/station_transfer_screen.dart';
+import '../../features/calibration/presentation/station_calibration_screen.dart';
 import '../../features/challenges/presentation/screens/challenges_screen.dart';
 import '../../features/duels/presentation/screens/forecast_duel_screen.dart';
 import '../../features/duels/presentation/screens/forecast_duels_screen.dart';
@@ -284,6 +285,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                 ],
+              ),
+              GoRoute(
+                path: 'calibration',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const StationCalibrationScreen(),
+                ),
               ),
               GoRoute(
                 path: 'imagery',

@@ -18,6 +18,7 @@ class _NoWallet extends WalletNotifier {
 const _destinations = <String, String>{
   'Sensor settings': '/collect/settings',
   'Alert settings': '/weather/alert-settings',
+  'Calibration certificates': '/collect/calibration',
   'Station security': '/collect/station-security',
   'Transfer or accept a station': '/collect/station-transfer',
   'Collector validation': '/collect/validation',
