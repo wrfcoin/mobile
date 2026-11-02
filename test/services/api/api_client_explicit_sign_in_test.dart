@@ -205,7 +205,7 @@ void main() {
     );
   }
 
-  /// What the Earnings screen does on open and on pull-to-refresh: an
+  /// What the Wallet screen does on open and on pull-to-refresh: an
   /// automatic session check, then the owner-bound wallet request (which
   /// goes through the auth interceptor and its 401 retry).
   Future<void> openEarnings(ApiClient client) async {

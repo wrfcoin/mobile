@@ -182,7 +182,7 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('Earnings shows the bounded-history notice', (tester) async {
+  testWidgets('Wallet shows the bounded-history notice', (tester) async {
     final backend = _Backend(
       (o) =>
           Response(requestOptions: o, data: _window([], offset: 0, total: 0)),
@@ -197,7 +197,11 @@ void main() {
         complete: false,
       ),
     );
-    expect(find.text('Earnings'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Wallet')),
+      findsOneWidget,
+    );
+    expect(find.text('Earnings'), findsNothing);
     expect(find.text('Showing recent activity only'), findsOneWidget);
     expect(backend.historyRequests, isEmpty);
   });

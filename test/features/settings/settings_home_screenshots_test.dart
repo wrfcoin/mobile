@@ -19,7 +19,7 @@ void main() {
     'settings': ('/profile/settings', Size(390, 2800), Size(1280, 2800)),
     'weather': ('/weather', Size(390, 844), Size(1280, 800)),
     'collect': ('/collect', Size(390, 844), Size(1280, 800)),
-    'earnings': ('/wallet', Size(390, 844), Size(1280, 800)),
+    'wallet': ('/wallet', Size(390, 844), Size(1280, 800)),
     'govern': ('/govern', Size(390, 844), Size(1280, 800)),
     'profile': ('/profile', Size(390, 844), Size(1280, 800)),
   };

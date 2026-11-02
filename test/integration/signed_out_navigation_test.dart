@@ -1,5 +1,5 @@
 // mobile#320 review P1-1: a wallet without a session is "Not signed in" on
-// Earnings only. The rest of the app stays usable: tapping Collect lands on
+// the Wallet tab only. The rest of the app stays usable: tapping Collect lands on
 // /collect and stays there, no tab bounces to /wallet, and being signed out
 // never costs a biometric prompt or a login request.
 import 'dart:convert';
@@ -80,7 +80,7 @@ void main() {
 
   testWidgets(
     'a stored wallet with no session: Collect stays on /collect, other tabs '
-    'stay reachable, Earnings says Not signed in, 0 nonce and 0 prompts',
+    'stay reachable, Wallet says Not signed in, 0 nonce and 0 prompts',
     (tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final backend = _Backend();

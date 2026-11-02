@@ -1,4 +1,4 @@
-// mobile#320: Earnings for a wallet that has no session says "Not signed in"
+// mobile#320: the Wallet tab for a wallet that has no session says "Not signed in"
 // and offers Sign in. It never says "Session expired" for a session that
 // never existed, and never "No Wallet Found" for a wallet that exists.
 import 'package:fpdart/fpdart.dart';
@@ -142,7 +142,7 @@ _pump(WidgetTester tester, {bool raiseHandoff = false}) async {
 }
 
 void main() {
-  testWidgets('a 401 on Earnings shows "Not signed in" with Sign in', (
+  testWidgets('a 401 on Wallet shows "Not signed in" with Sign in', (
     tester,
   ) async {
     final ctx = await _pump(tester);

@@ -466,7 +466,7 @@ void main() {
     });
   });
 
-  testWidgets('Earnings keeps its list, and refetches after a minute away', (
+  testWidgets('Wallet keeps its list, and refetches after a minute away', (
     tester,
   ) async {
     final wallet = _CountingWallet();

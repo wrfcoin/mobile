@@ -44,7 +44,7 @@ class WalletScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Earnings'),
+        title: const Text('Wallet'),
         actions: [
           if (flags.enableAnalyticsDashboard)
             Semantics(

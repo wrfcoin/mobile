@@ -6,7 +6,7 @@ import '../../../../services/api/api_client.dart';
 import '../providers/transactions_provider.dart';
 import '../providers/wallet_provider.dart';
 
-/// Earnings for a wallet without a session (mobile#320). It says "Not
+/// The Wallet tab for a wallet without a session (mobile#320). It says "Not
 /// signed in", not "Session expired", and offers the one action that signs
 /// in: each tap is one biometric prompt, one nonce and one login, and
 /// nothing retries on its own.
