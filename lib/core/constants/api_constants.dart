@@ -311,4 +311,17 @@ class ApiConstants {
   // Public read; the edge admits only the alias form, with no query.
   static String calibrationCertificate(String alias) =>
       '/calibration-certificates/station/$alias';
+
+  // Payout notifications (backend payout-notification-routes.ts). The config and
+  // stopping a topic need no login; the rest need that address's wallet token.
+  static const String notificationsConfig = '/notifications/config';
+  static const String notificationsSubscriptions =
+      '/notifications/subscriptions';
+  static String notificationsList(String address) =>
+      '/notifications/subscriptions/$address';
+  static String notificationsSubscription(String id) =>
+      '/notifications/subscriptions/$id';
+  static String notificationsTest(String id) =>
+      '/notifications/subscriptions/$id/test';
+  static const String notificationsUnsubscribe = '/notifications/unsubscribe';
 }

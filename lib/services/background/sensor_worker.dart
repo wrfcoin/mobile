@@ -4,6 +4,7 @@ import 'package:workmanager/workmanager.dart';
 import '../../features/collector/data/datasources/battery_monitor.dart';
 import '../../features/collector/data/datasources/sensor_data_source.dart';
 import '../../features/collector/data/repositories/collector_repository_impl.dart';
+import '../../features/notifications/data/ntfy_poller.dart';
 import '../../services/api/api_client.dart';
 import '../../services/crypto/wallet_secure_storage.dart';
 import '../../services/location/location_service.dart';
@@ -14,6 +15,7 @@ import 'sync_worker.dart';
 
 const sensorTaskName = 'com.wrfcoin.sensorCollection';
 const syncTaskName = 'com.wrfcoin.dataSync';
+const payoutPollTaskName = 'com.wrfcoin.payoutPoll';
 
 CollectorRepository _createRepository(AppDatabase db) {
   return CollectorRepository(
@@ -33,6 +35,9 @@ void callbackDispatcher() {
         return true;
       case syncTaskName:
         await _syncPendingData();
+        return true;
+      case payoutPollTaskName:
+        await pollPayoutNotificationsInBackground();
         return true;
       default:
         return false;
@@ -123,6 +128,30 @@ Future<void> registerSyncWorker() async {
       existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
       constraints: Constraints(networkType: NetworkType.connected),
     ),
+  );
+}
+
+/// The periodic check of this phone's payout topic (15 minutes is Android's
+/// floor). It survives collection being turned off: it is about being paid.
+Future<void> registerPayoutPollWorker() async {
+  if (kIsWeb) return;
+  await _bestEffortBackgroundWork(
+    'Payout notification check',
+    () => Workmanager().registerPeriodicTask(
+      payoutPollTaskName,
+      payoutPollTaskName,
+      frequency: const Duration(minutes: 15),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      constraints: Constraints(networkType: NetworkType.connected),
+    ),
+  );
+}
+
+Future<void> cancelPayoutPollWorker() async {
+  if (kIsWeb) return;
+  await _bestEffortBackgroundWork(
+    'Payout notification cancellation',
+    () => Workmanager().cancelByUniqueName(payoutPollTaskName),
   );
 }
 

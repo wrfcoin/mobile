@@ -30,6 +30,47 @@ class PushService {
     _initialized = true;
   }
 
+  /// Asks the OS to allow notifications (Android 13+, iOS). True when allowed.
+  Future<bool> requestPermission() async {
+    await initialize();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android != null) {
+      return await android.requestNotificationsPermission() ?? false;
+    }
+    final ios = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    if (ios != null) {
+      return await ios.requestPermissions(alert: true, sound: true) ?? false;
+    }
+    return false;
+  }
+
+  /// Payouts get their own channel, so they can be silenced apart from weather.
+  Future<void> showPayoutNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await initialize();
+    const android = AndroidNotificationDetails(
+      'wrfcoin_payouts',
+      'Payouts',
+      channelDescription: 'When your wallet is paid',
+      importance: Importance.defaultImportance,
+    );
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(android: android),
+    );
+  }
+
   Future<void> showNotification({
     required int id,
     required String title,

@@ -59,6 +59,15 @@ class WalletScreen extends ConsumerWidget {
             ),
           Semantics(
             button: true,
+            label: 'Open payout notifications',
+            child: IconButton(
+              tooltip: 'Payout notifications',
+              icon: const Icon(Icons.notifications_outlined),
+              onPressed: () => context.push('/wallet/notifications'),
+            ),
+          ),
+          Semantics(
+            button: true,
             label: 'Open chain explorer',
             child: IconButton(
               tooltip: 'Chain',
