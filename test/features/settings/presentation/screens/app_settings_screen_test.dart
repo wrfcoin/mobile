@@ -27,6 +27,7 @@ const _destinations = <String, String>{
   'Station security': '/collect/station-security',
   'Transfer a station': '/collect/station-transfer',
   'Accept a station': '/collect/station-accept',
+  'Recover a station': '/collect/station-recovery',
   'Collector validation': '/collect/validation',
   'Field mode': '/collect/field-mode',
 };
