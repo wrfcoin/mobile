@@ -394,6 +394,32 @@ void main() {
     await seed();
     expect((await worker().syncPendingReadings()).acceptedCount, 1);
   });
+  for (final cachedActive in [true, false]) {
+    test(
+      'one failed status check keeps the queue on the next good check '
+      '(cached on_chain: $cachedActive)',
+      () async {
+        if (cachedActive) {
+          await db.upsertOfflineData(
+            MobileStationStatusService.cacheKey(syntheticStationId),
+            jsonEncode({'stationId': syntheticStationId, 'status': 'on_chain'}),
+          );
+        }
+        statusOffline = true;
+        await seed();
+        final failed = await worker().syncPendingReadings();
+        expect(failed.acceptedCount, 0);
+        expect(failed.pendingCount, 1);
+        statusOffline = false;
+        clock = clock.add(const Duration(minutes: 1));
+        final next = await worker().syncPendingReadings();
+        expect(next.droppedStaleCount, 0, reason: 'nothing was unactivated');
+        expect(next.acceptedCount, 1);
+        expect(next.pendingCount, 0);
+        expect(await db.getSyncMetadata(staleReadingsNoticeTableName), isNull);
+      },
+    );
+  }
   for (final prepare in [true, false]) {
     test(
       '409 STATION_NOT_ACTIVE at ${prepare ? 'prepare' : 'submit'} is awaiting, never retried',
