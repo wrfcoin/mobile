@@ -25,6 +25,17 @@ enum ReadingSource {
   }
 }
 
+/// Where a reading's rough location came from: read for this reading, or
+/// reused from an earlier one. Reused locations carry their original time.
+abstract final class LocationSource {
+  static const fresh = 'fresh';
+  static const reused = 'reused';
+}
+
+/// The longest a rough location may be reused. Past this the phone may be
+/// anywhere, so no reading is taken until the app can read location again.
+const maxReusedLocationAge = Duration(hours: 24);
+
 /// Which background or foreground step a [CollectionRun] row describes:
 /// a [ReadingSource] value, or one of these for an upload.
 abstract final class CollectionRunKind {
@@ -39,6 +50,7 @@ abstract final class CollectionOutcome {
   static const batteryLow = 'battery_low';
   static const barometerUnavailable = 'barometer_unavailable';
   static const locationUnavailable = 'location_unavailable';
+  static const locationTooOld = 'location_too_old';
   static const notDue = 'not_due';
   static const error = 'error';
 }

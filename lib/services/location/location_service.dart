@@ -59,6 +59,10 @@ class LocationService {
     }
   }
 
+  /// How long a location request may take. Without a limit the call never
+  /// returns when Android withholds location.
+  static const positionTimeLimit = Duration(seconds: 30);
+
   Future<Position?> getCurrentPosition() async {
     try {
       if (!await requestPermission()) return null;
@@ -67,6 +71,28 @@ class LocationService {
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
           distanceFilter: 50,
+          timeLimit: positionTimeLimit,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Failed to get position: $e');
+      return null;
+    }
+  }
+
+  /// A rough position for the collection service. Never shows a permission
+  /// dialog, because there may be no screen to show it on.
+  Future<Position?> getQuietPosition() async {
+    try {
+      final permission = await checkPermission();
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        return null;
+      }
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: positionTimeLimit,
         ),
       );
     } catch (e) {

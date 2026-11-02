@@ -40,4 +40,15 @@ class SensorDataSource {
       lng: LocationService.anonymize(position.longitude),
     );
   }
+
+  /// [readLocation] for the collection service: no permission dialog.
+  Future<({double lat, double lng})?> readLocationQuietly() async {
+    final position = await _locationService.getQuietPosition();
+    if (position == null) return null;
+
+    return (
+      lat: LocationService.anonymize(position.latitude),
+      lng: LocationService.anonymize(position.longitude),
+    );
+  }
 }

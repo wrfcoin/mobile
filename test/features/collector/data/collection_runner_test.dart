@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sql;
@@ -26,6 +27,8 @@ class _Sensors extends SensorDataSource {
   @override
   Future<({double lat, double lng})?> readLocation() async => location;
   @override
+  Future<({double lat, double lng})?> readLocationQuietly() async => location;
+  @override
   Future<double?> readBarometer() async => pressure;
 }
 
@@ -47,10 +50,27 @@ void main() {
   Future<void> job(CollectionRunner r) =>
       runCollectionJob(r, batteryThreshold: 15, baseIntervalMinutes: 15);
 
+  /// A reading from when the app last read location.
+  Future<void> seedFresh(Duration ago) {
+    final at = DateTime.now().subtract(ago);
+    return db.insertReading(
+      SensorReadingsCompanion.insert(
+        latitude: 46.8,
+        longitude: -92.1,
+        pressureHpa: 1012,
+        timestamp: at,
+        source: const Value('collect_now'),
+        locationSource: const Value(LocationSource.fresh),
+        locationAt: Value(at),
+      ),
+    );
+  }
+
   test('a job that saves a reading succeeds and tags it', () async {
+    await seedFresh(const Duration(hours: 1));
     await job(runner(_Sensors()));
 
-    final reading = (await db.getReadingHistory()).single;
+    final reading = (await db.getReadingHistory()).last;
     expect(reading.source, 'job');
     final run = (await db.getCollectionRuns()).single;
     expect(run.kind, 'job');
@@ -64,12 +84,7 @@ void main() {
       80,
       CollectionOutcome.locationUnavailable,
     ),
-    (
-      'no barometer event',
-      _Sensors(pressure: null),
-      80,
-      CollectionOutcome.barometerUnavailable,
-    ),
+
     ('low battery', _Sensors(), 5, CollectionOutcome.batteryLow),
   ]) {
     test('$name: no reading, a saved reason, and not a success', () async {
@@ -85,17 +100,137 @@ void main() {
     });
   }
 
+  test('no barometer event: no reading, and not a success', () async {
+    await seedFresh(const Duration(hours: 1));
+    await expectLater(
+      job(runner(_Sensors(pressure: null))),
+      throwsA(isA<CollectionRunFailed>()),
+    );
+    expect((await db.getReadingHistory()).length, 1);
+    expect(
+      (await db.getCollectionRuns()).single.outcome,
+      CollectionOutcome.barometerUnavailable,
+    );
+  });
+
   test('a run not yet due is an empty run too', () async {
-    await job(runner(_Sensors()));
+    await seedFresh(const Duration(minutes: 5));
     await expectLater(
       job(runner(_Sensors())),
       throwsA(isA<CollectionRunFailed>()),
     );
     expect((await db.getReadingHistory()).length, 1);
     expect(
-      (await db.getCollectionRuns()).map((r) => r.outcome),
-      [CollectionOutcome.notDue, CollectionOutcome.readingSaved],
+      (await db.getCollectionRuns()).single.outcome,
+      CollectionOutcome.notDue,
     );
+  });
+
+  group('rough location', () {
+    test('the job never reads location, and labels the reused cell', () async {
+      await seedFresh(const Duration(hours: 3));
+      final original = (await db.getReadingHistory()).single.locationAt;
+      await runner(_Sensors(location: (lat: 1.0, lng: 2.0))).collect(
+        source: ReadingSource.job,
+      );
+
+      final reading = (await db.getReadingHistory()).last;
+      expect(reading.latitude, 46.8);
+      expect(reading.longitude, -92.1);
+      expect(reading.locationSource, LocationSource.reused);
+      expect(reading.locationAt, original);
+    });
+
+    test('the service prefers a quiet fresh read, rounded to the grid', () async {
+      await seedFresh(const Duration(hours: 3));
+      await runner(_Sensors(location: (lat: 47.04, lng: -92.26))).collect(
+        source: ReadingSource.service,
+      );
+
+      final reading = (await db.getReadingHistory()).last;
+      expect(reading.latitude, 47.0);
+      expect(reading.longitude, -92.3);
+      expect(reading.locationSource, LocationSource.fresh);
+    });
+
+    test('the service reuses the cell when no fix comes', () async {
+      await seedFresh(const Duration(hours: 3));
+      await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.service,
+      );
+      expect(
+        (await db.getReadingHistory()).last.locationSource,
+        LocationSource.reused,
+      );
+    });
+
+    test('reuse does not reset the cell age', () async {
+      await seedFresh(const Duration(hours: 23));
+      await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.service,
+      );
+      await db.customStatement(
+        'UPDATE sensor_readings SET location_at = location_at - 7200',
+      );
+      final result = await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.service,
+      );
+      expect(result.failureReason, CollectReadingFailureReason.locationTooOld);
+    });
+
+    test('a cell over a day old is refused with its own reason', () async {
+      await seedFresh(const Duration(hours: 25));
+      final result = await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.service,
+      );
+      expect(result.failureReason, CollectReadingFailureReason.locationTooOld);
+      expect((await db.getReadingHistory()).length, 1);
+      expect(
+        (await db.getCollectionRuns()).single.outcome,
+        CollectionOutcome.locationTooOld,
+      );
+    });
+
+    test('Collect Now still needs a real read, and never reuses', () async {
+      await seedFresh(const Duration(hours: 1));
+      final result = await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.collectNow,
+        force: true,
+      );
+      expect(
+        result.failureReason,
+        CollectReadingFailureReason.locationUnavailable,
+      );
+    });
+
+    test('an app-open reading never reuses a cell', () async {
+      await seedFresh(const Duration(hours: 1));
+      final result = await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.appOpen,
+      );
+      expect(
+        result.failureReason,
+        CollectReadingFailureReason.locationUnavailable,
+      );
+    });
+
+    test('a row from before this was recorded is never reused', () async {
+      await db.insertReading(
+        SensorReadingsCompanion.insert(
+          latitude: 10,
+          longitude: 20,
+          pressureHpa: 1000,
+          timestamp: DateTime.now(),
+        ),
+      );
+      final result = await runner(_Sensors(location: null)).collect(
+        source: ReadingSource.job,
+      );
+      expect(
+        result.failureReason,
+        CollectReadingFailureReason.locationUnavailable,
+      );
+    });
   });
 
   test('Collect Now readings say so', () async {

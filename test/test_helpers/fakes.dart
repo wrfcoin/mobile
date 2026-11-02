@@ -814,6 +814,9 @@ class FakeCollectorLocalStore implements CollectorLocalStore {
   final List<String> recordedRuns = <String>[];
 
   @override
+  Future<SensorReading?> getLatestLocatedReading() async => latestReading;
+
+  @override
   Future<void> recordCollectionRun({
     required String kind,
     required String outcome,

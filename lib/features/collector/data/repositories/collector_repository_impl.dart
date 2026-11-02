@@ -76,19 +76,17 @@ class CollectorRepository {
       );
     }
 
-    final rawLocation = await sensorDataSource.readLocation();
-    if (rawLocation == null) {
-      return const CollectReadingResult.failure(
-        CollectReadingFailureReason.locationUnavailable,
-      );
+    final now = DateTime.now();
+    final located = await _locate(source, now);
+    if (located.failure != null) {
+      return CollectReadingResult.failure(located.failure!);
     }
     // Whatever the source returned, a reading is stored and compared on the 0.1 degree grid.
     final location = (
-      lat: CoarseLocation.coarsen(rawLocation.lat),
-      lng: CoarseLocation.coarsen(rawLocation.lng),
+      lat: CoarseLocation.coarsen(located.lat),
+      lng: CoarseLocation.coarsen(located.lng),
     );
 
-    final now = DateTime.now();
     if (!force) {
       final previousReading = await db.getLatestReading();
       final decision = SamplingPolicy.evaluate(
@@ -130,6 +128,8 @@ class CollectorRepository {
         pressureHpa: pressure,
         timestamp: now,
         source: Value(source.dbValue),
+        locationSource: Value(located.source),
+        locationAt: Value(located.at),
       ),
     );
     await db.upsertSyncMetadata(
@@ -146,6 +146,43 @@ class CollectorRepository {
         timestamp: now,
       ),
     );
+  }
+
+  /// Collect Now reads location and may ask for permission. An automatic
+  /// reading on app open reads it without asking. The service tries a quiet
+  /// read first, and the WorkManager job cannot read location at all, so both
+  /// fall back to the last known cell, labelled as reused and refused once it
+  /// is too old. A reading's location is never sent to the chain: it stays in
+  /// this phone's record, and the attester compares against the station's
+  /// registered location.
+  Future<_Located> _locate(ReadingSource source, DateTime now) async {
+    if (source == ReadingSource.collectNow || source == ReadingSource.appOpen) {
+      final fresh = source == ReadingSource.collectNow
+          ? await sensorDataSource.readLocation()
+          : await sensorDataSource.readLocationQuietly();
+      return fresh == null
+          ? const _Located.failed(
+              CollectReadingFailureReason.locationUnavailable,
+            )
+          : _Located(fresh.lat, fresh.lng, LocationSource.fresh, now);
+    }
+    if (source == ReadingSource.service) {
+      final fresh = await sensorDataSource.readLocationQuietly();
+      if (fresh != null) {
+        return _Located(fresh.lat, fresh.lng, LocationSource.fresh, now);
+      }
+    }
+    final known = await db.getLatestLocatedReading();
+    final at = known?.locationAt;
+    if (known == null || at == null) {
+      return const _Located.failed(
+        CollectReadingFailureReason.locationUnavailable,
+      );
+    }
+    if (now.difference(at) > maxReusedLocationAge) {
+      return const _Located.failed(CollectReadingFailureReason.locationTooOld);
+    }
+    return _Located(known.latitude, known.longitude, LocationSource.reused, at);
   }
 
   Future<int> recommendedIntervalMinutes(int baseIntervalMinutes) async {
@@ -607,6 +644,9 @@ abstract class CollectorLocalStore {
 
   Future<SensorReading?> getLatestReading();
 
+  /// The newest reading that knows when its location was obtained.
+  Future<SensorReading?> getLatestLocatedReading();
+
   Future<List<SensorReading>> getReadingHistory({int limit = 5000}) async {
     final latest = await getLatestReading();
     return latest == null ? const [] : [latest];
@@ -669,6 +709,9 @@ class NoopCollectorLocalStore implements CollectorLocalStore {
   Future<SensorReading?> getLatestReading() async => null;
 
   @override
+  Future<SensorReading?> getLatestLocatedReading() async => null;
+
+  @override
   Future<List<SensorReading>> getReadingHistory({int limit = 5000}) async =>
       const [];
 
@@ -695,10 +738,26 @@ class NoopCollectorLocalStore implements CollectorLocalStore {
   }) async {}
 }
 
+class _Located {
+  const _Located(this.lat, this.lng, this.source, this.at) : failure = null;
+  const _Located.failed(CollectReadingFailureReason this.failure)
+    : lat = 0,
+      lng = 0,
+      source = null,
+      at = null;
+
+  final double lat;
+  final double lng;
+  final String? source;
+  final DateTime? at;
+  final CollectReadingFailureReason? failure;
+}
+
 enum CollectReadingFailureReason {
   batteryLow,
   barometerUnavailable,
   locationUnavailable,
+  locationTooOld,
   stationaryBackoff,
 }
 

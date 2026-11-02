@@ -179,6 +179,22 @@ class AppDatabase extends _$AppDatabase implements CollectorLocalStore {
   }
 
   @override
+  Future<SensorReading?> getLatestLocatedReading() {
+    return (select(sensorReadings)
+          ..where((row) => row.locationAt.isNotNull())
+          ..orderBy([
+            (row) => OrderingTerm(
+              expression: row.locationAt,
+              mode: OrderingMode.desc,
+            ),
+            (row) =>
+                OrderingTerm(expression: row.id, mode: OrderingMode.desc),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  @override
   Future<List<SensorReading>> getReadingHistory({int limit = 5000}) {
     return (select(sensorReadings)
           ..orderBy([

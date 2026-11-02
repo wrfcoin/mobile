@@ -575,6 +575,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
         return 'barometer_unavailable';
       case CollectReadingFailureReason.locationUnavailable:
         return 'location_unavailable';
+      case CollectReadingFailureReason.locationTooOld:
+        return 'location_too_old';
       case CollectReadingFailureReason.stationaryBackoff:
         return 'stationary_backoff';
       case null:
@@ -590,6 +592,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
         return 'No barometer reading was available on this device.';
       case CollectReadingFailureReason.locationUnavailable:
         return 'Allow location to register your weather station, then try Collect Now again.';
+      case CollectReadingFailureReason.locationTooOld:
+        return 'The saved location is over a day old. Open the app with location on to refresh it.';
       case CollectReadingFailureReason.stationaryBackoff:
         return 'Collection backed off because the device has not moved enough yet.';
       case null:

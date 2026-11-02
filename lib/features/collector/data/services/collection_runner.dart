@@ -51,6 +51,8 @@ class CollectionRunner {
         CollectionOutcome.barometerUnavailable,
       CollectReadingFailureReason.locationUnavailable =>
         CollectionOutcome.locationUnavailable,
+      CollectReadingFailureReason.locationTooOld =>
+        CollectionOutcome.locationTooOld,
       CollectReadingFailureReason.stationaryBackoff => CollectionOutcome.notDue,
       null => CollectionOutcome.error,
     };
