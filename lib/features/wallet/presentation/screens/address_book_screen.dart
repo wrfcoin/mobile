@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -327,6 +328,11 @@ class _PreviewRow extends StatelessWidget {
   );
 }
 
+/// `0x1747…a275`, the short form used for addresses elsewhere in the app.
+String shortContactAddress(String address) => address.length > 14
+    ? '${address.substring(0, 6)}…${address.substring(address.length - 4)}'
+    : address;
+
 class _ContactTile extends StatelessWidget {
   const _ContactTile({
     required this.entry,
@@ -359,13 +365,16 @@ class _ContactTile extends StatelessWidget {
           child: Text(entry.label.characters.first.toUpperCase()),
         ),
         title: Text(entry.label),
-        // The chip sits under the address: beside it, a phone-width row left
-        // the address a few characters per line.
+        // One short line, like addresses elsewhere. Tapping the contact shows
+        // the whole address and a copy button.
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              entry.address,
+              shortContactAddress(entry.address),
+              key: Key('contact-short-${entry.address}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             ),
             if (chip != null) ...[const SizedBox(height: 4), chip],
@@ -393,6 +402,7 @@ class _ContactDialogState extends ConsumerState<_ContactDialog> {
   late final _name = TextEditingController(text: widget.existing?.label);
   late final _address = TextEditingController(text: widget.existing?.address);
   String? _ownLegacyAlias;
+  bool _copied = false;
 
   @override
   void initState() {
@@ -498,11 +508,31 @@ class _ContactDialogState extends ConsumerState<_ContactDialog> {
               key: const Key('contact-address'),
               controller: _address,
               readOnly: editing,
+              // A saved address is shown whole: the list only has the short form.
+              maxLines: editing ? null : 1,
               decoration: InputDecoration(
                 labelText: 'Address',
                 hintText: '0x...',
-                helperText: editing
-                    ? 'To change the address, add a new contact.'
+                helperText: !editing
+                    ? null
+                    : _copied
+                    ? 'Address copied.'
+                    : 'To change the address, add a new contact.',
+                suffixIcon: editing
+                    ? IconButton(
+                        key: const Key('contact-copy-address'),
+                        tooltip: 'Copy address',
+                        icon: Icon(
+                          _copied ? Icons.check : Icons.copy,
+                          size: 18,
+                        ),
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: widget.existing!.address),
+                          );
+                          if (mounted) setState(() => _copied = true);
+                        },
+                      )
                     : null,
               ),
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
