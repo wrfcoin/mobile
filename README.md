@@ -22,7 +22,7 @@ The Android APK is **not yet published**. Signing and distribution follow launch
 - **Wallet:** create or import a wallet, view balances and transaction history, and keep signing keys on the client.
 - **Send and receive:** share a receive address and sign testnet transfers. Send availability depends on the build configuration and backend capabilities; legacy addresses are receive-only.
 - **Phone-as-a-station:** register a phone station and submit signed sensor observations, subject to device sensors, permissions and station setup.
-- **Earnings:** view backend-reported reward totals and role earnings; missing evidence stays unavailable, and a submitted observation is not a guaranteed payout.
+- **Rewards in the Wallet tab:** view backend-reported reward totals and role earnings; missing evidence stays unavailable, and a submitted observation is not a guaranteed payout.
 - **Leaderboard:** browse the contribution leaderboard returned by the API.
 
 These screens depend on the configured testnet API. An unavailable service or unsupported sensor is not replaced by a promise of live data.

@@ -331,7 +331,7 @@ void main() {
     await pumpUntilFound(tester, find.byType(PrivacyCenterScreen));
   });
 
-  testWidgets('Payout notifications moved from Earnings to Settings', (
+  testWidgets('Payout notifications moved from Wallet to Settings', (
     tester,
   ) async {
     final router = await pumpApp(tester);

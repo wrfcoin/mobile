@@ -174,7 +174,7 @@ void main() {
     expect(find.text('Collect'), findsWidgets);
     expect(find.text('Sync Progress & Rewards'), findsOneWidget);
 
-    // The stored wallet has no session: Earnings offers Sign in (mobile#320)
+    // The stored wallet has no session: Wallet offers Sign in (mobile#320)
     // and the other tabs stay reachable.
     await tester.tap(find.text('Wallet'));
     await tester.pumpAndSettle();

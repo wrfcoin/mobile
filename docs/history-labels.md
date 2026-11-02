@@ -2,7 +2,7 @@
 
 Implementation plan: label known network operations without inventing monetary
 direction or amounts; retain explicit transfer and paid-reward semantics. Use
-the shared wallet-history tile on Earnings and Wallet. On initial load/refresh,
+the shared wallet-history tile on the Wallet tab. On initial load/refresh,
 continue empty credit pages sequentially until credits arrive or 30 total pages
 have been examined, with progress, cancellation and incomplete-history feedback.
 
@@ -33,16 +33,16 @@ avoids falsely saying stake, treasury or privacy operations moved zero WRF.
 Transfer directions still require reported direction/settlement, and only paid
 weather/forecast ledger credits are rendered as received rewards.
 
-Earnings is WalletScreen (app-bar title “Earnings”); its Recent Transactions and
+The Wallet tab is WalletScreen (app-bar title “Wallet”); its Recent Transactions and
 Paid rewards both use TransactionTile and transactionsProvider. There is no
-separate Earnings history widget. Chain's My account card also uses that tile.
+separate earnings history widget. Chain's My account card also uses that tile.
 
 ## Discovery behavior
 
 Initial load and refresh publish the first transaction page, then sequentially
 follow empty credit pages until the first valid paid credits, cursor exhaustion,
 any previously seen cursor in this discovery run or 30 pages total (including the initial page). While discovering,
-Earnings shows “Checking earnings history…”. The transaction offset remains
+the Wallet tab shows “Checking earnings history…”. The transaction offset remains
 unchanged; credit scans do not consume transaction pages. Reaching the bound
 preserves the cursor for explicit Load more and forces the existing incomplete
 history notice even if the server did not report incomplete history.
