@@ -1,5 +1,9 @@
 # Offline Sky View phase 1 (Refs #341)
 
+Superseded for the live screen by `sky-view-stage-1.md`. Kept for the data,
+licensing and privacy reasoning, which still applies, except where that note
+says otherwise.
+
 Design recorded before implementation, 2026-10-02. App tier, r20; after
 closed-testnet GO. The existing `/weather/ar` entry becomes a schematic sky
 finder. It has no camera and makes no weather, backend or other HTTP calls.

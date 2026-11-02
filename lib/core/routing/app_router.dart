@@ -152,6 +152,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             _fadePage(key: state.pageKey, child: const OnboardingTourScreen()),
       ),
+      // Outside the shell: Sky View fills the screen, with no navigation bar.
+      GoRoute(
+        path: '/weather/ar',
+        pageBuilder: (context, state) =>
+            _fadePage(key: state.pageKey, child: const ArViewerScreen()),
+      ),
       ShellRoute(
         builder: (context, state, child) => ScaffoldWithNavBar(child: child),
         routes: [
@@ -165,13 +171,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 pageBuilder: (context, state) => _fadePage(
                   key: state.pageKey,
                   child: const WeatherMapScreen(),
-                ),
-              ),
-              GoRoute(
-                path: 'ar',
-                pageBuilder: (context, state) => _fadePage(
-                  key: state.pageKey,
-                  child: const ArViewerScreen(),
                 ),
               ),
               GoRoute(

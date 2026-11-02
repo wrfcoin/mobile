@@ -9,6 +9,7 @@ import android.os.PersistableBundle
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 // A FragmentActivity: local_auth can only show its biometric prompt from one
@@ -18,10 +19,16 @@ class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.wrfcoin.wrfcoin_mobile/screen_security"
     private val WEAR_CHANNEL = "com.wrfcoin.wrfcoin_mobile/wear_companion"
     private val CLIPBOARD_CHANNEL = "com.wrfcoin.wrfcoin_mobile/secure_clipboard"
+    private val SKY_ROTATION_CHANNEL = "com.wrfcoin.wrfcoin_mobile/sky_rotation_vector"
     private val wearCompanionBridge = WearCompanionBridge()
+    private var skyRotationVector: SkyRotationVectorStream? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        skyRotationVector = SkyRotationVectorStream(this).also {
+            EventChannel(flutterEngine.dartExecutor.binaryMessenger, SKY_ROTATION_CHANNEL)
+                .setStreamHandler(it)
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -97,5 +104,12 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // With the engine gone Dart can never cancel, so stop the sensor here.
+        skyRotationVector?.stop()
+        skyRotationVector = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 }

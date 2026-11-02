@@ -314,8 +314,8 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
                     children: [
                       Expanded(
                         child: _QuickAction(
-                          icon: Icons.view_in_ar,
-                          label: 'AR View',
+                          icon: Icons.stars,
+                          label: 'Sky View',
                           onTap: () => context.push('/weather/ar'),
                         ),
                       ),

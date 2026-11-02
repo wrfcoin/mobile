@@ -4,6 +4,10 @@ All notable changes to `wrfcoin_mobile` are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Sky View: a full-screen sky map that follows the phone, drawn with no camera and no network. Stars, planets, Sun, Moon, grid and horizon; Android's fused rotation-vector sensor with an accelerometer/magnetometer fallback; automatic declination from WMM2025; "Align on a star" calibration.
+
 ### Changed
 
 - The wallet reads its balance from the public route `GET /api/public/balance/0x<address>` and shows "Earned in total" beside it. A switched-off read (404) shows "Unavailable", a rate-limited one (429) "Busy"; a missing total is never shown as zero.
