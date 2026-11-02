@@ -1,5 +1,6 @@
 import '../../weather/domain/models/coarse_location.dart';
 import 'sky_astronomy.dart';
+import 'sky_moon.dart';
 
 class HorizonEvents {
   final DateTime? rise, set;
@@ -9,7 +10,8 @@ class HorizonEvents {
 /// First geometric zero-altitude crossings in [start, start + 24 hours).
 /// Samples one-minute intervals and refines sign changes to within a second.
 /// This is an approximate finder, not apparent limb rise/set: no refraction,
-/// terrain or observer elevation. Very brief grazing crossings may be missed.
+/// terrain or observer elevation. The Moon includes parallax, since it shifts
+/// the crossing by minutes. Very brief grazing crossings may be missed.
 /// Returns null if the complete window exceeds the existing ephemeris range.
 HorizonEvents? nextHorizonEvents(
   SkyObject object,
@@ -25,22 +27,17 @@ HorizonEvents? nextHorizonEvents(
     throw RangeError('Invalid sky position');
   }
   // Catalog coordinates are J2000; moving bodies need a fresh J2000 position
-  // at every sample, then both use the existing precession/horizon transform.
-  final moving = const {
-    'Sun',
-    'Mercury',
-    'Venus',
-    'Mars',
-    'Jupiter',
-    'Saturn',
-    'Uranus',
-    'Neptune',
-  }.contains(object.id);
+  // at every sample, then all use the shared precession/horizon transform.
   double altitude(DateTime time) {
-    final position = moving
-        ? solarSystem(time).singleWhere((body) => body.id == object.id).position
-        : object.position;
-    return toHorizontal(precess(position, time), time, cell).altitude;
+    final position = movingPosition(object.id, time) ?? object.position;
+    final at = SkyObject(
+      object.id,
+      object.name,
+      '',
+      position,
+      object.magnitude,
+    );
+    return observedHorizontal(at, time, cell).altitude;
   }
 
   DateTime refine(DateTime left, DateTime right, bool rising) {
