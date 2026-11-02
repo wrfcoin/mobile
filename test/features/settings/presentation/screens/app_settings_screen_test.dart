@@ -7,6 +7,9 @@ import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/settings/presentation/screens/app_settings_screen.dart';
 import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_provider.dart';
+import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
+import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
+import 'package:wrfcoin_mobile/services/crypto/wallet_secure_storage.dart';
 
 import '../../../../test_helpers/fakes.dart';
 
@@ -28,7 +31,11 @@ const _destinations = <String, String>{
   'Field mode': '/collect/field-mode',
 };
 
-Widget _app({ThemeMode mode = ThemeMode.light}) {
+Widget _app({
+  ThemeMode mode = ThemeMode.light,
+  FakeWalletSecureStorage? walletStorage,
+  InMemoryKeyValueStorage? keyStorage,
+}) {
   final router = GoRouter(
     initialLocation: '/profile/settings',
     routes: [
@@ -50,6 +57,15 @@ Widget _app({ThemeMode mode = ThemeMode.light}) {
       ),
       // Wallet unavailable: the settings entries must still be there.
       walletProvider.overrideWith(_NoWallet.new),
+      if (walletStorage != null)
+        walletSecureStorageProvider.overrideWithValue(walletStorage),
+      if (keyStorage != null)
+        keyManagerProvider.overrideWithValue(
+          KeyManager(
+            biometric: BiometricService(client: FakeLocalAuthClient()),
+            storage: keyStorage,
+          ),
+        ),
     ],
     child: MaterialApp.router(
       routerConfig: router,
@@ -167,5 +183,65 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('WRFCoin'), findsOneWidget);
     expect(find.text('Licensed under MIT OR Apache-2.0.'), findsOneWidget);
+  });
+
+  group('Emergency Wipe', () {
+    Finder wipe() => find.text('Emergency Wipe');
+
+    testWidgets('sits last on the page, set apart, below About', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1280, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      final danger = find.byKey(const Key('settings-danger-area'));
+      expect(danger, findsOneWidget);
+      expect(find.text('Privacy: danger area'), findsOneWidget);
+      expect(
+        tester.getTopLeft(danger).dy,
+        greaterThan(tester.getBottomLeft(find.text('About')).dy),
+      );
+      expect(
+        tester.getTopLeft(danger).dy,
+        greaterThan(tester.getBottomLeft(find.text('Privacy Center')).dy),
+      );
+    });
+
+    testWidgets('nothing can be erased without typing WIPE', (tester) async {
+      tester.view.physicalSize = const Size(1280, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final storage = FakeWalletSecureStorage();
+      final keys = InMemoryKeyValueStorage();
+      await keys.write(key: 'wrf_private_key', value: 'synthetic');
+      await tester.pumpWidget(_app(walletStorage: storage, keyStorage: keys));
+      await tester.pumpAndSettle();
+      await tester.tap(wipe());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Type WIPE to confirm'), findsOneWidget);
+      FilledButton wipeNow() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Wipe now'),
+      );
+      expect(wipeNow().onPressed, isNull);
+
+      await tester.enterText(find.byType(TextField), 'WIP');
+      await tester.pump();
+      expect(wipeNow().onPressed, isNull);
+
+      await tester.enterText(find.byType(TextField), 'WIPE');
+      await tester.pump();
+      expect(wipeNow().onPressed, isNotNull);
+
+      // Cancel erases nothing, even with WIPE typed.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Type WIPE to confirm'), findsNothing);
+      expect(find.textContaining('wiped'), findsNothing);
+      expect(storage.clearWalletDataCalls, 0);
+      expect(await keys.read(key: 'wrf_private_key'), 'synthetic');
+    });
   });
 }

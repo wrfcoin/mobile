@@ -530,15 +530,15 @@ void main() {
       expect(importers, [
         'lib/features/collector/data/repositories/collector_repository_impl.dart',
         'lib/features/collector/data/services/station_registration_service.dart',
-        'lib/features/wallet/presentation/screens/wallet_screen.dart',
+        'lib/features/wallet/presentation/emergency_wipe.dart',
         'lib/services/background/sync_worker.dart',
       ]);
-      final walletScreen = File('lib/features/wallet/presentation/screens/wallet_screen.dart').readAsStringSync();
-      expect(walletScreen, contains('ref.read(collectKeyWiperProvider).wipe()'));
-      expect(walletScreen, isNot(contains('collectKeyStoreProvider')));
-      expect(walletScreen, isNot(contains('CollectKeyStore(')));
-      expect(walletScreen, isNot(contains('signCommitAuthorization')));
-      expect(walletScreen, isNot(contains('SecureKeyValueStorage.collectKey()')));
+      final wipeSource = File('lib/features/wallet/presentation/emergency_wipe.dart').readAsStringSync();
+      expect(wipeSource, contains('ref.read(collectKeyWiperProvider).wipe()'));
+      expect(wipeSource, isNot(contains('collectKeyStoreProvider')));
+      expect(wipeSource, isNot(contains('CollectKeyStore(')));
+      expect(wipeSource, isNot(contains('signCommitAuthorization')));
+      expect(wipeSource, isNot(contains('SecureKeyValueStorage.collectKey()')));
       // ...and the collector has no wallet-send code.
       final transfer = File('lib/services/crypto/signed_transfer.dart')
           .readAsStringSync();
