@@ -281,6 +281,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Station security says what that screen does', (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.byType(SettingsGearButton));
+    await pumpUntilFound(tester, find.text('Station security'));
+    await pumpFrames(tester);
+    expect(
+      find.text('Freeze or deactivate your station, or cancel a recovery.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('recover your station'), findsNothing);
+    expect(find.text('Recover a station'), findsOneWidget);
+  });
+
   testWidgets('Settings does not overflow at 390 px', (tester) async {
     final router = await pumpApp(tester, size: const Size(390, 3200));
     router.go('/profile/settings');

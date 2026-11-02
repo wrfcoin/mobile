@@ -63,7 +63,7 @@ class AppSettingsScreen extends ConsumerWidget {
               _entry(
                 Icons.security,
                 'Station security',
-                'Freeze, deactivate or recover your station.',
+                'Freeze or deactivate your station, or cancel a recovery.',
                 () => context.push('/collect/station-security'),
               ),
               _entry(
