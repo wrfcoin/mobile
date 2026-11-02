@@ -16,7 +16,7 @@ import '../../test_helpers/screenshot_fonts.dart';
 /// test_helpers/screenshot_fonts.dart. Tab content is test fixture data.
 void main() {
   const screens = <String, (String, Size, Size)>{
-    'settings': ('/profile/settings', Size(390, 2600), Size(1280, 2600)),
+    'settings': ('/profile/settings', Size(390, 2800), Size(1280, 2800)),
     'weather': ('/weather', Size(390, 844), Size(1280, 800)),
     'collect': ('/collect', Size(390, 844), Size(1280, 800)),
     'earnings': ('/wallet', Size(390, 844), Size(1280, 800)),

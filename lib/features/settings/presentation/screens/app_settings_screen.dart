@@ -79,6 +79,12 @@ class AppSettingsScreen extends ConsumerWidget {
                 () => context.push('/collect/station-accept'),
               ),
               _entry(
+                Icons.restore,
+                'Recover a station',
+                "Countersign an operator's recovery claim, then complete it.",
+                () => context.push('/collect/station-recovery'),
+              ),
+              _entry(
                 Icons.verified_outlined,
                 'Calibration certificates',
                 "Check any station's signed sensor calibration.",
