@@ -57,6 +57,15 @@ class _ForecastDashboardState extends ConsumerState<ForecastDashboard> {
           ),
           Semantics(
             button: true,
+            label: 'Open forecast check',
+            child: IconButton(
+              tooltip: 'Forecast check',
+              icon: const Icon(Icons.fact_check_outlined),
+              onPressed: () => context.push('/weather/forecast-check'),
+            ),
+          ),
+          Semantics(
+            button: true,
             label: 'Open weather alerts',
             child: IconButton(
               tooltip: 'Weather alerts',

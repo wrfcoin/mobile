@@ -25,6 +25,7 @@ import '../../features/collector/presentation/screens/station_transfer_screen.da
 import '../../features/challenges/presentation/screens/challenges_screen.dart';
 import '../../features/duels/presentation/screens/forecast_duel_screen.dart';
 import '../../features/duels/presentation/screens/forecast_duels_screen.dart';
+import '../../features/forecast_check/presentation/screens/forecast_check_screen.dart';
 import '../../features/wallet/presentation/screens/wallet_screen.dart';
 import '../../features/analytics/presentation/screens/analytics_dashboard_screen.dart';
 import '../../features/wallet/presentation/screens/send_screen.dart';
@@ -185,6 +186,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 pageBuilder: (context, state) => _fadePage(
                   key: state.pageKey,
                   child: const WeatherStoriesScreen(),
+                ),
+              ),
+              GoRoute(
+                path: 'forecast-check',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: const ForecastCheckScreen(),
                 ),
               ),
               GoRoute(
