@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/constants/api_constants.dart';
@@ -31,7 +30,7 @@ class DataDesertMapScreen extends ConsumerStatefulWidget {
 class _DataDesertMapScreenState extends ConsumerState<DataDesertMapScreen> {
   final _mapController = MapController();
   List<CoverageZone> _zones = const [];
-  Position? _userPosition;
+  ({double lat, double lng})? _userCell;
   bool _loadingLocation = false;
   bool _loadingZones = true;
 
@@ -71,20 +70,19 @@ class _DataDesertMapScreenState extends ConsumerState<DataDesertMapScreen> {
 
   Future<void> _fetchUserLocation() async {
     setState(() => _loadingLocation = true);
-    final position =
-        await ref.read(locationServiceProvider).getCurrentPosition();
-    if (mounted) setState(() { _userPosition = position; _loadingLocation = false; });
+    final cell = await ref.read(locationServiceProvider).getRoughCell();
+    if (mounted) setState(() { _userCell = cell; _loadingLocation = false; });
   }
 
   void _centerOnUser() {
-    final pos = _userPosition;
-    if (pos == null) {
+    final cell = _userCell;
+    if (cell == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Location not available')),
       );
       return;
     }
-    _mapController.move(LatLng(pos.latitude, pos.longitude), 10);
+    _mapController.move(LatLng(cell.lat, cell.lng), 10);
   }
 
   void _onZoneTap(CoverageZone zone) {
@@ -140,14 +138,11 @@ class _DataDesertMapScreenState extends ConsumerState<DataDesertMapScreen> {
                         ))
                     .toList(growable: false),
               ),
-              if (_userPosition != null)
+              if (_userCell != null)
                 MarkerLayer(
                   markers: [
                     Marker(
-                      point: LatLng(
-                        _userPosition!.latitude,
-                        _userPosition!.longitude,
-                      ),
+                      point: LatLng(_userCell!.lat, _userCell!.lng),
                       width: 36,
                       height: 36,
                       child: const _UserLocationMarker(),
