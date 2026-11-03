@@ -650,9 +650,11 @@ class CollectorDashboard extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.battery_saver_outlined,
-                        color: AppColors.success,
+                        color: batteryImpact.isReassuring
+                            ? AppColors.success
+                            : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       const Expanded(
@@ -666,8 +668,10 @@ class CollectorDashboard extends ConsumerWidget {
                       ),
                       Text(
                         batteryImpact.label,
-                        style: const TextStyle(
-                          color: AppColors.success,
+                        style: TextStyle(
+                          color: batteryImpact.isReassuring
+                              ? AppColors.success
+                              : AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -683,7 +687,7 @@ class CollectorDashboard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'GPS gates collection at 50 m movement; barometer reads wait for movement or the next adaptive interval.',
+                    'Readings use your rough location, about 11 km.',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,

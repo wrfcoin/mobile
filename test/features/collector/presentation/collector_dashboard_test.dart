@@ -567,7 +567,10 @@ void main() {
     );
 
     expect(find.text('Battery Impact'), findsOneWidget);
-    expect(find.text('Low'), findsOneWidget);
+    expect(find.text('Low'), findsNothing);
+    expect(find.text('Balanced'), findsNothing);
+    expect(find.text('Not running'), findsOneWidget);
+    expect(find.textContaining('not been measured'), findsOneWidget);
     expect(
       find.textContaining('2.0 samples/hour, pauses below 15%'),
       findsOneWidget,

@@ -36,7 +36,15 @@ class BatteryImpactEstimate {
   final String label;
   final String detail;
 
-  const BatteryImpactEstimate({required this.label, required this.detail});
+  /// A reassuring label, shown in green. Never for service collection, whose
+  /// battery use has not been measured.
+  final bool isReassuring;
+
+  const BatteryImpactEstimate({
+    required this.label,
+    required this.detail,
+    this.isReassuring = true,
+  });
 }
 
 class SamplingPolicy {
@@ -114,9 +122,27 @@ class SamplingPolicy {
   static BatteryImpactEstimate estimateImpact({
     required int intervalMinutes,
     required int batteryThreshold,
+    bool usesForegroundService = false,
+    bool serviceRunning = false,
   }) {
     final interval = intervalMinutes.clamp(15, 60).toInt();
     final samplesPerHour = 60 / interval;
+    if (usesForegroundService) {
+      final rate =
+          '${samplesPerHour.toStringAsFixed(1)} samples/hour, pauses below '
+          '$batteryThreshold%.';
+      const cost =
+          'it keeps the phone partly awake and uses more battery. How much has '
+          'not been measured.';
+      return BatteryImpactEstimate(
+        label: serviceRunning ? 'More battery' : 'Not running',
+        detail: serviceRunning
+            ? '$rate While collecting with the app closed, $cost'
+            : '$rate Not collecting with the app closed right now. When it '
+                  'runs, $cost',
+        isReassuring: false,
+      );
+    }
     final label = interval >= 45
         ? 'Very low'
         : interval >= 30

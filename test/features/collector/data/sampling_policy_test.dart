@@ -67,6 +67,33 @@ void main() {
       expect(estimate.detail, contains('2.0 samples/hour'));
       expect(estimate.detail, contains('pauses below 15%'));
     });
+
+    test('service collection says more battery, unmeasured, never Balanced', () {
+      final estimate = SamplingPolicy.estimateImpact(
+        intervalMinutes: 15,
+        batteryThreshold: 15,
+        usesForegroundService: true,
+        serviceRunning: true,
+      );
+
+      expect(estimate.label, 'More battery');
+      expect(estimate.detail, contains('uses more battery'));
+      expect(estimate.detail, contains('not been measured'));
+      expect(estimate.detail, contains('pauses below 15%'));
+    });
+
+    test('turned off, it says what turning it on costs', () {
+      final estimate = SamplingPolicy.estimateImpact(
+        intervalMinutes: 15,
+        batteryThreshold: 15,
+        usesForegroundService: true,
+        serviceRunning: false,
+      );
+
+      expect(estimate.label, 'Not running');
+      expect(estimate.detail, contains('uses more battery'));
+      expect(estimate.detail, contains('not been measured'));
+    });
   });
 
   group('SamplingPolicy timer jitter', () {
