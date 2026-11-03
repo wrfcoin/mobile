@@ -20,7 +20,9 @@ import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../providers/collector_provider.dart';
 import '../providers/mobile_station_status_provider.dart';
+import '../widgets/battery_exemption_dialog.dart';
 import '../widgets/owner_ledger_banner.dart';
+import '../../data/services/collector_preferences.dart';
 import '../../data/services/mobile_station_status_service.dart';
 import '../../../../services/background/sync_worker.dart';
 import '../widgets/sync_status.dart';
@@ -52,6 +54,15 @@ class CollectorDashboard extends ConsumerWidget {
         : null;
     final featuredChallenge = challengesState?.selectedChallenge;
     final batteryImpact = ref.watch(batteryImpactEstimateProvider);
+    final status = collectionStatusOf(
+      state,
+      formatTime: (value) => AppFormatters.formatDateTime(
+        context,
+        appPreferences,
+        value,
+        includeDate: !DateUtils.isSameDay(value, DateTime.now()),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -307,11 +318,15 @@ class CollectorDashboard extends ConsumerWidget {
                   Row(
                     children: [
                       Icon(
-                        Icons.sensors,
+                        status.isProblem
+                            ? Icons.warning_amber_rounded
+                            : Icons.sensors,
                         size: 32,
-                        color: state.isCollecting
-                            ? AppColors.success
-                            : AppColors.textSecondary,
+                        color: !state.isCollecting
+                            ? AppColors.textSecondary
+                            : status.isProblem
+                            ? AppColors.warning
+                            : AppColors.success,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -319,18 +334,14 @@ class CollectorDashboard extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              state.isCollecting
-                                  ? 'Collecting Data'
-                                  : 'Collection Paused',
+                              status.title,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             Text(
-                              state.isCollecting
-                                  ? 'Every ${state.intervalMinutes} minutes'
-                                  : 'Tap to start collecting',
+                              status.detail,
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 13,
@@ -343,11 +354,23 @@ class CollectorDashboard extends ConsumerWidget {
                         value: state.isCollecting,
                         onChanged: kIsWeb || !canCollect
                             ? null
-                            : (v) {
+                            : (v) async {
                                 if (v) {
-                                  ref
+                                  final accepted =
+                                      await explainBackgroundCollectionOnce(
+                                        context,
+                                        ref.read(collectorPreferencesProvider),
+                                      );
+                                  if (!accepted) return;
+                                  await ref
                                       .read(collectorProvider.notifier)
                                       .startCollecting();
+                                  if (context.mounted) {
+                                    await askBatteryExemptionOnce(
+                                      context,
+                                      ref.read(collectorProvider.notifier),
+                                    );
+                                  }
                                 } else {
                                   ref
                                       .read(collectorProvider.notifier)

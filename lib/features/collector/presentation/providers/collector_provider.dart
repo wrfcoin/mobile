@@ -8,15 +8,22 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
+import 'package:geolocator/geolocator.dart' show LocationPermission;
+import 'package:workmanager/workmanager.dart' show ExistingPeriodicWorkPolicy;
 
 import '../../../../core/feature_flags/feature_flags.dart';
 import '../../../../core/preferences/app_preferences.dart';
 import '../../data/models/sensor_reading_model.dart';
 import '../../data/repositories/collector_repository_impl.dart';
+import '../../data/services/collection_runner.dart';
 import '../../data/services/collector_preferences.dart';
+import '../../domain/collection_run.dart';
+import '../../domain/collection_status.dart';
 import '../../data/services/sampling_policy.dart';
+import '../../../../services/background/collection_service.dart';
 import '../../../../services/background/sensor_worker.dart';
 import '../../../../services/background/sync_worker.dart';
+import '../../../../services/location/location_service.dart';
 import '../../../../services/storage/local_db.dart';
 import 'mobile_station_status_provider.dart';
 import '../../../widgets/data/widget_snapshot_store.dart';
@@ -53,6 +60,15 @@ class CollectorState {
   final String? lastCommitId;
   final String? lastSubmissionStatus;
 
+  // What the Collect card reports, from what really happened.
+  final bool serviceSupported;
+  final bool serviceRunning;
+  final CollectionServiceIssue? serviceIssue;
+  final DateTime? serviceRestartedAt;
+  final DateTime? lastReadingAt;
+  final String? lastRunOutcome;
+  final DateTime? lastRunAt;
+
   const CollectorState({
     this.isCollecting = false,
     this.isCollectingNow = false,
@@ -72,6 +88,13 @@ class CollectorState {
     this.lastSubmissionId,
     this.lastCommitId,
     this.lastSubmissionStatus,
+    this.serviceSupported = false,
+    this.serviceRunning = false,
+    this.serviceIssue,
+    this.serviceRestartedAt,
+    this.lastReadingAt,
+    this.lastRunOutcome,
+    this.lastRunAt,
   });
 
   CollectorState copyWith({
@@ -93,6 +116,13 @@ class CollectorState {
     Object? lastSubmissionId = _noChange,
     Object? lastCommitId = _noChange,
     Object? lastSubmissionStatus = _noChange,
+    bool? serviceSupported,
+    bool? serviceRunning,
+    Object? serviceIssue = _noChange,
+    Object? serviceRestartedAt = _noChange,
+    Object? lastReadingAt = _noChange,
+    Object? lastRunOutcome = _noChange,
+    Object? lastRunAt = _noChange,
   }) {
     return CollectorState(
       isCollecting: isCollecting ?? this.isCollecting,
@@ -127,6 +157,23 @@ class CollectorState {
       lastSubmissionStatus: identical(lastSubmissionStatus, _noChange)
           ? this.lastSubmissionStatus
           : lastSubmissionStatus as String?,
+      serviceSupported: serviceSupported ?? this.serviceSupported,
+      serviceRunning: serviceRunning ?? this.serviceRunning,
+      serviceIssue: identical(serviceIssue, _noChange)
+          ? this.serviceIssue
+          : serviceIssue as CollectionServiceIssue?,
+      serviceRestartedAt: identical(serviceRestartedAt, _noChange)
+          ? this.serviceRestartedAt
+          : serviceRestartedAt as DateTime?,
+      lastReadingAt: identical(lastReadingAt, _noChange)
+          ? this.lastReadingAt
+          : lastReadingAt as DateTime?,
+      lastRunOutcome: identical(lastRunOutcome, _noChange)
+          ? this.lastRunOutcome
+          : lastRunOutcome as String?,
+      lastRunAt: identical(lastRunAt, _noChange)
+          ? this.lastRunAt
+          : lastRunAt as DateTime?,
     );
   }
 }
@@ -138,6 +185,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
   late AppPreferencesStore _appPreferencesStore;
   late AppLogger _logger;
   late bool _enableConnectivityHardening;
+  late CollectionServiceController _service;
+  late LocationService _location;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -150,6 +199,14 @@ class CollectorNotifier extends Notifier<CollectorState> {
     _enableConnectivityHardening = ref
         .watch(featureFlagsProvider)
         .enableConnectivityHardening;
+    _service = ref.watch(collectionServiceProvider);
+    _location = ref.watch(locationServiceProvider);
+
+    final stopListening = _service.listen(
+      _handleStoppedFromNotification,
+      onTick: () => unawaited(_refreshSyncMetadata()),
+    );
+    ref.onDispose(stopListening);
 
     unawaited(_restoreState());
     if (!kIsWeb) {
@@ -174,15 +231,122 @@ class CollectorNotifier extends Notifier<CollectorState> {
       );
       return;
     }
+    if (!await _location.requestPermission()) {
+      state = state.copyWith(
+        syncMessage:
+            'Collection needs location while the app is in use. Allow it, then turn this on again.',
+      );
+      return;
+    }
+    await _service.requestNotificationPermission();
+    final started = await _service.start(
+      intervalMinutes: state.intervalMinutes,
+    );
+    if (started == CollectionServiceStart.failed) {
+      state = state.copyWith(
+        syncMessage: 'Android would not start collection. Try again.',
+      );
+      return;
+    }
     await _scheduleWorkers();
-    state = state.copyWith(isCollecting: true, syncMessage: null);
+    state = state.copyWith(
+      isCollecting: true,
+      syncMessage: null,
+      serviceIssue: null,
+      serviceRestartedAt: null,
+    );
     await _persistPreferences();
+    await _refreshServiceState();
   }
 
   Future<void> stopCollecting() async {
+    await _service.stop();
     await cancelCollectionWorkers();
-    state = state.copyWith(isCollecting: false, isSyncing: false);
+    state = state.copyWith(
+      isCollecting: false,
+      isSyncing: false,
+      serviceRunning: false,
+      serviceIssue: null,
+      serviceRestartedAt: null,
+    );
     await _persistPreferences();
+  }
+
+  /// Whether to ask about battery limits now: collection just turned on,
+  /// Android's limits apply, and this was never asked.
+  Future<bool> shouldAskBatteryExemption() async {
+    if (!state.isCollecting) return false;
+    if (await _preferences.batteryExemptionAsked()) return false;
+    return await _service.isBatteryLimited == true;
+  }
+
+  /// Records the answer, so the question never comes back.
+  Future<void> answerBatteryExemption({required bool allow}) async {
+    await _preferences.markBatteryExemptionAsked();
+    if (allow) await _service.requestBatteryExemption();
+  }
+
+  /// The notification's Stop button already saved this and stopped the work.
+  void _handleStoppedFromNotification() {
+    state = state.copyWith(
+      isCollecting: false,
+      isSyncing: false,
+      serviceRunning: false,
+      serviceIssue: null,
+      serviceRestartedAt: null,
+    );
+  }
+
+  Future<void> _refreshServiceState() async {
+    state = state.copyWith(
+      serviceSupported: _service.supported,
+      serviceRunning: state.isCollecting && await _service.isRunning,
+    );
+  }
+
+  /// An automatic reading when the app opens, if collection is on and one is
+  /// due. It reads location without asking, and a failure is only recorded.
+  Future<void> _collectOnAppOpen() async {
+    if (kIsWeb || !state.isCollecting || state.isCollectingNow) return;
+    if (!await _hasCollectionConsent()) return;
+    final result = await CollectionRunner(_repository).collect(
+      source: ReadingSource.appOpen,
+      batteryThreshold: state.batteryThreshold,
+      baseIntervalMinutes: state.intervalMinutes,
+    );
+    await _refreshSyncMetadata(currentReading: result.reading);
+    if (result.isSuccess) await _publishHomeWidgetCollectionSlice(reading: result.reading);
+  }
+
+  /// Opening the app is the one chance to restart a service Android stopped.
+  /// Asks for nothing: without location it stays off.
+  Future<void> _ensureServiceRunning() async {
+    if (kIsWeb || !state.isCollecting) return;
+    if (await _service.isRunning) {
+      await _refreshServiceState();
+      return;
+    }
+    final permission = await _location.checkPermission();
+    if (permission != LocationPermission.whileInUse &&
+        permission != LocationPermission.always) {
+      state = state.copyWith(
+        serviceIssue: CollectionServiceIssue.noLocationPermission,
+      );
+      await _refreshServiceState();
+      return;
+    }
+    final started = await _service.start(
+      intervalMinutes: state.intervalMinutes,
+    );
+    state = state.copyWith(
+      serviceIssue: started == CollectionServiceStart.failed
+          ? CollectionServiceIssue.startRefused
+          : null,
+      serviceRestartedAt: started == CollectionServiceStart.started
+          ? DateTime.now()
+          : state.serviceRestartedAt,
+    );
+    await _refreshServiceState();
   }
 
   Future<void> collectNow() async {
@@ -197,7 +361,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
     state = state.copyWith(isCollectingNow: true, syncMessage: null);
     try {
-      final result = await _repository.collectReading(
+      final result = await CollectionRunner(_repository).collect(
+        source: ReadingSource.collectNow,
         batteryThreshold: state.batteryThreshold,
         baseIntervalMinutes: state.intervalMinutes,
         force: true,
@@ -303,6 +468,15 @@ class CollectorNotifier extends Notifier<CollectorState> {
   /// One lifecycle check; a cancelled signing prompt stays user-rearmed.
   Future<void> handleAppResume() async {
     ref.invalidate(mobileStationStatusProvider);
+    if (state.isCollecting) {
+      if (await _preferences.isCollectingNow()) {
+        await _ensureServiceRunning();
+        await _collectOnAppOpen();
+      } else {
+        // Stopped from the notification while this isolate was asleep.
+        _handleStoppedFromNotification();
+      }
+    }
     if (_signingRefused) return;
     await syncPendingData(fromResume: true);
   }
@@ -429,6 +603,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _persistPreferences();
     if (state.isCollecting) {
       await _scheduleWorkers();
+      await _service.setInterval(minutes);
     }
   }
 
@@ -459,18 +634,29 @@ class CollectorNotifier extends Notifier<CollectorState> {
     );
     if (kIsWeb) return;
     await _refreshSyncMetadata();
+    await _refreshServiceState();
 
     if (preferences.isCollecting && canCollect && !kIsWeb) {
-      await _scheduleWorkers();
+      await _ensureServiceRunning();
+      await _collectOnAppOpen();
+      // Keep the jobs' schedule: replacing them here ran them on every app
+      // start, which is where the reading on opening the app used to come
+      // from. That reading is now the deliberate one above.
+      await _scheduleWorkers(policy: ExistingPeriodicWorkPolicy.update);
     }
   }
 
-  Future<void> _scheduleWorkers() async {
+  Future<void> _scheduleWorkers({
+    ExistingPeriodicWorkPolicy policy = ExistingPeriodicWorkPolicy.replace,
+  }) async {
     final intervalMinutes = await _repository.recommendedIntervalMinutes(
       state.intervalMinutes,
     );
-    await registerSensorWorker(interval: Duration(minutes: intervalMinutes));
-    await registerSyncWorker();
+    await registerSensorWorker(
+      interval: Duration(minutes: intervalMinutes),
+      policy: policy,
+    );
+    await registerSyncWorker(policy: policy);
   }
 
   Future<void> _persistPreferences() {
@@ -495,7 +681,20 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _refreshStaleReadingsCount();
     final metadata = await _repository.getSyncMetadata();
     final count = await _repository.getUnsyncedCount();
+    final latest = await _repository.db.getRecentReadings(limit: 1);
+    // The newest collection try that had something to say. A run that was
+    // simply not due says nothing about whether collection works.
+    final runs = await _repository.db.getCollectionRuns(
+      limit: 8,
+      kinds: {for (final source in ReadingSource.values) source.dbValue},
+    );
+    final lastRun = runs
+        .where((run) => run.outcome != CollectionOutcome.notDue)
+        .firstOrNull;
     state = state.copyWith(
+      lastReadingAt: latest.isEmpty ? null : latest.first.timestamp,
+      lastRunOutcome: lastRun?.outcome,
+      lastRunAt: lastRun?.startedAt,
       currentReading: currentReading ?? state.currentReading,
       pendingSyncCount: count,
       lastSyncAt: metadata?.lastSyncAt,
@@ -516,10 +715,12 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
     if (state.isCollecting) {
       await registerSensorWorker(interval: Duration(minutes: intervalMinutes));
+      await _service.setInterval(intervalMinutes);
     }
   }
 
   Future<void> handleConsentRevoked() async {
+    await _service.stop();
     await cancelCollectionWorkers();
     await Future.wait([
       _repository.db.clearUnsyncedReadings(),
@@ -572,6 +773,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
         return 'barometer_unavailable';
       case CollectReadingFailureReason.locationUnavailable:
         return 'location_unavailable';
+      case CollectReadingFailureReason.locationTooOld:
+        return 'location_too_old';
       case CollectReadingFailureReason.stationaryBackoff:
         return 'stationary_backoff';
       case null:
@@ -587,6 +790,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
         return 'No barometer reading was available on this device.';
       case CollectReadingFailureReason.locationUnavailable:
         return 'Allow location to register your weather station, then try Collect Now again.';
+      case CollectReadingFailureReason.locationTooOld:
+        return 'The saved location is over a day old. Open the app with location on to refresh it.';
       case CollectReadingFailureReason.stationaryBackoff:
         return 'Collection backed off because the device has not moved enough yet.';
       case null:
@@ -663,6 +868,25 @@ class CollectorNotifier extends Notifier<CollectorState> {
 
 final collectorProvider = NotifierProvider<CollectorNotifier, CollectorState>(
   CollectorNotifier.new,
+);
+
+/// What the Collect card says right now.
+CollectionStatus collectionStatusOf(
+  CollectorState state, {
+  required String Function(DateTime) formatTime,
+  DateTime? now,
+}) => describeCollection(
+  isCollecting: state.isCollecting,
+  serviceSupported: state.serviceSupported,
+  serviceRunning: state.serviceRunning,
+  issue: state.serviceIssue,
+  serviceRestartedAt: state.serviceRestartedAt,
+  lastReadingAt: state.lastReadingAt,
+  lastRunOutcome: state.lastRunOutcome,
+  lastRunAt: state.lastRunAt,
+  intervalMinutes: state.intervalMinutes,
+  now: now ?? DateTime.now(),
+  formatTime: formatTime,
 );
 
 final batteryImpactEstimateProvider = Provider<BatteryImpactEstimate>((ref) {

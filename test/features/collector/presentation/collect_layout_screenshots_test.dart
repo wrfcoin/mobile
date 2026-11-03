@@ -28,6 +28,7 @@ import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
+import 'package:wrfcoin_mobile/services/background/collection_service.dart';
 import 'package:wrfcoin_mobile/services/background/sync_worker.dart';
 import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
 
@@ -56,9 +57,29 @@ class _Wallet extends WalletNotifier {
       const WalletModel(address: 'wrf1wallet', balance: '150000000');
 }
 
+class _RunningService extends CollectionServiceController {
+  @override
+  bool get supported => true;
+  @override
+  Future<bool> get isRunning async => true;
+  @override
+  Future<bool?> get isBatteryLimited async => false;
+  @override
+  void Function() listen(
+    void Function() onStopped, {
+    void Function()? onTick,
+  }) => () {};
+}
+
 final _shots = <(String, Widget, bool, MobileStationPhase)>[
   (
     'collect-healthy',
+    const CollectorDashboard(),
+    true,
+    MobileStationPhase.onChain,
+  ),
+  (
+    'collect-stopped',
     const CollectorDashboard(),
     true,
     MobileStationPhase.onChain,
@@ -117,6 +138,7 @@ void main() {
                 ),
               ),
               syncWorkerProvider.overrideWithValue(_Worker()),
+              collectionServiceProvider.overrideWithValue(_RunningService()),
               appPreferencesStoreProvider.overrideWithValue(
                 TestAppPreferencesStore(
                   AppPreferences(
@@ -182,6 +204,16 @@ void main() {
               pressureHpa: 1012.4,
               timestamp: DateTime(2026, 11, 1, 12),
             ),
+            serviceSupported: true,
+            serviceRunning: true,
+            lastReadingAt: DateTime.now().subtract(
+              shot == 'collect-stopped'
+                  ? const Duration(hours: 9)
+                  : const Duration(minutes: 6),
+            ),
+            serviceRestartedAt: shot == 'collect-stopped'
+                ? DateTime.now()
+                : null,
           );
           await tester.pump();
         }

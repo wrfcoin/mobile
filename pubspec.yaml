@@ -80,6 +80,7 @@ dependencies:
   fpdart: ^1.1.0
   intl: ^0.20.2
   url_launcher: ^6.3.3
+  flutter_foreground_task: ^11.0.3
 
 dev_dependencies:
   flutter_test:

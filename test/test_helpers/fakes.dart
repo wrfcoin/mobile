@@ -12,6 +12,7 @@ import 'package:wrfcoin_mobile/features/challenges/data/repositories/challenge_r
 import 'package:wrfcoin_mobile/features/collector/data/datasources/battery_monitor.dart';
 import 'package:wrfcoin_mobile/features/collector/data/datasources/sensor_data_source.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_model.dart';
+import 'package:wrfcoin_mobile/features/collector/domain/collection_run.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/models/achievement_model.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/models/leaderboard_entry_model.dart';
@@ -793,6 +794,7 @@ class FakeCollectorRepository extends CollectorRepository {
     int batteryThreshold = 15,
     int baseIntervalMinutes = 15,
     bool force = false,
+    ReadingSource source = ReadingSource.collectNow,
   }) async {
     if (reading == null) {
       return const CollectReadingResult.failure(
@@ -808,6 +810,35 @@ class FakeCollectorRepository extends CollectorRepository {
 
 class FakeCollectorLocalStore implements CollectorLocalStore {
   FakeCollectorLocalStore({this.pendingCount = 0, this.latestReading});
+
+  final List<String> recordedRuns = <String>[];
+
+  @override
+  Future<SensorReading?> getLatestLocatedReading() async => latestReading;
+
+  List<CollectionRun> collectionRuns = const [];
+
+  @override
+  Future<List<SensorReading>> getRecentReadings({int limit = 10}) async =>
+      latestReading == null ? const [] : [latestReading!];
+
+  @override
+  Future<List<CollectionRun>> getCollectionRuns({
+    int limit = 50,
+    Set<String>? kinds,
+  }) async => collectionRuns;
+
+  @override
+  Future<void> recordCollectionRun({
+    required String kind,
+    required String outcome,
+    required DateTime startedAt,
+    required DateTime finishedAt,
+    String? detail,
+    int acceptedCount = 0,
+  }) async {
+    recordedRuns.add('$kind:$outcome');
+  }
 
   int pendingCount;
   final List<int> syncedIds = <int>[];

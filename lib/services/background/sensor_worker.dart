@@ -1,9 +1,13 @@
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, debugPrint, visibleForTesting;
 import 'package:workmanager/workmanager.dart';
 
 import '../../features/collector/data/datasources/battery_monitor.dart';
 import '../../features/collector/data/datasources/sensor_data_source.dart';
 import '../../features/collector/data/repositories/collector_repository_impl.dart';
+import '../../features/collector/data/services/collection_runner.dart';
+import '../../features/collector/data/services/collector_preferences.dart';
+import '../../features/collector/domain/collection_run.dart';
 import '../../features/notifications/data/ntfy_poller.dart';
 import '../../services/api/api_client.dart';
 import '../../services/crypto/wallet_secure_storage.dart';
@@ -49,20 +53,88 @@ Future<void> _collectSensorData() async {
   final db = AppDatabase(openAppDatabase());
   try {
     final repository = _createRepository(db);
-    final intervalMinutes = await repository.recommendedIntervalMinutes(15);
-    await repository.collectReading(baseIntervalMinutes: intervalMinutes);
+    final preferences = await const CollectorPreferences().load();
+    await runCollectionJob(
+      CollectionRunner(repository),
+      batteryThreshold: preferences.batteryThreshold,
+      baseIntervalMinutes: await repository.recommendedIntervalMinutes(
+        preferences.intervalMinutes,
+      ),
+    );
   } finally {
     await db.close();
+  }
+}
+
+/// One WorkManager collection run. A run that saved no reading throws, so
+/// WorkManager records a failure, never a success.
+@visibleForTesting
+Future<void> runCollectionJob(
+  CollectionRunner runner, {
+  required int batteryThreshold,
+  required int baseIntervalMinutes,
+}) async {
+  final result = await runner.collect(
+    source: ReadingSource.job,
+    batteryThreshold: batteryThreshold,
+    baseIntervalMinutes: baseIntervalMinutes,
+  );
+  if (!result.isSuccess) {
+    throw CollectionRunFailed(CollectionRunner.outcomeOf(result));
   }
 }
 
 Future<void> _syncPendingData() async {
   // The Workmanager isolate never starts a wallet login: the foreground
   // app owns the login guard (mobile#313).
-  await SyncWorker(
+  final worker = SyncWorker(
     walletSecureStorage: const WalletSecureStorage(),
     canStartLogin: false,
-  ).syncPendingReadings();
+  );
+  final db = AppDatabase(openAppDatabase());
+  try {
+    await runSyncJob(
+      worker.syncPendingReadings,
+      db,
+      kind: CollectionRunKind.syncJob,
+    );
+  } finally {
+    await db.close();
+  }
+}
+
+/// One upload run: saves its result, and throws unless it did its job.
+Future<SyncRunResult> runSyncJob(
+  Future<SyncRunResult> Function() sync,
+  CollectorLocalStore store, {
+  required String kind,
+  DateTime Function() now = DateTime.now,
+}) async {
+  final startedAt = now();
+  final SyncRunResult result;
+  try {
+    result = await sync();
+  } catch (error) {
+    await store.recordCollectionRun(
+      kind: kind,
+      outcome: CollectionOutcome.error,
+      detail: error.runtimeType.toString(),
+      startedAt: startedAt,
+      finishedAt: now(),
+    );
+    rethrow;
+  }
+  await store.recordCollectionRun(
+    kind: kind,
+    outcome: result.reason.name,
+    acceptedCount: result.acceptedCount,
+    startedAt: startedAt,
+    finishedAt: now(),
+  );
+  if (!syncRunSucceeded(result.reason)) {
+    throw CollectionRunFailed(result.reason.name);
+  }
+  return result;
 }
 
 /// Runs [action], swallowing the errors Workmanager throws on platforms
@@ -93,6 +165,7 @@ Future<void> initializeBackgroundWork() async {
 
 Future<void> registerSensorWorker({
   Duration interval = const Duration(minutes: 15),
+  ExistingPeriodicWorkPolicy policy = ExistingPeriodicWorkPolicy.replace,
 }) async {
   if (kIsWeb) {
     debugPrint('Background sensor worker unavailable on web');
@@ -104,15 +177,16 @@ Future<void> registerSensorWorker({
       sensorTaskName,
       sensorTaskName,
       frequency: interval,
-      // Lane 1: replace any existing registration so interval changes take
-      // effect immediately without needing to cancel first.
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      // A replaced job runs at once. Only a change the user made does that.
+      existingWorkPolicy: policy,
       constraints: Constraints(networkType: NetworkType.notRequired),
     ),
   );
 }
 
-Future<void> registerSyncWorker() async {
+Future<void> registerSyncWorker({
+  ExistingPeriodicWorkPolicy policy = ExistingPeriodicWorkPolicy.replace,
+}) async {
   if (kIsWeb) {
     debugPrint('Background sync worker unavailable on web');
     return;
@@ -123,9 +197,8 @@ Future<void> registerSyncWorker() async {
       syncTaskName,
       syncTaskName,
       frequency: const Duration(minutes: 15),
-      // Lane 1: replace any existing registration so re-enabling collection
-      // always resets the sync schedule cleanly.
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      // A replaced job runs at once. Only a change the user made does that.
+      existingWorkPolicy: policy,
       constraints: Constraints(networkType: NetworkType.connected),
     ),
   );
