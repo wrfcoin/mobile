@@ -41,6 +41,25 @@ class LocationService {
     }
   }
 
+  /// This phone's rough cell: asks only for low accuracy, gives up after 20
+  /// seconds, and rounds to the 0.1 degree grid before anyone else sees it.
+  /// May show the permission dialog.
+  Future<({double lat, double lng})?> getRoughCell() async {
+    try {
+      if (!await requestPermission()) return null;
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      return (lat: anonymize(position.latitude), lng: anonymize(position.longitude));
+    } catch (e) {
+      debugPrint('Failed to get position: $e');
+      return null;
+    }
+  }
+
   /// Shows the system permission dialog when Android can still show it.
   /// Returns whether location is now granted.
   Future<bool> requestPermission() async {

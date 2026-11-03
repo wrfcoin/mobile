@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_map/flutter_map.dart' show MarkerLayer;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'package:wrfcoin_mobile/features/gamification/presentation/screens/data_desert_map_screen.dart';
 import 'package:wrfcoin_mobile/services/api/api_client.dart';
@@ -15,7 +17,18 @@ class _FakeLocationService extends LocationService {
   _FakeLocationService({this._position});
 
   @override
-  Future<Position?> getCurrentPosition() async => _position;
+  Future<({double lat, double lng})?> getRoughCell() async {
+    final position = _position;
+    if (position == null) return null;
+    return (
+      lat: LocationService.anonymize(position.latitude),
+      lng: LocationService.anonymize(position.longitude),
+    );
+  }
+
+  @override
+  Future<Position?> getCurrentPosition() async =>
+      throw StateError('the map must not ask for a precise position');
 }
 
 Dio _mockDio(dynamic responseData) {
@@ -126,6 +139,20 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the map marks the rough cell, never the precise fix', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildScreen(position: _fakePosition()));
+      await tester.pump(const Duration(milliseconds: 100));
+      final points = tester
+          .widgetList<MarkerLayer>(find.byType(MarkerLayer))
+          .expand((layer) => layer.markers)
+          .where((marker) => marker.width == 36)
+          .map((marker) => marker.point)
+          .toList();
+      expect(points, [const LatLng(37.8, -122.4)]);
     });
 
     testWidgets('no uncaught exception when user position is null', (tester) async {
