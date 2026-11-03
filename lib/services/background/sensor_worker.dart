@@ -66,6 +66,13 @@ Future<void> _collectSensorData() async {
   }
 }
 
+/// How far past due a reading must be before the job takes it. The service and
+/// the job fire on the same 15 minutes; left equal they race, and one tick can
+/// save two readings. The service reads a fresh location and the job only reuses
+/// one, so the service goes first and the job covers for it when it has stopped.
+/// With the service stopped, the job collects on every second run.
+const serviceBackstopGrace = Duration(minutes: 5);
+
 /// One WorkManager collection run. A run that saved no reading throws, so
 /// WorkManager records a failure, never a success.
 @visibleForTesting
@@ -78,6 +85,7 @@ Future<void> runCollectionJob(
     source: ReadingSource.job,
     batteryThreshold: batteryThreshold,
     baseIntervalMinutes: baseIntervalMinutes,
+    dueGrace: serviceBackstopGrace,
   );
   if (!result.isSuccess) {
     throw CollectionRunFailed(CollectionRunner.outcomeOf(result));

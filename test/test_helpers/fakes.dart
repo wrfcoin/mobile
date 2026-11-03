@@ -795,6 +795,7 @@ class FakeCollectorRepository extends CollectorRepository {
     int baseIntervalMinutes = 15,
     bool force = false,
     ReadingSource source = ReadingSource.collectNow,
+    Duration dueGrace = Duration.zero,
   }) async {
     if (reading == null) {
       return const CollectReadingResult.failure(

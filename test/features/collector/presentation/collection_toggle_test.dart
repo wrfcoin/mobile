@@ -90,6 +90,7 @@ class _Repo extends FakeCollectorRepository {
     int baseIntervalMinutes = 15,
     bool force = false,
     ReadingSource source = ReadingSource.collectNow,
+    Duration dueGrace = Duration.zero,
   }) {
     calls.add((source, force));
     return super.collectReading(
