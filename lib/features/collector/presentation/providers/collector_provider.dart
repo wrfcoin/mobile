@@ -894,5 +894,7 @@ final batteryImpactEstimateProvider = Provider<BatteryImpactEstimate>((ref) {
   return SamplingPolicy.estimateImpact(
     intervalMinutes: state.intervalMinutes,
     batteryThreshold: state.batteryThreshold,
+    usesForegroundService: ref.watch(collectionServiceProvider).supported,
+    serviceRunning: state.isCollecting && state.serviceRunning,
   );
 });
