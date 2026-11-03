@@ -228,6 +228,7 @@ class _CollectorRepo extends FakeCollectorRepository {
     int baseIntervalMinutes = 15,
     bool force = false,
     ReadingSource source = ReadingSource.collectNow,
+    Duration dueGrace = Duration.zero,
   }) async => locationUnavailable
       ? const CollectReadingResult.failure(
           CollectReadingFailureReason.locationUnavailable,

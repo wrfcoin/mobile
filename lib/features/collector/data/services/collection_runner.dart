@@ -15,6 +15,7 @@ class CollectionRunner {
     int batteryThreshold = 15,
     int baseIntervalMinutes = 15,
     bool force = false,
+    Duration dueGrace = Duration.zero,
   }) async {
     final startedAt = _now();
     try {
@@ -23,6 +24,7 @@ class CollectionRunner {
         baseIntervalMinutes: baseIntervalMinutes,
         force: force,
         source: source,
+        dueGrace: dueGrace,
       );
       await _repository.db.recordCollectionRun(
         kind: source.dbValue,

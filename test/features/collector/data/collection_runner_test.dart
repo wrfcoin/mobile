@@ -126,6 +126,51 @@ void main() {
     );
   });
 
+  group('the service goes first, the job is the backstop', () {
+    test('at the usual 15 minutes the job leaves it to the service', () async {
+      await seedFresh(const Duration(minutes: 15));
+      await expectLater(
+        job(runner(_Sensors())),
+        throwsA(
+          isA<CollectionRunFailed>().having(
+            (e) => e.outcome,
+            'outcome',
+            CollectionOutcome.notDue,
+          ),
+        ),
+      );
+      expect((await db.getReadingHistory()).length, 1);
+    });
+
+    test('at the same 15 minutes the service takes it', () async {
+      await seedFresh(const Duration(minutes: 15));
+      await runner(_Sensors()).collect(source: ReadingSource.service);
+
+      final readings = await db.getReadingHistory();
+      expect(readings.length, 2);
+      expect(readings.last.source, 'service');
+    });
+
+    test('once the service has missed a tick the job collects', () async {
+      await seedFresh(const Duration(minutes: 30));
+      await job(runner(_Sensors()));
+
+      final readings = await db.getReadingHistory();
+      expect(readings.length, 2);
+      expect(readings.last.source, 'job');
+    });
+
+    test('after a job reading, the next tick waits again', () async {
+      await seedFresh(const Duration(minutes: 30));
+      await job(runner(_Sensors()));
+      await expectLater(
+        job(runner(_Sensors())),
+        throwsA(isA<CollectionRunFailed>()),
+      );
+      expect((await db.getReadingHistory()).length, 2);
+    });
+  });
+
   group('rough location', () {
     test('the job never reads location, and labels the reused cell', () async {
       await seedFresh(const Duration(hours: 3));

@@ -68,6 +68,7 @@ class SamplingPolicy {
     required double longitude,
     DateTime? now,
     double movementThresholdMeters = defaultMovementThresholdMeters,
+    Duration dueGrace = Duration.zero,
   }) {
     final intervalMinutes = adaptiveIntervalMinutes(
       baseIntervalMinutes: baseIntervalMinutes,
@@ -85,7 +86,8 @@ class SamplingPolicy {
     final elapsed = (now ?? DateTime.now()).difference(
       previousReading.timestamp,
     );
-    if (elapsed >= Duration(minutes: intervalMinutes) - intervalTolerance) {
+    if (elapsed >=
+        Duration(minutes: intervalMinutes) - intervalTolerance + dueGrace) {
       return SamplingDecision(
         shouldCollect: true,
         reason: SamplingDecisionReason.intervalElapsed,

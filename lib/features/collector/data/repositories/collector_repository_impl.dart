@@ -66,6 +66,7 @@ class CollectorRepository {
     int baseIntervalMinutes = 15,
     bool force = false,
     ReadingSource source = ReadingSource.collectNow,
+    Duration dueGrace = Duration.zero,
   }) async {
     final batteryLevel = await batteryMonitor.getBatteryLevel();
     if (await batteryMonitor.shouldPauseCollection(
@@ -105,6 +106,7 @@ class CollectorRepository {
         latitude: location.lat,
         longitude: location.lng,
         now: now,
+        dueGrace: dueGrace,
       );
 
       if (!decision.shouldCollect) {
