@@ -14,8 +14,21 @@ class MobileStationStatus {
   final MobileStationPhase phase;
   final bool cached;
 
+  /// True to `SyncWorker`: while waiting, the backend refuses uploads, and
+  /// everything unsynced is deleted at each check and again at activation
+  /// (`dropUnactivatedReadingsWithNotice`). So this must not call them saved.
   static const awaitingActivationMessage =
-      'Station awaiting activation. Rewards start once the network activates your station.';
+      'Your station is registered and waiting for the network to activate it. '
+      'Nothing is wrong, and you don\'t need to do anything. There\'s no set '
+      'time for this. Readings taken before activation can\'t earn and are '
+      'removed from this phone. Rewards can start with readings taken after '
+      'it activates.';
+
+  /// The server said this station is not active yet: not a failed or stale check.
+  bool get isAwaitingActivation =>
+      !cached &&
+      (phase == MobileStationPhase.dbOnly ||
+          phase == MobileStationPhase.submitted);
 
   String? get message {
     if (cached) {

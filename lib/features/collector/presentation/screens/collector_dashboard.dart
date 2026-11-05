@@ -564,12 +564,15 @@ class CollectorDashboard extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Text(SyncWorker.earningWindowMessage),
+          // While waiting nothing uploads, so "can upload for 50 minutes" would
+          // contradict the station card above.
+          if (!(stationStatus?.asData?.value.isAwaitingActivation ?? false))
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(SyncWorker.earningWindowMessage),
+              ),
             ),
-          ),
           if (challengeCapability.available && challengesState != null) ...[
             const SizedBox(height: 16),
             Card(
