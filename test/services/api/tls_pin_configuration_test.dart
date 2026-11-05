@@ -1,49 +1,87 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/services/api/tls_pin_configuration.dart';
 
+const releaseSet = 'cloudflare-universal-v1';
 const pinA =
     '00:01:02:03:04:05:06:07:08:09:0A:0B:0C:0D:0E:0F:'
     '10:11:12:13:14:15:16:17:18:19:1A:1B:1C:1D:1E:1F';
-const pinB =
-    '20:21:22:23:24:25:26:27:28:29:2A:2B:2C:2D:2E:2F:'
-    '30:31:32:33:34:35:36:37:38:39:3A:3B:3C:3D:3E:3F';
+const pinB = '202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F';
 
 TlsPinConfiguration configuration({
   String profile = tlsPublicReleaseProfile,
-  String current = pinA,
-  String next = '',
+  String pinSet = releaseSet,
   bool product = true,
+  Map<String, List<String>> pinSets = tlsPinSets,
 }) => TlsPinConfiguration(
   profile: profile,
-  currentPin: current,
-  nextPin: next,
+  pinSet: pinSet,
   isProductBuild: product,
+  pinSets: pinSets,
+);
+
+Matcher stateErrorContaining(String text) => throwsA(
+  isA<StateError>().having((e) => e.message, 'message', contains(text)),
 );
 
 void main() {
-  group('release TLS pin configuration', () {
-    test('accepts a current pin and one bounded rotation pin', () {
-      expect(configuration(next: pinB).validatedPins(), [pinA, pinB]);
+  group('release TLS pin set', () {
+    test('the release set names ten distinct, well-formed pins', () {
+      final pins = configuration().validatedPins();
+      expect(pins, hasLength(10));
+      expect(pins.map(normalizeCertificatePin).toSet(), hasLength(10));
+      expect(pins.every(isValidSha256CertificatePin), isTrue);
     });
 
-    test('rejects missing, placeholder, and malformed release pins', () {
-      for (final current in ['', 'CONFIGURE_VIA_DART_DEFINE', 'AA:BB']) {
+    test('a release build with no pin set stops', () {
+      for (final name in ['', '   ']) {
         expect(
-          () => configuration(current: current).validatedPins(),
-          throwsStateError,
+          () => configuration(pinSet: name).validatedPins(),
+          stateErrorContaining('requires TLS_PIN_SET'),
         );
       }
     });
 
-    test('rejects duplicate current and next pins', () {
+    test('an unknown or empty pin set stops', () {
+      for (final name in ['cloudflare-universal-v0', 'CONFIGURE_ME', 'gts']) {
+        expect(
+          () => configuration(pinSet: name).validatedPins(),
+          stateErrorContaining('Unknown or empty TLS pin set'),
+        );
+      }
       expect(
-        () => configuration(next: pinA.toLowerCase()).validatedPins(),
-        throwsStateError,
+        () => configuration(
+          pinSet: 'empty',
+          pinSets: const {'empty': []},
+        ).validatedPins(),
+        stateErrorContaining('Unknown or empty TLS pin set'),
+      );
+    });
+
+    test('a set with a malformed or repeated pin stops', () {
+      for (final pins in [
+        [pinA, 'AA:BB'],
+        [pinA, 'CONFIGURE_VIA_DART_DEFINE'],
+        [pinA, pinB, pinA.replaceAll(':', '').toLowerCase()],
+      ]) {
+        expect(
+          () =>
+              configuration(pinSet: 'x', pinSets: {'x': pins}).validatedPins(),
+          throwsStateError,
+        );
+      }
+      expect(
+        configuration(
+          pinSet: 'x',
+          pinSets: const {
+            'x': [pinA, pinB],
+          },
+        ).validatedPins(),
+        [pinA, pinB],
       );
     });
 
     test('product builds cannot use the developer trust-store fallback', () {
-      final config = configuration(profile: tlsDeveloperProfile, current: '');
+      final config = configuration(profile: tlsDeveloperProfile, pinSet: '');
       expect(config.releaseClassification, 'NON_RELEASE');
       expect(config.validatedPins, throwsStateError);
     });
@@ -51,11 +89,26 @@ void main() {
     test('developer fallback is explicit and visibly NON_RELEASE', () {
       final config = configuration(
         profile: tlsDeveloperProfile,
-        current: '',
+        pinSet: '',
         product: false,
       );
       expect(config.releaseClassification, 'NON_RELEASE');
       expect(config.validatedPins(), isEmpty);
+    });
+
+    test('a developer build may opt in to the release set', () {
+      final config = configuration(
+        profile: tlsDeveloperProfile,
+        product: false,
+      );
+      expect(config.validatedPins(), hasLength(10));
+    });
+
+    test('an unknown profile stops', () {
+      expect(
+        () => configuration(profile: 'staging').validatedPins(),
+        stateErrorContaining('Unknown TLS security profile'),
+      );
     });
   });
 }

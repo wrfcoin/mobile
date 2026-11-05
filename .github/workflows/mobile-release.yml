@@ -53,8 +53,7 @@ jobs:
 
       - name: Validate release TLS pins
         env:
-          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
-          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+          WRFCOIN_TLS_PIN_SET: ${{ vars.WRFCOIN_TLS_PIN_SET }}
         run: bash scripts/validate-release-tls-pins.sh
 
       - name: Validate release API host
@@ -75,8 +74,7 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
-          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
-          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+          WRFCOIN_TLS_PIN_SET: ${{ vars.WRFCOIN_TLS_PIN_SET }}
           WRFCOIN_ANDROID_KEYSTORE_BASE64: ${{ secrets.WRFCOIN_ANDROID_KEYSTORE_BASE64 }}
           WRFCOIN_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.WRFCOIN_ANDROID_KEYSTORE_PASSWORD }}
           WRFCOIN_ANDROID_KEY_ALIAS: ${{ secrets.WRFCOIN_ANDROID_KEY_ALIAS }}
@@ -123,8 +121,7 @@ jobs:
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/app-store-connect-key.p8
           WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
-          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
-          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+          WRFCOIN_TLS_PIN_SET: ${{ vars.WRFCOIN_TLS_PIN_SET }}
         run: |
           set -euo pipefail
           printf '%s' "${APP_STORE_CONNECT_KEY_BASE64}" | base64 --decode > "${APP_STORE_CONNECT_KEY_PATH}"
@@ -191,8 +188,7 @@ jobs:
           WRFCOIN_ANDROID_KEY_PASSWORD: ${{ secrets.WRFCOIN_ANDROID_KEY_PASSWORD }}
           PLAY_SERVICE_ACCOUNT_JSON_PATH: ${{ runner.temp }}/wrfcoin-android/play-service-account.json
           WRFCOIN_API_BASE_URL: ${{ vars.WRFCOIN_API_BASE_URL || secrets.WRFCOIN_API_BASE_URL }}
-          WRFCOIN_TLS_PIN_SHA256_CURRENT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_CURRENT || secrets.WRFCOIN_TLS_PIN_SHA256_CURRENT }}
-          WRFCOIN_TLS_PIN_SHA256_NEXT: ${{ vars.WRFCOIN_TLS_PIN_SHA256_NEXT || secrets.WRFCOIN_TLS_PIN_SHA256_NEXT }}
+          WRFCOIN_TLS_PIN_SET: ${{ vars.WRFCOIN_TLS_PIN_SET }}
         run: bundle exec fastlane android release
 
       - name: Upload Android metadata

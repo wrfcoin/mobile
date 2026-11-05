@@ -67,56 +67,92 @@ See [release chain controls](SIGNING_CHAIN_BUILD.md).
   any signing input absent stops at `preReleaseBuild` with
   `RELEASE_SIGNING_REFUSED`; it never falls back to the debug key. The signer
   checks below must still run.
-- The owner supplies the current TLS **SPKI pin** of a CA in the API's chain
-  (the issuing intermediate) and, optionally, a distinct backup pin (its root).
-  See [TLS pins](#tls-pins). Validate them through the deployment's trusted
-  process. Do not copy a sample pin or treat format validation as proof of
-  server identity.
+- The owner sets the TLS **pin set** name, `WRFCOIN_TLS_PIN_SET=cloudflare-universal-v1`
+  (a GitHub Actions variable for CI releases). See [TLS pins](#tls-pins). Check
+  the live chain against the set before each release. Do not treat a valid
+  name as proof of server identity.
 
 ## TLS pins
 
-Release builds pin a **CA public key**, never the leaf certificate. wrfcoin.com's
-leaf is a Cloudflare-managed Google Trust Services certificate (issuer `CN=WE1`)
-that is replaced about every 90 days without notice; pinning it would lock out
-installed apps at each renewal.
+Release builds pin **CA root public keys**, never the leaf certificate.
+wrfcoin.com's leaf is a Cloudflare-managed certificate that is replaced about
+every 90 days without notice; pinning it would lock out installed apps at each
+renewal.
 
-A pin is the SHA-256 of the certificate's DER SubjectPublicKeyInfo, written as
-64 hex digits (colons optional, any case). The app accepts a connection only
+A pin is the SHA-256 of a certificate's DER SubjectPublicKeyInfo, written as 64
+hex digits. A release build is compiled with one named **pin set**
+(`--dart-define=TLS_PIN_SET=<name>`); the sets are `tlsPinSets` in
+`lib/services/api/tls_pin_configuration.dart`. The app accepts a connection only
 when the chain the server presents runs, with valid signatures, dates and host
-name, from the leaf to a certificate whose key matches `TLS_PIN_SHA256_CURRENT`
-or `TLS_PIN_SHA256_NEXT`. The platform trust store is not used.
+name, from the leaf to a certificate whose key is in the set. The platform trust
+store is not used.
 
 dart:io exposes only the leaf certificate to the app, so the app cannot hash
-the intermediates itself. Each pin instead selects a CA certificate bundled in
+the intermediates itself. Each pin instead selects a root certificate bundled in
 `lib/services/api/pinnable_ca_certificates.dart`, and the selected certificates
-become the TLS context's only trust anchors (BoringSSL accepts an intermediate
-as an anchor). A pin that matches no bundled certificate stops the app at
-start-up, before any request (fail closed). To pin a CA that is not bundled,
-add its certificate to that file in the same release.
+become the TLS context's only trust anchors. A cross-signed copy of a root that
+the server sends (for example GTS Root R4 cross-signed by GlobalSign) has the
+same key, so the chain stops at the bundled root.
 
-Bundled today:
+Fail closed, at three points:
 
-| Certificate | SPKI SHA-256 pin |
-|---|---|
-| GTS WE1 (intermediate, issued by GTS Root R4, expires 2029-02-20) | `908769e8d34477cc2cba0632c88605b22d7294c0840f78596d247c645b1afc0e` |
-| GTS WR1 (intermediate, issued by GTS Root R1, expires 2029-02-20) | `c83bbda20db9e4d3791847fe0706bdad3aea150d04c9d674af514287d4dd016e` |
-| GTS Root R4 (root, expires 2036-06-22) | `9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347` |
-| GTS Root R1 (root, expires 2036-06-22) | `871a9194f4eed5b312ff40c84c1d524aed2f778bbff25f138cf81f680a7adc67` |
+- `scripts/validate-release-tls-pins.sh` (Fastlane and the release workflow run
+  it) refuses a missing `WRFCOIN_TLS_PIN_SET`, a name that is not a key of
+  `tlsPinSets`, and the retired `WRFCOIN_TLS_PIN_SHA256_CURRENT`/`_NEXT`.
+- A public-release app with no set, an unknown or empty set, or a malformed or
+  repeated pin stops at start-up.
+- A pin that matches no bundled certificate stops the app at start-up, before
+  any request.
 
-wrfcoin.com's Cloudflare edge certificates are set to Google Trust Services
-(owner decision, 2026-11-05), so a renewal can only move between the GTS
-chains: ECDSA through WE1 to GTS Root R4, or RSA through WR1 to GTS Root R1.
-Pin the two roots, which outlive any intermediate:
+A debug build with no set uses the platform trust store, as before, and is
+labelled NON_RELEASE.
 
-```bash
-WRFCOIN_TLS_PIN_SHA256_CURRENT=9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347  # GTS Root R4 (chain today: leaf, WE1, R4)
-WRFCOIN_TLS_PIN_SHA256_NEXT=871a9194f4eed5b312ff40c84c1d524aed2f778bbff25f138cf81f680a7adc67     # GTS Root R1 (RSA chain)
-```
+### Why four CAs
 
-If Cloudflare ever issues from a CA other than Google Trust Services (for
-example after the dashboard setting is changed back), these pins stop
-matching and the app refuses to connect until a release with new pins ships.
-Check the chain before every release. To compute the pins from the live chain:
+wrfcoin.com uses Cloudflare's free Universal SSL. Cloudflare picks the CA, may
+switch it without notice, and issues the backup certificate from a different CA
+than the primary. It uses four CAs: Google Trust Services, Let's Encrypt,
+Sectigo and SSL.com
+([certificate authorities](https://developers.cloudflare.com/ssl/reference/certificate-authorities/),
+[backup certificates](https://developers.cloudflare.com/ssl/edge-certificates/backup-certificates/)).
+An app that pinned one CA would be cut off by a switch, so the set pins the
+roots of all four (owner decision, 2026-11-05). Each CA has an ECDSA and an RSA
+root; Sectigo is mid-migration from its USERTrust roots to the Public Server
+Authentication roots, and both generations have live DV intermediates, so all
+four Sectigo roots are pinned. Cloudflare's SSL.com certificates chain through
+`Cloudflare TLS Issuing ECC/RSA CA` and `SSL.com TLS Transit ECC/RSA CA R2` to
+the SSL.com TLS 2022 roots (Cloudflare's
+[cfssl_trust](https://github.com/cloudflare/cfssl_trust) bundle), so the 2016
+SSL.com roots are not pinned.
+
+### Pin set `cloudflare-universal-v1`
+
+Each root was downloaded from its CA's own repository (the source below), its
+SHA-256 fingerprint matched the Mozilla-derived OS trust store, and the pin was
+computed from that DER file. `test/services/api/certificate_pinning_test.dart`
+checks every bundled certificate against this table.
+
+| CA | Root | Expires | Source | SPKI SHA-256 pin |
+|---|---|---|---|---|
+| Google Trust Services | GTS Root R1 (RSA) | 2036-06-22 | https://i.pki.goog/r1.crt | `871a9194f4eed5b312ff40c84c1d524aed2f778bbff25f138cf81f680a7adc67` |
+| Google Trust Services | GTS Root R4 (ECDSA) | 2036-06-22 | https://i.pki.goog/r4.crt | `9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347` |
+| Let's Encrypt | ISRG Root X1 (RSA) | 2035-06-04 | https://letsencrypt.org/certs/isrgrootx1.der | `0b9fa5a59eed715c26c1020c711b4f6ec42d58b0015e14337a39dad301c5afc3` |
+| Let's Encrypt | ISRG Root X2 (ECDSA) | 2040-09-17 | https://letsencrypt.org/certs/isrg-root-x2.der | `762195c225586ee6c0237456e2107dc54f1efc21f61a792ebd515913cce68332` |
+| Sectigo | USERTrust ECC Certification Authority | 2038-01-18 | http://crt.usertrust.com/USERTrustECCCertificationAuthority.crt | `2021917e98263945c859c43f1d73cb4139053c414fa03ca3bc7ee88614298f3b` |
+| Sectigo | USERTrust RSA Certification Authority | 2038-01-18 | http://crt.usertrust.com/USERTrustRSACertificationAuthority.crt | `c784333d20bcd742b9fdc3236f4e509b8937070e73067e254dd3bf9c45bf4dde` |
+| Sectigo | Sectigo Public Server Authentication Root E46 | 2046-03-21 | http://crt.sectigo.com/SectigoPublicServerAuthenticationRootE46.crt | `b0b56335468561f5bb9fa12d801784a633a572705d34f32b643445dfa8b005d1` |
+| Sectigo | Sectigo Public Server Authentication Root R46 | 2046-03-21 | http://crt.sectigo.com/SectigoPublicServerAuthenticationRootR46.crt | `0e8bb18bbeefb381be21bfc1a206d317298462ad104855f04a0542699708d3d4` |
+| SSL.com | SSL.com TLS ECC Root CA 2022 | 2046-08-19 | https://repo-certs.ssl.com/repo/certs/SSLcom-TLS-Root-2022-ECC.der | `1bf00d5c8f13c094dd17e00504cf0888850f12fd067fa1f92c0fdbf60b86e321` |
+| SSL.com | SSL.com TLS RSA Root CA 2022 | 2046-08-19 | https://repo-certs.ssl.com/repo/certs/SSLcom-TLS-Root-2022-RSA.der | `2bcf553a66f570900ddd32ba6dfe1ecc06c9182d662dc1b60e1f7b767c2bdd54` |
+
+Sectigo serves its certificate repository over plain HTTP only (its HTTPS
+endpoint refuses the handshake), which is why the fingerprint check against the
+OS trust store matters for those four.
+
+The first root to expire is ISRG Root X1 (2035-06-04). Ship a set without it,
+or with its successor, well before then.
+
+### Check the live chain before a release
 
 ```bash
 # Save each certificate the server sends as cert1.pem (leaf), cert2.pem, ...
@@ -130,10 +166,34 @@ for f in cert*.pem; do
 done
 ```
 
-The last certificate the server sends is `GTS Root R4` cross-signed by
-GlobalSign. It has the same key, and so the same pin, as the self-signed root
-bundled in the app; its pin must equal `WRFCOIN_TLS_PIN_SHA256_CURRENT` above. The pin format is hex; the
-base64 form (`openssl dgst -sha256 -binary | base64`) is not accepted.
+The last certificate's pin (or, for a chain that ends at an intermediate, its
+issuer's root) must be in the table above. On 2026-11-05 the chain was leaf,
+`WE1`, `GTS Root R4` cross-signed by GlobalSign (pin `9847e565…`), and
+`openssl verify -no-CApath -no-CAstore -CAfile <the ten roots> -untrusted
+<cert2+cert3> -verify_hostname wrfcoin.com cert1.pem` returned OK, ending at
+the bundled GTS Root R4. The pin format is hex; the base64 form
+(`openssl dgst -sha256 -binary | base64`) is not accepted.
+
+### Add a CA (or a new root) in an app update
+
+Installed apps only trust the set they were built with, so a new CA has to ship
+in an app update **before** Cloudflare can start using it.
+
+1. Download the root as DER from the CA's own repository into a new empty
+   directory. Confirm its SHA-256 fingerprint against a second source (the OS
+   or Mozilla trust store, or the CA's published fingerprint).
+2. Compute the pin from that file:
+   `openssl x509 -inform DER -in root.der -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256`.
+3. Add the certificate (base64 DER, its source URL, expiry and pin in the
+   comment, and its `authority`) to `pinnable_ca_certificates.dart` and to
+   `pinnableCaCertificates`.
+4. Add a **new** set to `tlsPinSets` (e.g. `cloudflare-universal-v2`) with the
+   old pins plus the new one. Keep the `'<name>': [` line shape; the release
+   gate script reads it. Never change the pins of a set that has shipped.
+5. Update `_bundledPins` and the authority counts in
+   `test/services/api/certificate_pinning_test.dart`, and this table.
+6. Release with `WRFCOIN_TLS_PIN_SET=<new name>`. Remove a root only after
+   every supported app version trusts the CA's replacement.
 
 ## Reproducible build recipe
 
@@ -153,7 +213,7 @@ set +x
 : "${RELEASE_BUILD_NUMBER:?new build number required}"
 : "${WRFCOIN_API_BASE_URL:?verified public API URL required}"
 : "${WRFCOIN_WALLET_AUTH_ORIGIN:?backend login origin required}"
-: "${WRFCOIN_TLS_PIN_SHA256_CURRENT:?verified CA SPKI pin required}"
+: "${WRFCOIN_TLS_PIN_SET:?TLS pin set name required}"
 : "${WRFCOIN_ANDROID_KEYSTORE_PATH:?private absolute keystore path required}"
 : "${WRFCOIN_ANDROID_KEYSTORE_PASSWORD:?injected signing password required}"
 : "${WRFCOIN_ANDROID_KEY_ALIAS:?injected signing alias required}"
@@ -201,8 +261,7 @@ flutter build apk --release \
   --dart-define="WRFCOIN_CHAIN_ID=$WRFCOIN_CHAIN_ID" \
   --dart-define="WRFCOIN_NETWORK_ID=$WRFCOIN_NETWORK_ID" \
   --dart-define=TLS_SECURITY_PROFILE=public-release \
-  --dart-define="TLS_PIN_SHA256_CURRENT=$WRFCOIN_TLS_PIN_SHA256_CURRENT" \
-  --dart-define="TLS_PIN_SHA256_NEXT=${WRFCOIN_TLS_PIN_SHA256_NEXT:-}"
+  --dart-define="TLS_PIN_SET=$WRFCOIN_TLS_PIN_SET"
 ```
 
 Install the locked Ruby bundle first (`bundle install`, using Ruby 3.3 as in CI).
@@ -260,8 +319,8 @@ can be checked before release inputs are available. Use a disposable worktree;
 this is not a distributable APK and does not establish API or device acceptance.
 Keep the signed-release checks above for the eventual release.
 
-The dry run uses reserved `.invalid` origins, a synthetic TLS pin (the build
-succeeds; the app would refuse it at start-up, since it matches no bundled CA), the current
+The dry run uses reserved `.invalid` origins, the release TLS pin set (the
+`.invalid` hosts cannot connect anyway), the current
 source version/build number, and provisional testnet chain/network values. It
 unsets all four signing variables and sets `WRFCOIN_ANDROID_UNSIGNED_RELEASE=1`,
 the only way Gradle builds a release without signing inputs. The result is
@@ -285,7 +344,7 @@ flutter build apk --release --build-name 0.1.0 --build-number 1 \
   --dart-define=WRFCOIN_CHAIN_ID=888 \
   --dart-define=WRFCOIN_NETWORK_ID=testnet \
   --dart-define=TLS_SECURITY_PROFILE=public-release \
-  --dart-define=TLS_PIN_SHA256_CURRENT=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  --dart-define=TLS_PIN_SET=cloudflare-universal-v1
 ```
 
 Record the exact source/toolchain revisions, lock hashes, Flutter migrations,
@@ -300,8 +359,8 @@ Before a real release the owner must supply or confirm:
 
 - Approved source and Flutter revisions, version/build number and changelog.
 - Public API base URL and backend wallet-login origin, with endpoint acceptance.
-- Current API TLS CA SPKI pin (issuing intermediate) and optional backup pin
-  (root); see [TLS pins](#tls-pins).
+- The TLS pin set name (`cloudflare-universal-v1`), after checking the live
+  chain against it; see [TLS pins](#tls-pins).
 - Chain ID and network ID for the selected deployment.
 - Signing keystore, alias, injected passwords and trusted signer fingerprint.
 - Physical-device acceptance, including clean install and upgrade with wallet

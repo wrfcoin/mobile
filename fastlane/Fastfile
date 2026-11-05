@@ -27,21 +27,11 @@ def required_envs!(keys)
   UI.user_error!("Missing required environment variables: #{missing.join(", ")}")
 end
 
-def valid_tls_pin?(value)
-  candidate = value.to_s.upcase
-  (candidate.match?(/\A[0-9A-F]{64}\z/) || candidate.match?(/\A(?:[0-9A-F]{2}:){31}[0-9A-F]{2}\z/)) &&
-    !value.match?(/CONFIGURE|PLACEHOLDER|CHANGEME/i)
-end
-
-def release_tls_pins!
-  current = required_env!("WRFCOIN_TLS_PIN_SHA256_CURRENT")
-  next_pin = env_or_nil("WRFCOIN_TLS_PIN_SHA256_NEXT")
-  UI.user_error!("WRFCOIN_TLS_PIN_SHA256_CURRENT is malformed or a placeholder") unless valid_tls_pin?(current)
-  if next_pin
-    UI.user_error!("WRFCOIN_TLS_PIN_SHA256_NEXT is malformed or a placeholder") unless valid_tls_pin?(next_pin)
-    UI.user_error!("Current and next TLS pins must be distinct") if current.delete(":").casecmp?(next_pin.delete(":"))
-  end
-  [current, next_pin]
+# The named TLS pin set (lib/services/api/tls_pin_configuration.dart). The
+# shell gate refuses a missing or unknown name and the retired single pins.
+def release_tls_pin_set!
+  sh("bash", "scripts/validate-release-tls-pins.sh")
+  required_env!("WRFCOIN_TLS_PIN_SET")
 end
 
 def release_api_base_url!
@@ -202,13 +192,12 @@ end
 
 def release_dart_defines
   api_base_url = release_api_base_url!
-  current_pin, next_pin = release_tls_pins!
+  pin_set = release_tls_pin_set!
   defines = [
     "--dart-define=#{Shellwords.escape("API_BASE_URL=#{api_base_url}")}",
     "--dart-define=#{Shellwords.escape("TLS_SECURITY_PROFILE=public-release")}",
-    "--dart-define=#{Shellwords.escape("TLS_PIN_SHA256_CURRENT=#{current_pin}")}",
+    "--dart-define=#{Shellwords.escape("TLS_PIN_SET=#{pin_set}")}",
   ]
-  defines << "--dart-define=#{Shellwords.escape("TLS_PIN_SHA256_NEXT=#{next_pin}")}" if next_pin
   optional_wallet_auth_defines!.each do |key, value|
     defines << "--dart-define=#{Shellwords.escape("#{key}=#{value}")}"
   end
@@ -271,7 +260,7 @@ desc "Verify beta release pipeline secrets and platform routing before upload jo
 lane :verify_release_pipeline do
   context = validated_release_context
   release_api_base_url!
-  release_tls_pins!
+  release_tls_pin_set!
   release_ios = truthy_env?("RELEASE_IOS")
   release_android = truthy_env?("RELEASE_ANDROID")
 
