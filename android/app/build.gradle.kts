@@ -5,16 +5,27 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Release signing comes only from these four variables. A release build never
+// falls back to the debug key: a debug-signed APK cannot be upgraded by a
+// properly signed one, so shipping it would strand every phone that installed it.
+val releaseSigningEnvNames = listOf(
+    "WRFCOIN_ANDROID_KEYSTORE_PATH",
+    "WRFCOIN_ANDROID_KEYSTORE_PASSWORD",
+    "WRFCOIN_ANDROID_KEY_ALIAS",
+    "WRFCOIN_ANDROID_KEY_PASSWORD",
+)
 val releaseKeystorePath = providers.environmentVariable("WRFCOIN_ANDROID_KEYSTORE_PATH").orNull
 val releaseKeystorePassword = providers.environmentVariable("WRFCOIN_ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("WRFCOIN_ANDROID_KEY_ALIAS").orNull
 val releaseKeyPassword = providers.environmentVariable("WRFCOIN_ANDROID_KEY_PASSWORD").orNull
-val hasReleaseSigning = listOf(
-    releaseKeystorePath,
-    releaseKeystorePassword,
-    releaseKeyAlias,
-    releaseKeyPassword,
-).all { !it.isNullOrBlank() }
+val missingReleaseSigning = releaseSigningEnvNames.filter {
+    providers.environmentVariable(it).orNull.isNullOrBlank()
+}
+val hasReleaseSigning = missingReleaseSigning.isEmpty()
+// The compile-only dry run in docs/RELEASING.md builds an UNSIGNED release APK
+// on purpose. It has to say so; it never gets the debug key either.
+val allowUnsignedRelease =
+    providers.environmentVariable("WRFCOIN_ANDROID_UNSIGNED_RELEASE").orNull == "1"
 
 android {
     namespace = "com.wrfcoin.wrfcoin_mobile"
@@ -55,8 +66,34 @@ android {
 
     buildTypes {
         release {
-            // Release builds use keystore material injected by GitHub Actions secrets.
-            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // Release builds use keystore material injected by GitHub Actions secrets
+            // or the release owner's shell. Without it the release is unsigned, and
+            // the check below refuses to build it unless the dry run asked for that.
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
+        }
+    }
+}
+
+// Runs only when a release variant is built, so debug and profile builds are untouched.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        if (hasReleaseSigning) {
+            val keystore = file(releaseKeystorePath!!)
+            if (!keystore.isFile) {
+                throw GradleException(
+                    "RELEASE_SIGNING_REFUSED: WRFCOIN_ANDROID_KEYSTORE_PATH does not name a readable file.",
+                )
+            }
+        } else if (!allowUnsignedRelease) {
+            throw GradleException(
+                "RELEASE_SIGNING_REFUSED: a release build needs all four signing variables " +
+                    "and will not fall back to the debug key. Missing: " +
+                    missingReleaseSigning.joinToString(", ") +
+                    ". For the unsigned compile-only dry run set WRFCOIN_ANDROID_UNSIGNED_RELEASE=1; " +
+                    "for a tester APK use scripts/build_profile_apk.sh.",
+            )
+        } else {
+            logger.warn("WRFCOIN_ANDROID_UNSIGNED_RELEASE=1: building an UNSIGNED release. Do not install or distribute it.")
         }
     }
 }
