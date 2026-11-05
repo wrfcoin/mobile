@@ -69,7 +69,7 @@ Release builds are produced by the Fastlane lanes (`fastlane/Fastfile`, `release
 | Variable | Required | Dart define | When unset |
 |---|---|---|---|
 | `WRFCOIN_API_BASE_URL` | yes | `API_BASE_URL` | the release fails (see below) |
-| `WRFCOIN_TLS_PIN_SHA256_CURRENT` / `_NEXT` | current: yes; next: no | `TLS_PIN_SHA256_CURRENT` / `_NEXT` | the release fails (current) / no backup pin |
+| `WRFCOIN_TLS_PIN_SET` | yes | `TLS_PIN_SET` | the release fails |
 | `WRFCOIN_WALLET_AUTH_ORIGIN` | no | `WRFCOIN_WALLET_AUTH_ORIGIN` | no define: ed25519 login expects the origin of `API_BASE_URL` |
 | `WRFCOIN_CHAIN_ID` | yes | `WRFCOIN_CHAIN_ID` | release/profile compilation fails |
 | `WRFCOIN_NETWORK_ID` | no | `WRFCOIN_NETWORK_ID` | no define: `testnet` |
@@ -85,12 +85,13 @@ Release builds still fail closed until `WRFCOIN_API_BASE_URL` is explicitly set 
 
 ### TLS pinning (release builds)
 
-Release builds pin the **public key (SPKI) of a CA in the server's chain**, not the leaf certificate. wrfcoin.com's leaf certificate is managed by Cloudflare and replaced about every 90 days without notice; a leaf pin would lock installed apps out at each renewal.
+Release builds pin the **public keys (SPKI) of CA roots**, not the leaf certificate. wrfcoin.com's leaf certificate is managed by Cloudflare and replaced about every 90 days without notice; a leaf pin would lock installed apps out at each renewal.
 
-- A pin is the SHA-256 of a certificate's DER SubjectPublicKeyInfo, as 64 hex digits (colons optional). `TLS_PIN_SHA256_CURRENT` is required; `TLS_PIN_SHA256_NEXT` is an optional, distinct backup.
-- The connection is accepted when the chain the server presents runs, with valid signatures, dates and host name, from the leaf to a certificate whose key matches a pin: the issuing intermediate or a root. The platform trust store is not used.
-- dart:io shows the app only the leaf certificate, so each pin selects a CA certificate bundled in `lib/services/api/pinnable_ca_certificates.dart`, and that certificate becomes the only trust anchor. A pin with no bundled certificate stops the app at start-up (fail closed). To pin another CA, add its certificate there.
-- For wrfcoin.com, pin **GTS Root R4** as current and **GTS Root R1** as the backup (Cloudflare is set to Google Trust Services, owner decision 2026-11-05). The values and the openssl commands that compute them from the live chain are in [docs/RELEASING.md](docs/RELEASING.md#tls-pins).
+- A release is built with one named pin set, `--dart-define=TLS_PIN_SET=cloudflare-universal-v1` (set `WRFCOIN_TLS_PIN_SET`). The sets are `tlsPinSets` in `lib/services/api/tls_pin_configuration.dart`; a missing or unknown name stops the release gate and the app.
+- `cloudflare-universal-v1` pins the ECDSA and RSA roots of all four CAs Cloudflare Universal SSL may use (primary or backup): Google Trust Services, Let's Encrypt, Sectigo (both root generations) and SSL.com. Ten roots in all (owner decision, 2026-11-05).
+- The connection is accepted when the chain the server presents runs, with valid signatures, dates and host name, from the leaf to a pinned root. The platform trust store is not used.
+- dart:io shows the app only the leaf certificate, so each pin selects a root bundled in `lib/services/api/pinnable_ca_certificates.dart`, and those roots become the only trust anchors. A pin with no bundled certificate stops the app at start-up (fail closed).
+- The pins, their sources and expiry, and how to add a CA in an app update are in [docs/RELEASING.md](docs/RELEASING.md#tls-pins).
 
 ### ed25519 wallet login configuration
 

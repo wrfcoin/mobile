@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
+# A release build must name a known TLS pin set (WRFCOIN_TLS_PIN_SET). The
+# known names are the keys of tlsPinSets in the Dart source, so this gate and
+# the app's start-up check agree. See docs/RELEASING.md#tls-pins.
 set -euo pipefail
 
-current_pin="${WRFCOIN_TLS_PIN_SHA256_CURRENT:-}"
-next_pin="${WRFCOIN_TLS_PIN_SHA256_NEXT:-}"
-pin_pattern='^([0-9A-Fa-f]{64}|([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2})$'
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source_file="$repo_root/lib/services/api/tls_pin_configuration.dart"
+pin_set="${WRFCOIN_TLS_PIN_SET:-}"
 
-if [[ -z "$current_pin" ]]; then
-  echo "WRFCOIN_TLS_PIN_SHA256_CURRENT is required for release" >&2
+if [[ -n "${WRFCOIN_TLS_PIN_SHA256_CURRENT:-}${WRFCOIN_TLS_PIN_SHA256_NEXT:-}" ]]; then
+  echo "WRFCOIN_TLS_PIN_SHA256_CURRENT/_NEXT are retired; set WRFCOIN_TLS_PIN_SET instead" >&2
   exit 1
 fi
-if [[ ! "$current_pin" =~ $pin_pattern ]] || [[ "$current_pin" =~ CONFIGURE|PLACEHOLDER|CHANGEME ]]; then
-  echo "WRFCOIN_TLS_PIN_SHA256_CURRENT is malformed or a placeholder" >&2
-  exit 1
-fi
-if [[ -n "$next_pin" ]] && [[ ! "$next_pin" =~ $pin_pattern ]]; then
-  echo "WRFCOIN_TLS_PIN_SHA256_NEXT is malformed or a placeholder" >&2
+if [[ -z "$pin_set" ]]; then
+  echo "WRFCOIN_TLS_PIN_SET is required for release" >&2
   exit 1
 fi
 
-normalize_pin() { tr -d ':' <<<"$1" | tr '[:lower:]' '[:upper:]'; }
-if [[ -n "$next_pin" ]] && [[ "$(normalize_pin "$current_pin")" == "$(normalize_pin "$next_pin")" ]]; then
-  echo "Current and next TLS pins must be distinct" >&2
+known_sets="$(sed -nE "s/^  '([a-z0-9.-]+)': \[$/\1/p" "$source_file")"
+if [[ -z "$known_sets" ]]; then
+  echo "no TLS pin sets found in $source_file" >&2
+  exit 1
+fi
+if ! grep -qxF -- "$pin_set" <<<"$known_sets"; then
+  echo "WRFCOIN_TLS_PIN_SET names an unknown pin set (known: $(tr '\n' ' ' <<<"$known_sets"))" >&2
   exit 1
 fi
 
-echo "release TLS pin configuration valid"
+echo "release TLS pin set valid: $pin_set"
