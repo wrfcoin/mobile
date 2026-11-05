@@ -90,7 +90,7 @@ Release builds pin the **public key (SPKI) of a CA in the server's chain**, not 
 - A pin is the SHA-256 of a certificate's DER SubjectPublicKeyInfo, as 64 hex digits (colons optional). `TLS_PIN_SHA256_CURRENT` is required; `TLS_PIN_SHA256_NEXT` is an optional, distinct backup.
 - The connection is accepted when the chain the server presents runs, with valid signatures, dates and host name, from the leaf to a certificate whose key matches a pin: the issuing intermediate or a root. The platform trust store is not used.
 - dart:io shows the app only the leaf certificate, so each pin selects a CA certificate bundled in `lib/services/api/pinnable_ca_certificates.dart`, and that certificate becomes the only trust anchor. A pin with no bundled certificate stops the app at start-up (fail closed). To pin another CA, add its certificate there.
-- For wrfcoin.com today, pin the Google Trust Services **WE1** intermediate as current and **GTS Root R4** as the backup. The values and the openssl commands that compute them from the live chain are in [docs/RELEASING.md](docs/RELEASING.md#tls-pins).
+- For wrfcoin.com, pin **GTS Root R4** as current and **GTS Root R1** as the backup (Cloudflare is set to Google Trust Services, owner decision 2026-11-05). The values and the openssl commands that compute them from the live chain are in [docs/RELEASING.md](docs/RELEASING.md#tls-pins).
 
 ### ed25519 wallet login configuration
 

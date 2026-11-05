@@ -24,6 +24,16 @@ API and the backend's wallet-login origin match the configuration. Do not use a
 private-only API port. An HTML response or redirect to the homepage is not API
 acceptance.
 
+Before building, confirm that the live login challenge names `https://wrfcoin.com`
+(through early November 2026 the backend named the older tailnet host, and
+an app built for the wrong origin refuses every login):
+
+```bash
+curl -s 'https://wrfcoin.com/api/auth/nonce/0x0000000000000000000000000000000000000001?scheme=ed25519' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["message"].split("\n")[1])'
+# expect: wrfcoin.com wants you to sign in with your WRFCoin ed25519 account:
+```
+
 `WRFCOIN_WALLET_AUTH_ORIGIN` must equal the backend's configured login origin,
 including its port if any, with no path or trailing slash. It need not equal the
 API origin when the backend deliberately uses a separate login origin. Record
@@ -93,18 +103,20 @@ Bundled today:
 | GTS Root R4 (root, expires 2036-06-22) | `9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347` |
 | GTS Root R1 (root, expires 2036-06-22) | `871a9194f4eed5b312ff40c84c1d524aed2f778bbff25f138cf81f680a7adc67` |
 
-For wrfcoin.com on 2026-10-31 (chain: leaf, WE1, GTS Root R4 cross-signed by
-GlobalSign), configure:
+wrfcoin.com's Cloudflare edge certificates are set to Google Trust Services
+(owner decision, 2026-11-05), so a renewal can only move between the GTS
+chains: ECDSA through WE1 to GTS Root R4, or RSA through WR1 to GTS Root R1.
+Pin the two roots, which outlive any intermediate:
 
 ```bash
-WRFCOIN_TLS_PIN_SHA256_CURRENT=908769e8d34477cc2cba0632c88605b22d7294c0840f78596d247c645b1afc0e  # GTS WE1
-WRFCOIN_TLS_PIN_SHA256_NEXT=9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347     # GTS Root R4
+WRFCOIN_TLS_PIN_SHA256_CURRENT=9847e5653e5e9e847516e5cb818606aa7544a19be67fd7366d506988e8d84347  # GTS Root R4 (chain today: leaf, WE1, R4)
+WRFCOIN_TLS_PIN_SHA256_NEXT=871a9194f4eed5b312ff40c84c1d524aed2f778bbff25f138cf81f680a7adc67     # GTS Root R1 (RSA chain)
 ```
 
-If Cloudflare moves the zone to another CA (for example an RSA chain through
-WR1 and GTS Root R1, or a different issuer), these pins stop matching and the
-app refuses to connect until a release with new pins ships. Check the chain
-before every release. To compute the pins from the live chain:
+If Cloudflare ever issues from a CA other than Google Trust Services (for
+example after the dashboard setting is changed back), these pins stop
+matching and the app refuses to connect until a release with new pins ships.
+Check the chain before every release. To compute the pins from the live chain:
 
 ```bash
 # Save each certificate the server sends as cert1.pem (leaf), cert2.pem, ...
@@ -118,9 +130,9 @@ for f in cert*.pem; do
 done
 ```
 
-Pin the certificate whose subject is `CN=WE1` as current, and the root (`GTS
-Root R4`) as next. The cross-signed `GTS Root R4` the server sends has the same
-key, and so the same pin, as the self-signed root. The pin format is hex; the
+The last certificate the server sends is `GTS Root R4` cross-signed by
+GlobalSign. It has the same key, and so the same pin, as the self-signed root
+bundled in the app; its pin must equal `WRFCOIN_TLS_PIN_SHA256_CURRENT` above. The pin format is hex; the
 base64 form (`openssl dgst -sha256 -binary | base64`) is not accepted.
 
 ## Reproducible build recipe
