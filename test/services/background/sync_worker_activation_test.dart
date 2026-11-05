@@ -19,8 +19,7 @@ import 'package:wrfcoin_mobile/services/storage/local_db.dart';
 
 import '../../test_helpers/fake_station_backend.dart';
 
-const awaiting =
-    'Station awaiting activation. Rewards start once the network activates your station.';
+const awaiting = MobileStationStatus.awaitingActivationMessage;
 
 class _Online implements Connectivity {
   @override

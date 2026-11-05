@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
@@ -15,6 +16,7 @@ import 'package:wrfcoin_mobile/features/challenges/data/repositories/challenge_r
 import 'package:wrfcoin_mobile/features/collector/data/datasources/battery_monitor.dart';
 import 'package:wrfcoin_mobile/features/collector/data/datasources/sensor_data_source.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/collector/data/services/mobile_station_status_service.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/screens/collector_dashboard.dart';
 import 'package:wrfcoin_mobile/features/settings/presentation/screens/privacy_center_screen.dart';
@@ -28,6 +30,7 @@ import 'package:wrfcoin_mobile/services/location/location_service.dart';
 import 'package:wrfcoin_mobile/services/observability/app_logger.dart';
 import 'package:wrfcoin_mobile/services/storage/local_db.dart';
 
+import '../../../test_helpers/screenshot_fonts.dart';
 import '../../../test_helpers/fakes.dart';
 import '../../../test_helpers/fake_station_backend.dart';
 
@@ -228,19 +231,47 @@ void main() {
       await pump(tester, status);
       expect(statusCalls, 1);
       expect(
-        find.text(
-          'Station awaiting activation. Rewards start once the network activates your station.',
-        ),
+        find.text(MobileStationStatus.awaitingActivationMessage),
         findsOneWidget,
       );
+      // Plain about the wait, and never promises a time.
+      expect(find.textContaining('Nothing is wrong'), findsOneWidget);
+      expect(find.textContaining('no set time'), findsOneWidget);
+      // The worker deletes unsynced readings while waiting, so the screen must
+      // say so and must not offer the 50-minute upload window.
+      expect(
+        find.textContaining('are removed from this phone'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('50 minutes'), findsNothing);
     });
+  }
+  for (final (name, size) in screenshotSizes) {
+    testWidgets('awaiting activation screenshot $name', (tester) async {
+      await loadScreenshotFonts();
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await pump(tester, 'db_only', dropped: 3);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          '../../../../docs/screens/activation-wait/awaiting-$name.png',
+        ),
+      );
+    }, skip: Platform.environment['SCREENSHOT_FONT_DIR'] == null);
   }
   testWidgets('on_chain uses normal Collect without pending activation', (
     tester,
   ) async {
     await pump(tester, 'on_chain');
     expect(statusCalls, 1);
-    expect(find.textContaining('Rewards start once'), findsNothing);
+    expect(
+      find.text(MobileStationStatus.awaitingActivationMessage),
+      findsNothing,
+    );
+    expect(find.textContaining('50 minutes'), findsOneWidget);
   });
   testWidgets('unregistered phone explains the one-time wallet approval', (
     tester,
