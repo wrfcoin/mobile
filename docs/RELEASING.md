@@ -53,8 +53,10 @@ See [release chain controls](SIGNING_CHAIN_BUILD.md).
   versions in the build record. Repeat with those same inputs. This recipe does
   not promise bit-for-bit equality across machines.
 - The owner supplies the release version/build number, changelog entry, and all
-  signing inputs through the worker's secret injection. Gradle falls back to
-  debug signing if any signing input is absent: the checks below must run.
+  signing inputs through the worker's secret injection. A release build with
+  any signing input absent stops at `preReleaseBuild` with
+  `RELEASE_SIGNING_REFUSED`; it never falls back to the debug key. The signer
+  checks below must still run.
 - The owner supplies the current TLS **SPKI pin** of a CA in the API's chain
   (the issuing intermediate) and, optionally, a distinct backup pin (its root).
   See [TLS pins](#tls-pins). Validate them through the deployment's trusted
@@ -249,10 +251,9 @@ Keep the signed-release checks above for the eventual release.
 The dry run uses reserved `.invalid` origins, a synthetic TLS pin (the build
 succeeds; the app would refuse it at start-up, since it matches no bundled CA), the current
 source version/build number, and provisional testnet chain/network values. It
-unsets all four signing variables. Main otherwise falls back to debug signing,
-so temporarily replace the release `signingConfig` assignment in
-`android/app/build.gradle.kts` with `signingConfig = null`. Record this patch as a
-build input; do not commit it or change the signed-release defaults.
+unsets all four signing variables and sets `WRFCOIN_ANDROID_UNSIGNED_RELEASE=1`,
+the only way Gradle builds a release without signing inputs. The result is
+unsigned, never debug-signed. No Gradle patch is needed.
 
 Run with JDK 17 and the Android SDK selected through `JAVA_HOME` and
 `ANDROID_HOME`; prepend the JDK bin directory to `PATH`. Save the following as
@@ -264,6 +265,7 @@ set -euo pipefail
 set +x
 unset WRFCOIN_ANDROID_KEYSTORE_PATH WRFCOIN_ANDROID_KEYSTORE_PASSWORD
 unset WRFCOIN_ANDROID_KEY_ALIAS WRFCOIN_ANDROID_KEY_PASSWORD
+export WRFCOIN_ANDROID_UNSIGNED_RELEASE=1
 flutter pub get --enforce-lockfile
 flutter build apk --release --build-name 0.1.0 --build-number 1 \
   --dart-define=API_BASE_URL=https://api.example.invalid \
@@ -280,8 +282,7 @@ RSS is not an aggregate peak for concurrent Gradle/Kotlin daemons. Inspect the
 APK with `apksigner verify --verbose`: an unsigned artifact must fail signature
 verification. Record its SHA-256 and size locally, keep it out of Git, and label
 it **UNSIGNED / PLACEHOLDER CONFIGURATION / DO NOT INSTALL OR DISTRIBUTE**.
-Restore the temporary Gradle patch and generated migrations after recording
-those inputs. A dry-run checksum is not a release checksum.
+Restore generated migrations after recording those inputs. A dry-run checksum is not a release checksum.
 
 Before a real release the owner must supply or confirm:
 
