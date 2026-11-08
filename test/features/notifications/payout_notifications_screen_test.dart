@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart' hide State;
 import 'package:wrfcoin_mobile/core/errors/failures.dart';
 import 'package:wrfcoin_mobile/core/theme/app_theme.dart';
+import 'package:wrfcoin_mobile/features/notifications/data/payout_alert_style.dart';
 import 'package:wrfcoin_mobile/features/notifications/data/payout_device.dart';
 import 'package:wrfcoin_mobile/features/notifications/data/payout_notifications.dart';
 import 'package:wrfcoin_mobile/features/notifications/presentation/payout_notifications_screen.dart';
@@ -97,6 +98,23 @@ class _Device extends PayoutDevice {
   bool permission = true;
   int checks = 0;
   final List<String> calls = [];
+  PayoutAlertStyle style = PayoutAlertStyle.defaultStyle;
+  bool hasSystemSettings = true;
+
+  @override
+  Future<PayoutAlertStyle> alertStyle() async => style;
+
+  @override
+  Future<void> setAlertStyle(PayoutAlertStyle style) async {
+    calls.add('style:${style.name}');
+    this.style = style;
+  }
+
+  @override
+  Future<bool> openSystemSettings() async {
+    calls.add('system-settings');
+    return hasSystemSettings;
+  }
 
   @override
   Future<bool> requestPermission() async {
@@ -204,6 +222,64 @@ void main() {
     expect(find.text('my-other-topic-1'), findsOneWidget);
     expect(find.text('Browser (fcm.example)'), findsOneWidget);
     expect(find.text('Remove'), findsNWidgets(2));
+  });
+
+  testWidgets('alert style: shows the saved choice and saves a new one', (
+    tester,
+  ) async {
+    final repository = _Repository()
+      ..subscriptions = const [
+        NotificationSubscription(id: 'p', channel: 'ntfy', label: _topic),
+      ];
+    final device = _Device(stored: _topic)..style = PayoutAlertStyle.vibrate;
+    await _pump(tester, repository, device);
+    await tester.scrollUntilVisible(
+      find.text('Silent'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final card = find.byKey(const Key('payout-alert-style'));
+    expect(card, findsOneWidget);
+    final button = tester.widget<SegmentedButton<PayoutAlertStyle>>(
+      find.byType(SegmentedButton<PayoutAlertStyle>),
+    );
+    expect(button.selected, {PayoutAlertStyle.vibrate});
+    expect(find.text('No sound.'), findsOneWidget);
+
+    await tester.tap(find.text('Silent'));
+    await tester.pumpAndSettle();
+    expect(device.calls, contains('style:silent'));
+    expect(device.style, PayoutAlertStyle.silent);
+    expect(
+      find.text('Shown in the notification shade, no sound or vibration.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('alert style: opens the system settings, or says it cannot', (
+    tester,
+  ) async {
+    final repository = _Repository()
+      ..subscriptions = const [
+        NotificationSubscription(id: 'p', channel: 'ntfy', label: _topic),
+      ];
+    final device = _Device(stored: _topic)..hasSystemSettings = false;
+    await _pump(tester, repository, device);
+    final open = find.text('Open system notification settings');
+    await tester.scrollUntilVisible(
+      open,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(open);
+    await tester.pumpAndSettle();
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    expect(device.calls, contains('system-settings'));
+    expect(
+      find.textContaining('no notification settings page'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('error: not "off", with a retry that works', (tester) async {
@@ -438,6 +514,18 @@ void main() {
         find.byType(MaterialApp),
         matchesGoldenFile(
           '../../../docs/screenshots/payout-notifications/screen-$name.png',
+        ),
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('payout-alert-style')),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          '../../../docs/screenshots/payout-notifications/alert-style-$name.png',
         ),
       );
     }, skip: fonts == null);

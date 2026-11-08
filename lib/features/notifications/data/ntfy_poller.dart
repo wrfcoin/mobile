@@ -64,6 +64,7 @@ typedef ShowPayoutNotice = Future<void> Function({
   required int id,
   required String title,
   required String body,
+  bool alert,
 });
 
 /// Reads this phone's topic from ntfy and shows what arrived as local
@@ -113,11 +114,14 @@ class NtfyPoller {
     final recent = messages.length > maxShownPerPoll
         ? messages.sublist(messages.length - maxShownPerPoll)
         : messages;
-    for (final message in recent) {
+    for (final (index, message) in recent.indexed) {
       await show(
         id: message.id.hashCode & 0x7fffffff,
         title: message.title,
         body: message.body,
+        // One check, one alert: a producer is paid every block, so a check
+        // can find several payouts, and each used to make its own sound.
+        alert: index == 0,
       );
     }
     await store.saveSince(messages.last.id);
