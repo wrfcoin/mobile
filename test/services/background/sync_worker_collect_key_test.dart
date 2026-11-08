@@ -310,6 +310,38 @@ void main() {
       expect(backend.count('/weather/stations/mobile'), 0);
     });
 
+    test('a background run that cannot read the collect key says so, '
+        'instead of asking for registration', () async {
+      await alreadyRegistered();
+      await seed(2);
+      // Another engine created the store's keys: this one's reads now fail
+      // (as flutter_secure_storage does when its storage key cannot be
+      // unwrapped), although the key and the registration are there.
+      collectStorage.failReads = true;
+
+      final result = await worker(foreground: false).syncPendingReadings();
+
+      expect(result.reason, SyncRunReason.signingUnavailable);
+      expect(result.message, SyncWorker.collectKeyUnreadableMessage);
+      expect(result.pendingCount, 2);
+      expect(backend.count('/oracle/submit-data'), 0);
+      expect(backend.count('/weather/stations/mobile'), 0);
+      expect(signer.openAttempts, 0);
+    });
+
+    test('a missing collect key in the background still asks for the app',
+        () async {
+      await seed(1);
+      final result = await worker(foreground: false).syncPendingReadings();
+      expect(result.reason, SyncRunReason.awaitingForeground);
+    });
+
+    test('prepare creates nothing visible and never throws', () async {
+      collectStorage.failReads = true;
+      await collectStore.prepare();
+      expect(collectStorage.writes, isEmpty);
+    });
+
     test('the wallet key is never read while signing commits', () async {
       await alreadyRegistered();
       await seed(4);

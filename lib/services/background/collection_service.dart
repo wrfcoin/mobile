@@ -268,25 +268,72 @@ String collectionNotificationText(
   };
 }
 
+/// The longest one service tick may take. A tick that hangs (a request that
+/// never answers, a plugin call that never returns) would otherwise hold the
+/// tick guard forever, and every later tick would return at once: the service
+/// stays up, its notification stays, and nothing is collected or uploaded.
+const collectionTickTimeout = Duration(minutes: 10);
+
+/// Which step of a tick was running when it failed or ran out of time.
+enum CollectionTickStage { settings, collect, upload }
+
 /// One tick of the service: stop if collection was turned off, otherwise take
 /// a reading and upload what is queued. Returns the notification text, or
 /// null if the service should stop.
+///
+/// A tick that crashes outside collect and upload (which save their own run
+/// rows), or runs past [timeout], is saved through [recordFailure] with the
+/// step it was on, so the validation log says why, then rethrown.
 @visibleForTesting
 Future<String?> runCollectionTick({
   required Future<bool> Function() stillWanted,
   required Future<CollectReadingResult> Function() collect,
   required Future<SyncRunResult> Function() sync,
   DateTime Function() now = DateTime.now,
+  Future<void> Function(String outcome, String detail)? recordFailure,
+  Duration timeout = collectionTickTimeout,
 }) async {
-  if (!await stillWanted()) return null;
-  final result = await collect();
-  SyncRunReason? upload;
-  try {
-    upload = (await sync()).reason;
-  } on CollectionRunFailed catch (failed) {
-    debugPrint('Collection service upload: ${failed.outcome}');
+  var stage = CollectionTickStage.settings;
+  Future<String?> tick() async {
+    if (!await stillWanted()) return null;
+    stage = CollectionTickStage.collect;
+    final result = await collect();
+    stage = CollectionTickStage.upload;
+    SyncRunReason? upload;
+    String uploadOutcome;
+    try {
+      upload = (await sync()).reason;
+      uploadOutcome = upload.name;
+    } on CollectionRunFailed catch (failed) {
+      uploadOutcome = failed.outcome;
+    }
+    // One line per tick, whatever happened: a quiet logcat then means the
+    // tick never ran, not that it ran and found nothing to say.
+    debugPrint(
+      'Collection service tick: ${CollectionRunner.outcomeOf(result)}, '
+      'upload: $uploadOutcome',
+    );
+    return collectionNotificationText(result, now(), upload: upload);
   }
-  return collectionNotificationText(result, now(), upload: upload);
+
+  try {
+    return await tick().timeout(timeout);
+  } on TimeoutException {
+    debugPrint('Collection service tick timed out in ${stage.name}');
+    await recordFailure?.call(
+      CollectionOutcome.timeout,
+      'The ${stage.name} step did not finish in ${timeout.inMinutes} minutes',
+    );
+    rethrow;
+  } catch (error) {
+    if (stage == CollectionTickStage.settings) {
+      await recordFailure?.call(
+        CollectionOutcome.error,
+        '${stage.name}: ${describeRunError(error)}',
+      );
+    }
+    rethrow;
+  }
 }
 
 /// Saves "stopped", from the service isolate, so the app sees it when opened.
@@ -331,6 +378,7 @@ class _CollectionTaskHandler extends TaskHandler {
   Future<void> _tick() async {
     if (_ticking) return;
     _ticking = true;
+    final startedAt = DateTime.now();
     final db = AppDatabase(openAppDatabase());
     try {
       final preferences = await _freshPreferences();
@@ -359,6 +407,13 @@ class _CollectionTaskHandler extends TaskHandler {
           db,
           kind: CollectionRunKind.syncService,
         ),
+        recordFailure: (outcome, detail) => db.recordCollectionRun(
+          kind: CollectionRunKind.serviceTick,
+          outcome: outcome,
+          detail: detail,
+          startedAt: startedAt,
+          finishedAt: DateTime.now(),
+        ),
       );
       if (text == null) {
         await FlutterForegroundTask.stopService();
@@ -367,7 +422,7 @@ class _CollectionTaskHandler extends TaskHandler {
         FlutterForegroundTask.sendDataToMain(collectionTickMessage);
       }
     } catch (error) {
-      // Stay alive for the next tick. CollectionRunner saved the reason.
+      // Stay alive for the next tick. The reason is in the validation log.
       debugPrint('Collection service tick failed: ${error.runtimeType}');
     } finally {
       await db.close();

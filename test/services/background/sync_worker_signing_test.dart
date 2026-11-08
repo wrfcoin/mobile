@@ -454,6 +454,7 @@ void main() {
         now: () => clock,
         canStartLogin: false,
         sessionOpener: signer.open,
+        collectKeyStore: collectStore,
       ).syncPendingReadings();
 
       expect(signer.openAttempts, 0, reason: 'the key was never read');

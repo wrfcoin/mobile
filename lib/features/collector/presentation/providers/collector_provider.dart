@@ -30,6 +30,12 @@ import '../../../widgets/data/widget_snapshot_store.dart';
 import '../../../../services/observability/app_logger.dart';
 import '../../../wear/services/wear_companion_bridge.dart';
 
+/// Creates the collect-key store's keys from the app before the service or a
+/// job can race to create them (see [prepareCollectKeyStore]).
+final collectKeyStorePreparerProvider = Provider<Future<void> Function()>(
+  (ref) => prepareCollectKeyStore,
+);
+
 final syncWorkerProvider = Provider<SyncWorker>((ref) {
   return SyncWorker();
 });
@@ -239,6 +245,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
       return;
     }
     await _service.requestNotificationPermission();
+    // Before the service and the jobs start: they run in their own engines.
+    await ref.read(collectKeyStorePreparerProvider)();
     final started = await _service.start(
       intervalMinutes: state.intervalMinutes,
     );
@@ -637,6 +645,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _refreshServiceState();
 
     if (preferences.isCollecting && canCollect && !kIsWeb) {
+      await ref.read(collectKeyStorePreparerProvider)();
       await _ensureServiceRunning();
       await _collectOnAppOpen();
       // Keep the jobs' schedule: replacing them here ran them on every app

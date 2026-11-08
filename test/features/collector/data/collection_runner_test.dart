@@ -113,12 +113,10 @@ void main() {
     );
   });
 
-  test('a run not yet due is an empty run too', () async {
+  test('a run not yet due saves no reading, says not_due, and is not a '
+      'WorkManager failure', () async {
     await seedFresh(const Duration(minutes: 5));
-    await expectLater(
-      job(runner(_Sensors())),
-      throwsA(isA<CollectionRunFailed>()),
-    );
+    await job(runner(_Sensors()));
     expect((await db.getReadingHistory()).length, 1);
     expect(
       (await db.getCollectionRuns()).single.outcome,
@@ -129,17 +127,12 @@ void main() {
   group('the service goes first, the job is the backstop', () {
     test('at the usual 15 minutes the job leaves it to the service', () async {
       await seedFresh(const Duration(minutes: 15));
-      await expectLater(
-        job(runner(_Sensors())),
-        throwsA(
-          isA<CollectionRunFailed>().having(
-            (e) => e.outcome,
-            'outcome',
-            CollectionOutcome.notDue,
-          ),
-        ),
-      );
+      await job(runner(_Sensors()));
       expect((await db.getReadingHistory()).length, 1);
+      expect(
+        (await db.getCollectionRuns()).single.outcome,
+        CollectionOutcome.notDue,
+      );
     });
 
     test('at the same 15 minutes the service takes it', () async {
@@ -163,10 +156,7 @@ void main() {
     test('after a job reading, the next tick waits again', () async {
       await seedFresh(const Duration(minutes: 30));
       await job(runner(_Sensors()));
-      await expectLater(
-        job(runner(_Sensors())),
-        throwsA(isA<CollectionRunFailed>()),
-      );
+      await job(runner(_Sensors()));
       expect((await db.getReadingHistory()).length, 2);
     });
   });
@@ -329,6 +319,67 @@ void main() {
         expect((await db.getCollectionRuns()).single.outcome, reason.name);
       });
     }
+
+    test('a run that left readings behind saves the reason in words',
+        () async {
+      await expectLater(
+        runSyncJob(
+          () async => const SyncRunResult(
+            acceptedCount: 0,
+            failedCount: 1,
+            pendingCount: 1,
+            reason: SyncRunReason.failure,
+            message:
+                'Wallet authentication required before syncing reward readings.',
+          ),
+          db,
+          kind: CollectionRunKind.syncJob,
+        ),
+        throwsA(isA<CollectionRunFailed>()),
+      );
+      final run = (await db.getCollectionRuns()).single;
+      expect(run.outcome, 'failure');
+      expect(run.detail, contains('Wallet authentication required'));
+    });
+
+    test('a successful run saves no detail', () async {
+      await runSyncJob(
+        () async => const SyncRunResult(
+          acceptedCount: 1,
+          failedCount: 0,
+          pendingCount: 0,
+          reason: SyncRunReason.success,
+          message: 'ignored',
+        ),
+        db,
+        kind: CollectionRunKind.syncJob,
+      );
+      expect((await db.getCollectionRuns()).single.detail, isNull);
+    });
+
+    test('a network crash saves its kind and status, not its message',
+        () async {
+      await expectLater(
+        runSyncJob(
+          () async => throw DioException(
+            requestOptions: RequestOptions(path: '/oracle/submit-data'),
+            type: DioExceptionType.badCertificate,
+            message: 'secret detail',
+          ),
+          db,
+          kind: CollectionRunKind.syncService,
+        ),
+        throwsA(isA<DioException>()),
+      );
+      final run = (await db.getCollectionRuns()).single;
+      expect(run.detail, 'DioException.badCertificate');
+    });
+
+    test('a long reason is cut to one short line', () {
+      final detail = runDetail('a\n${'b' * 500}')!;
+      expect(detail.length, maxRunDetailLength);
+      expect(detail, isNot(contains('\n')));
+    });
 
     test('a crash is saved with its type only', () async {
       await expectLater(

@@ -17,6 +17,11 @@ import '../storage/db_path_stub.dart'
     if (dart.library.io) '../storage/db_path.dart';
 import '../storage/local_db.dart';
 
+/// Creates the collect-key store's encryption keys from the app, before the
+/// Collect service or a job starts in its own engine (see
+/// [CollectKeyStore.prepare]). Never throws.
+Future<void> prepareCollectKeyStore() => CollectKeyStore().prepare();
+
 class SyncWorker {
   static const int maxBatchSize = 50;
   static const int maxRetries = 5;
@@ -61,6 +66,10 @@ class SyncWorker {
 
   static const String signingUnavailableMessage =
       'This wallet cannot sign uploads. Readings are saved.';
+
+  static const String collectKeyUnreadableMessage =
+      'The upload key could not be read with the app closed (secure storage '
+      'error). Readings are saved; open the app to upload them.';
 
   static const String registrationRefusedMessage =
       "The server's station registration did not match your wallet, so it "
@@ -310,6 +319,28 @@ class SyncWorker {
       // Workmanager isolate. Null on first run, after a reinstall/restore, or
       // when it belongs to another wallet.
       var collectKey = await _collectKeys.load(owner);
+      if (collectKey == null &&
+          _collectKeys.lastLoadUnreadable &&
+          openSession == null) {
+        // Not "needs registration": the key may well be there, but this
+        // engine cannot read it. Say so, so the run log names the cause.
+        await _writeMetadata(
+          db,
+          pendingCount: pendingNow,
+          lastSyncAttemptAt: attemptedAt,
+          lastSyncError: collectKeyUnreadableMessage,
+        );
+        return await _buildResult(
+          db,
+          acceptedCount: 0,
+          failedCount: 0,
+          pendingCount: pendingNow,
+          message: collectKeyUnreadableMessage,
+          reason: SyncRunReason.signingUnavailable,
+          droppedStaleCount: droppedStale,
+          notice: notice,
+        );
+      }
 
       var acceptedCount = 0;
       var failedCount = 0;

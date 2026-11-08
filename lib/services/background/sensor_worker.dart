@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show DioException;
 import 'package:flutter/foundation.dart'
     show kIsWeb, debugPrint, visibleForTesting;
 import 'package:workmanager/workmanager.dart';
@@ -73,8 +74,12 @@ Future<void> _collectSensorData() async {
 /// With the service stopped, the job collects on every second run.
 const serviceBackstopGrace = Duration(minutes: 5);
 
-/// One WorkManager collection run. A run that saved no reading throws, so
-/// WorkManager records a failure, never a success.
+/// One WorkManager collection run. A run that saved no reading for a real
+/// reason (no location, no barometer, low battery, an error) throws, so
+/// WorkManager records a failure. A run that was simply not due yet (the
+/// service or an app open took the reading) is a success: with the service
+/// running that is the job's usual answer, and a failure every cycle only
+/// hid the real ones. The run row still says `not_due`.
 @visibleForTesting
 Future<void> runCollectionJob(
   CollectionRunner runner, {
@@ -87,7 +92,8 @@ Future<void> runCollectionJob(
     baseIntervalMinutes: baseIntervalMinutes,
     dueGrace: serviceBackstopGrace,
   );
-  if (!result.isSuccess) {
+  if (!result.isSuccess &&
+      result.failureReason != CollectReadingFailureReason.stationaryBackoff) {
     throw CollectionRunFailed(CollectionRunner.outcomeOf(result));
   }
 }
@@ -126,23 +132,50 @@ Future<SyncRunResult> runSyncJob(
     await store.recordCollectionRun(
       kind: kind,
       outcome: CollectionOutcome.error,
-      detail: error.runtimeType.toString(),
+      detail: describeRunError(error),
       startedAt: startedAt,
       finishedAt: now(),
     );
     rethrow;
   }
+  final succeeded = syncRunSucceeded(result.reason);
   await store.recordCollectionRun(
     kind: kind,
     outcome: result.reason.name,
+    // A run that left readings behind says why, in the words the app shows.
+    detail: succeeded ? null : runDetail(result.message),
     acceptedCount: result.acceptedCount,
     startedAt: startedAt,
     finishedAt: now(),
   );
-  if (!syncRunSucceeded(result.reason)) {
+  if (!succeeded) {
     throw CollectionRunFailed(result.reason.name);
   }
   return result;
+}
+
+/// The longest detail a run row keeps.
+const maxRunDetailLength = 240;
+
+/// [message] trimmed to one short line for a run row, or null when empty.
+String? runDetail(String? message) {
+  final text = message?.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text == null || text.isEmpty) return null;
+  return text.length <= maxRunDetailLength
+      ? text
+      : '${text.substring(0, maxRunDetailLength - 1)}…';
+}
+
+/// What a crashed run saves: the error's type, and for a network error its
+/// kind and HTTP status (a TLS refusal reads `DioException.badCertificate`
+/// or `.connectionError`). Never the message, which may quote a server body.
+String describeRunError(Object error) {
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    return 'DioException.${error.type.name}'
+        '${status == null ? '' : ' HTTP $status'}';
+  }
+  return error.runtimeType.toString();
 }
 
 /// Runs [action], swallowing the errors Workmanager throws on platforms
