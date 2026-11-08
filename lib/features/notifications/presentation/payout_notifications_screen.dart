@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_error_widget.dart';
 import '../../../services/crypto/key_manager.dart';
 import '../data/ntfy_poller.dart';
+import '../data/payout_alert_style.dart';
 import '../data/payout_device.dart';
 import '../data/payout_notifications.dart';
 
@@ -134,8 +135,28 @@ class _BodyState extends ConsumerState<_Body> {
   bool _busy = false;
   String? _message;
   bool _messageOk = false;
+  PayoutAlertStyle? _style;
+  bool _noSystemSettings = false;
 
   PayoutNotificationsView get view => widget.view;
+
+  @override
+  void initState() {
+    super.initState();
+    _device.alertStyle().then((style) {
+      if (mounted) setState(() => _style = style);
+    });
+  }
+
+  Future<void> _setStyle(PayoutAlertStyle style) async {
+    setState(() => _style = style);
+    await _device.setAlertStyle(style);
+  }
+
+  Future<void> _openSystemSettings() async {
+    final opened = await _device.openSystemSettings();
+    if (mounted) setState(() => _noSystemSettings = !opened);
+  }
 
   @override
   void dispose() {
@@ -302,6 +323,10 @@ class _BodyState extends ConsumerState<_Body> {
               ),
             ),
           ),
+        if (view.address != null && view.signedIn) ...[
+          const SizedBox(height: 12),
+          _alertStyleCard(),
+        ],
       ],
     );
   }
@@ -366,6 +391,58 @@ class _BodyState extends ConsumerState<_Body> {
                 child: const Text('Copy topic for the ntfy app'),
               ),
             ],
+          ),
+      ],
+    );
+  }
+
+  /// Sound, vibrate only or silent. A producer is paid every block, so with
+  /// sound on the phone can chime at every 15-minute check.
+  Widget _alertStyleCard() {
+    final style = _style;
+    return _Card(
+      key: const Key('payout-alert-style'),
+      title: 'How payout notices alert you',
+      children: [
+        const Text(
+          'A node or producer can be paid many times an hour, so a notice can '
+          'arrive at every check. Each check alerts at most once.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: 10),
+        if (style == null)
+          const LinearProgressIndicator()
+        else ...[
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<PayoutAlertStyle>(
+              showSelectedIcon: false,
+              segments: [
+                for (final option in PayoutAlertStyle.values)
+                  ButtonSegment(value: option, label: Text(option.label)),
+              ],
+              selected: {style},
+              onSelectionChanged: (picked) => _setStyle(picked.single),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            style.detail,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: _openSystemSettings,
+          child: const Text('Open system notification settings'),
+        ),
+        if (_noSystemSettings)
+          const Text(
+            'This phone has no notification settings page for the app.',
+            style: TextStyle(color: AppColors.wcagWarning, fontSize: 13),
           ),
       ],
     );
@@ -452,7 +529,7 @@ final payoutTestSettleProvider = Provider<Duration>(
 );
 
 class _Card extends StatelessWidget {
-  const _Card({required this.title, required this.children});
+  const _Card({super.key, required this.title, required this.children});
 
   final String title;
   final List<Widget> children;

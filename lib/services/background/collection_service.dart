@@ -1,8 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb, visibleForTesting;
-import 'package:flutter/services.dart' show MissingPluginException, PlatformException;
+    show
+        TargetPlatform,
+        debugPrint,
+        defaultTargetPlatform,
+        kIsWeb,
+        visibleForTesting;
+import 'package:flutter/services.dart'
+    show MissingPluginException, PlatformException;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -41,7 +47,8 @@ const collectionStoppedMessage = 'collection_stopped';
 const collectionTickMessage = 'collection_tick';
 
 /// Says plainly what is running, and that it uses rough location.
-const collectionNotificationTitle = 'Collecting weather with your rough location';
+const collectionNotificationTitle =
+    'Collecting weather with your rough location';
 
 enum CollectionServiceStart {
   started,
@@ -209,21 +216,31 @@ class CollectionServiceController {
 
   static void _init(int intervalMinutes) {
     FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'wrfcoin_collection',
-        channelName: 'Weather collection',
-        channelDescription:
-            'Shown while WRFCoin collects weather readings using your rough '
-            'location.',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
-        onlyAlertOnce: true,
-      ),
+      androidNotificationOptions: collectionNotificationOptions(),
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: _options(intervalMinutes),
     );
   }
 }
+
+/// The status notice of the collection service. Android requires it while the
+/// service runs. It must never sound or vibrate: it is rewritten after every
+/// run (about every 15 minutes), so the channel is low importance with no sound
+/// or vibration, and only the first post may alert at all.
+@visibleForTesting
+AndroidNotificationOptions collectionNotificationOptions() =>
+    AndroidNotificationOptions(
+      channelId: 'wrfcoin_collection',
+      channelName: 'Weather collection',
+      channelDescription:
+          'Shown while WRFCoin collects weather readings using your rough '
+          'location.',
+      channelImportance: NotificationChannelImportance.LOW,
+      priority: NotificationPriority.LOW,
+      playSound: false,
+      enableVibration: false,
+      onlyAlertOnce: true,
+    );
 
 /// What one service tick did, in words short enough for a notification.
 String collectionNotificationText(
@@ -239,8 +256,7 @@ String collectionNotificationText(
         : 'Last reading $time, waiting to upload';
   }
   return switch (result.failureReason) {
-    CollectReadingFailureReason.batteryLow =>
-      'Paused at $time: battery is low',
+    CollectReadingFailureReason.batteryLow => 'Paused at $time: battery is low',
     CollectReadingFailureReason.barometerUnavailable =>
       'No reading at $time: the barometer gave no data',
     CollectReadingFailureReason.locationUnavailable =>

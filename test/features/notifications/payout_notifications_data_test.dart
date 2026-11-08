@@ -273,12 +273,17 @@ void main() {
   group('reading ntfy', () {
     const store = NtfyDeviceStore();
     late List<String> shown;
+    late List<bool> alerts;
 
     Future<void> show({
       required int id,
       required String title,
       required String body,
-    }) async => shown.add('$title|$body');
+      bool alert = true,
+    }) async {
+      shown.add('$title|$body');
+      alerts.add(alert);
+    }
 
     NtfyPoller poller(_Server server) => NtfyPoller(
       store: store,
@@ -288,6 +293,7 @@ void main() {
 
     setUp(() {
       shown = [];
+      alerts = [];
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -362,6 +368,18 @@ void main() {
       expect(await poller(server).pollOnce(), NtfyPoller.maxShownPerPoll);
       expect(shown.first, 'WRFCoin|paid m3');
       expect(await store.since(), 'm7');
+    });
+
+    test('one check alerts once, however many payouts it finds', () async {
+      await store.save(topic: _topic, server: 'https://ntfy.sh', since: '1');
+      final server = _Server(
+        (_) => ResponseBody.fromString(
+          List.generate(3, (i) => line('m$i')).join('\n'),
+          200,
+        ),
+      );
+      expect(await poller(server).pollOnce(), 3);
+      expect(alerts, [true, false, false]);
     });
 
     test('offline keeps the place, so nothing is lost', () async {

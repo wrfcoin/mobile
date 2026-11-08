@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/background/sensor_worker.dart';
 import '../../../services/notifications/push_service.dart';
 import 'ntfy_poller.dart';
+import 'payout_alert_style.dart';
 
 final payoutDeviceProvider = Provider<PayoutDevice>(
   (ref) => PayoutDevice(ref.watch(pushServiceProvider)),
@@ -15,6 +16,13 @@ class PayoutDevice {
 
   final PushService _push;
   final _store = const NtfyDeviceStore();
+  final _styles = const PayoutAlertStyleStore();
+
+  Future<PayoutAlertStyle> alertStyle() => _styles.load();
+  Future<void> setAlertStyle(PayoutAlertStyle style) => _styles.save(style);
+
+  /// Android's own page for this app's notifications.
+  Future<bool> openSystemSettings() => _push.openSystemNotificationSettings();
 
   Future<bool> requestPermission() => _push.requestPermission();
   Future<String?> topic() => _store.topic();
