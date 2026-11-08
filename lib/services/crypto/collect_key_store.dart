@@ -113,10 +113,17 @@ class CollectKeyStore {
   /// cannot erase the wallet while silently leaving its collect key behind.
   Future<void> wipe() => _storage.deleteAll();
 
+  /// True when the last [load] could not read the store at all (a platform
+  /// or decryption error), as opposed to finding no key. A background run
+  /// says so instead of reporting that the station needs registering.
+  bool get lastLoadUnreadable => _lastLoadUnreadable;
+  bool _lastLoadUnreadable = false;
+
   /// The stored key for [ownerAddress], or null when there is none (first
   /// run, reinstall, restore onto a new device) or it is unusable.
   Future<CollectKey?> load(String ownerAddress) async {
     final owner = ownerAddress.trim().toLowerCase();
+    _lastLoadUnreadable = false;
     try {
       final storedOwner = await _storage.read(key: _ownerKey);
       final seed = await _storage.read(key: _seedKey);
@@ -127,7 +134,28 @@ class CollectKeyStore {
     } catch (_) {
       // An unreadable store is treated as "no key": the next foreground run
       // registers a fresh one rather than looping on a broken store.
+      _lastLoadUnreadable = true;
       return null;
+    }
+  }
+
+  /// Creates the store's encryption keys, once, from the app itself. Call it
+  /// before starting the Collect service or scheduling the jobs.
+  ///
+  /// On Android each Flutter engine (the app, the service, every WorkManager
+  /// run) has its own secure-storage instance, and the first one to touch an
+  /// empty namespace generates its keystore key and wrapped storage key with
+  /// no lock across engines. Turning Collect on starts the service and runs
+  /// both jobs at once, so on a fresh install several engines could create
+  /// the namespace together and leave a key that only one of them can read;
+  /// the others then never find the collect key and never upload. A read
+  /// here creates the keys first, so every later engine finds them.
+  /// Never throws.
+  Future<void> prepare() async {
+    try {
+      await _storage.read(key: _ownerKey);
+    } catch (_) {
+      // Best effort: load() reports an unreadable store.
     }
   }
 

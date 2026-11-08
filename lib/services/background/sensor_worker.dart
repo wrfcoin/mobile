@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show DioException;
 import 'package:flutter/foundation.dart'
     show kIsWeb, debugPrint, visibleForTesting;
 import 'package:workmanager/workmanager.dart';
@@ -126,23 +127,50 @@ Future<SyncRunResult> runSyncJob(
     await store.recordCollectionRun(
       kind: kind,
       outcome: CollectionOutcome.error,
-      detail: error.runtimeType.toString(),
+      detail: describeRunError(error),
       startedAt: startedAt,
       finishedAt: now(),
     );
     rethrow;
   }
+  final succeeded = syncRunSucceeded(result.reason);
   await store.recordCollectionRun(
     kind: kind,
     outcome: result.reason.name,
+    // A run that left readings behind says why, in the words the app shows.
+    detail: succeeded ? null : runDetail(result.message),
     acceptedCount: result.acceptedCount,
     startedAt: startedAt,
     finishedAt: now(),
   );
-  if (!syncRunSucceeded(result.reason)) {
+  if (!succeeded) {
     throw CollectionRunFailed(result.reason.name);
   }
   return result;
+}
+
+/// The longest detail a run row keeps.
+const maxRunDetailLength = 240;
+
+/// [message] trimmed to one short line for a run row, or null when empty.
+String? runDetail(String? message) {
+  final text = message?.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text == null || text.isEmpty) return null;
+  return text.length <= maxRunDetailLength
+      ? text
+      : '${text.substring(0, maxRunDetailLength - 1)}…';
+}
+
+/// What a crashed run saves: the error's type, and for a network error its
+/// kind and HTTP status (a TLS refusal reads `DioException.badCertificate`
+/// or `.connectionError`). Never the message, which may quote a server body.
+String describeRunError(Object error) {
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    return 'DioException.${error.type.name}'
+        '${status == null ? '' : ' HTTP $status'}';
+  }
+  return error.runtimeType.toString();
 }
 
 /// Runs [action], swallowing the errors Workmanager throws on platforms

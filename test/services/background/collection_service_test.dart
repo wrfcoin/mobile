@@ -1,4 +1,5 @@
 // What one tick of the Collect service does and says.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +79,54 @@ void main() {
       );
       expect(synced, 1);
       expect(text, 'No reading at $_time: the barometer gave no data');
+    });
+
+    test('a hung upload ends the tick and is saved with its step', () async {
+      final saved = <(String, String)>[];
+      await expectLater(
+        runCollectionTick(
+          stillWanted: () async => true,
+          collect: () async => _reading,
+          // Never answers: without the timeout every later tick is skipped.
+          sync: () => Completer<SyncRunResult>().future,
+          recordFailure: (outcome, detail) async => saved.add((outcome, detail)),
+          timeout: const Duration(milliseconds: 20),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(saved, hasLength(1));
+      expect(saved.single.$1, CollectionOutcome.timeout);
+      expect(saved.single.$2, contains('upload'));
+    });
+
+    test('a crash before collecting is saved; collect and upload crashes '
+        'are left to their own run rows', () async {
+      final saved = <(String, String)>[];
+      Future<void> record(String outcome, String detail) async =>
+          saved.add((outcome, detail));
+      await expectLater(
+        runCollectionTick(
+          stillWanted: () async => throw StateError('prefs'),
+          collect: () async => _reading,
+          sync: () async => _sync(SyncRunReason.idle),
+          recordFailure: record,
+        ),
+        throwsStateError,
+      );
+      expect(saved.single.$1, CollectionOutcome.error);
+      expect(saved.single.$2, 'settings: StateError');
+
+      saved.clear();
+      await expectLater(
+        runCollectionTick(
+          stillWanted: () async => true,
+          collect: () async => _reading,
+          sync: () async => throw StateError('sync'),
+          recordFailure: record,
+        ),
+        throwsStateError,
+      );
+      expect(saved, isEmpty);
     });
   });
 

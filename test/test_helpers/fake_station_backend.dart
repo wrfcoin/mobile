@@ -26,9 +26,15 @@ class CountingKeyValueStorage extends InMemoryKeyValueStorage {
 
   final Map<String, int> writes = <String, int>{};
 
+  /// Makes every read throw, like a platform store this engine cannot open.
+  bool failReads = false;
+
   @override
   Future<String?> read({required String key}) {
     reads[key] = (reads[key] ?? 0) + 1;
+    if (failReads) {
+      return Future.error(StateError('secure storage unreadable'));
+    }
     return super.read(key: key);
   }
 

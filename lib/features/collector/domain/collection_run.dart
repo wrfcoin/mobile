@@ -41,6 +41,9 @@ const maxReusedLocationAge = Duration(hours: 24);
 abstract final class CollectionRunKind {
   static const syncJob = 'sync_job';
   static const syncService = 'sync_service';
+
+  /// A service tick that crashed outside collect and upload, or hung.
+  static const serviceTick = 'service_tick';
 }
 
 /// What a collection run ended with. Only [readingSaved] means a reading
@@ -53,6 +56,9 @@ abstract final class CollectionOutcome {
   static const locationTooOld = 'location_too_old';
   static const notDue = 'not_due';
   static const error = 'error';
+
+  /// The step did not finish in time (see collectionTickTimeout).
+  static const timeout = 'timeout';
 }
 
 /// Thrown out of a WorkManager task that did not do its job. WorkManager then

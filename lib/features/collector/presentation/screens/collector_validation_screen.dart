@@ -119,7 +119,8 @@ class _CollectorValidationScreenState
                           (
                             _formatDateTime(run.startedAt),
                             '${run.kind}: ${run.outcome}'
-                                '${run.acceptedCount > 0 ? ' (${run.acceptedCount})' : ''}',
+                                '${run.acceptedCount > 0 ? ' (${run.acceptedCount})' : ''}'
+                                '${run.detail == null ? '' : ' (${run.detail})'}',
                           ),
                       ],
                     ),
