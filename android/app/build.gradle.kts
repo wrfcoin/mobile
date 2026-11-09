@@ -106,4 +106,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
     // Required by flutter_local_notifications ≥18 when targeting Java 17+
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // JVM tests of the Collect wake lock and alarms (src/test).
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("androidx.test:core:1.6.1")
 }
