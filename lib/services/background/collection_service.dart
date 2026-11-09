@@ -27,6 +27,7 @@ import '../location/location_service.dart';
 import '../storage/db_path_stub.dart'
     if (dart.library.io) '../storage/db_path.dart';
 import '../storage/local_db.dart';
+import 'collection_wake.dart';
 import 'sensor_worker.dart';
 import 'sync_worker.dart';
 
@@ -168,6 +169,8 @@ class CollectionServiceController {
       await FlutterForegroundTask.updateService(
         foregroundTaskOptions: _options(intervalMinutes),
       );
+      // The service's wake-up alarm is set from its own isolate.
+      FlutterForegroundTask.sendDataToTask(collectionIntervalChangedMessage);
     } on MissingPluginException {
       return;
     } on PlatformException {
@@ -200,19 +203,7 @@ class CollectionServiceController {
   }
 
   static ForegroundTaskOptions _options(int intervalMinutes) =>
-      ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(
-          Duration(minutes: intervalMinutes).inMilliseconds,
-        ),
-        // Android's boot broadcast cannot start a location service.
-        autoRunOnBoot: false,
-        autoRunOnMyPackageReplaced: false,
-        // The timer does not run while the CPU sleeps, so without this the
-        // readings stop when the screen is off. It is the battery cost.
-        allowWakeLock: true,
-        allowWifiLock: false,
-        allowAutoRestart: true,
-      );
+      collectionTaskOptions(intervalMinutes);
 
   static void _init(int intervalMinutes) {
     FlutterForegroundTask.init(
@@ -222,6 +213,25 @@ class CollectionServiceController {
     );
   }
 }
+
+/// How the service runs. Its repeat timer does not count while the CPU
+/// sleeps, and the plugin's answer to that is a wake lock held for as long as
+/// the service runs, which kept the phone from ever sleeping. So the plugin's
+/// lock is off: the service takes its own, one tick at a time, and an alarm
+/// wakes it for the next (collection_wake.dart).
+@visibleForTesting
+ForegroundTaskOptions collectionTaskOptions(int intervalMinutes) =>
+    ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.repeat(
+        Duration(minutes: intervalMinutes).inMilliseconds,
+      ),
+      // Android's boot broadcast cannot start a location service.
+      autoRunOnBoot: false,
+      autoRunOnMyPackageReplaced: false,
+      allowWakeLock: false,
+      allowWifiLock: false,
+      allowAutoRestart: true,
+    );
 
 /// The status notice of the collection service. Android requires it while the
 /// service runs. It must never sound or vibrate: it is rewritten after every
@@ -273,6 +283,10 @@ String collectionNotificationText(
 /// tick guard forever, and every later tick would return at once: the service
 /// stays up, its notification stays, and nothing is collected or uploaded.
 const collectionTickTimeout = Duration(minutes: 10);
+
+/// The longest the tick's wake lock is held if nothing gives it back: the
+/// tick's own limit, plus time to save why it failed.
+const collectionWakeHold = Duration(minutes: 11);
 
 /// Which step of a tick was running when it failed or ran out of time.
 enum CollectionTickStage { settings, collect, upload }
@@ -352,15 +366,50 @@ Future<CollectorPreferencesState> _freshPreferences() async {
 
 class _CollectionTaskHandler extends TaskHandler {
   bool _ticking = false;
+  DateTime? _lastTickStartedAt;
+  Duration _interval = const Duration(minutes: 15);
+  final _wake = CollectionWake();
 
   @override
-  Future<void> onStart(DateTime timestamp, TaskStarter starter) => _tick();
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) =>
+      _tick(CollectionTickTrigger.start);
 
   @override
-  void onRepeatEvent(DateTime timestamp) => unawaited(_tick());
+  void onRepeatEvent(DateTime timestamp) =>
+      unawaited(_tick(CollectionTickTrigger.timer));
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+  void onReceiveData(Object data) {
+    if (data == collectionAlarmMessage) {
+      unawaited(_tick(CollectionTickTrigger.alarm));
+    } else if (data == collectionIntervalChangedMessage) {
+      unawaited(_intervalChanged());
+    }
+  }
+
+  @override
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) => _wake.stop();
+
+  Future<void> _intervalChanged() async {
+    try {
+      final interval = Duration(
+        minutes: (await _freshPreferences()).intervalMinutes,
+      );
+      if (interval == _interval) return;
+      _interval = interval;
+      await _wake.reschedule(
+        delay: collectionNextAlarmDelay(
+          now: DateTime.now(),
+          lastTickStartedAt: _lastTickStartedAt,
+          interval: interval,
+        ),
+        hold: collectionWakeHold,
+      );
+    } catch (error) {
+      // The next tick sets the alarm from the saved interval anyway.
+      debugPrint('Collection interval change failed: ${error.runtimeType}');
+    }
+  }
 
   @override
   void onNotificationButtonPressed(String id) {
@@ -375,13 +424,34 @@ class _CollectionTaskHandler extends TaskHandler {
     await FlutterForegroundTask.stopService();
   }
 
-  Future<void> _tick() async {
+  Future<void> _tick(CollectionTickTrigger trigger) async {
+    // The running tick gives the lock back when it ends.
     if (_ticking) return;
-    _ticking = true;
     final startedAt = DateTime.now();
+    if (!collectionTickDue(
+      trigger: trigger,
+      now: startedAt,
+      lastTickStartedAt: _lastTickStartedAt,
+      interval: _interval,
+      alarmDriven: _wake.alarmDriven,
+    )) {
+      // An alarm took the lock on its way here, and no tick will end it.
+      if (trigger == CollectionTickTrigger.alarm) await _wake.dropTick();
+      return;
+    }
+    _ticking = true;
+    _lastTickStartedAt = startedAt;
+    // First, so a tick that fails early still has its lock and its next
+    // alarm. It never throws.
+    await _wake.beginTick(interval: _interval, hold: collectionWakeHold);
     final db = AppDatabase(openAppDatabase());
     try {
       final preferences = await _freshPreferences();
+      final interval = Duration(minutes: preferences.intervalMinutes);
+      if (interval != _interval) {
+        _interval = interval;
+        await _wake.beginTick(interval: interval, hold: collectionWakeHold);
+      }
       final repository = CollectorRepository(
         sensorDataSource: SensorDataSource(LocationService()),
         batteryMonitor: BatteryMonitor(),
@@ -427,6 +497,7 @@ class _CollectionTaskHandler extends TaskHandler {
     } finally {
       await db.close();
       _ticking = false;
+      await _wake.endTick();
     }
   }
 }
