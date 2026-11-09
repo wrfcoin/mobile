@@ -71,6 +71,12 @@ jobs:
         with:
           channel: stable
           cache: true
+      # The runner's default Java is newer than this Gradle accepts.
+      - uses: actions/setup-java@v5
+        if: steps.changed.outputs.run == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
       - if: steps.changed.outputs.run == 'true'
         run: bash scripts/ci_pub_get.sh
       - name: Android unit tests
