@@ -24,6 +24,21 @@ class MobileStationStatus {
       'removed from this phone. Rewards can start with readings taken after '
       'it activates.';
 
+  /// Shown until the one foreground approval has registered this phone. A
+  /// background run cannot open the wallet, so nothing uploads before the
+  /// user taps Collect Now and approves; say exactly that.
+  static const notRegisteredMessage =
+      'One step left before this phone can earn: register it as a weather '
+      'station. Turn collection on, tap Collect Now, and approve once with '
+      'your fingerprint or PIN. Nothing uploads until you do.';
+
+  /// True to `SyncWorker.maxReadingAge`: a reading is kept 50 minutes, then
+  /// dropped, whatever the reason it could not upload.
+  static const statusUnavailableMessage =
+      'Station status is not available right now. The app keeps trying. '
+      'Readings wait for up to 50 minutes; older ones can\'t earn and are '
+      'removed.';
+
   /// The server said this station is not active yet: not a failed or stale check.
   bool get isAwaitingActivation =>
       !cached &&
@@ -42,11 +57,11 @@ class MobileStationStatus {
       return 'Station status could not be refreshed. Last known status: $lastKnown; rewards are not confirmed.';
     }
     return switch (phase) {
-      MobileStationPhase.none => 'Register your phone as a weather station. Collect Now asks for one wallet approval to enable uploads.',
+      MobileStationPhase.none => notRegisteredMessage,
       MobileStationPhase.dbOnly ||
       MobileStationPhase.submitted => awaitingActivationMessage,
       MobileStationPhase.onChain => null,
-      MobileStationPhase.unknown => 'Station status is not available. Readings stay saved if registration or upload cannot complete.',
+      MobileStationPhase.unknown => statusUnavailableMessage,
     };
   }
 }

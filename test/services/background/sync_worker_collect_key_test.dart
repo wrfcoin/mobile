@@ -392,8 +392,8 @@ void main() {
         expect(signer.openAttempts, 0);
         expect(result.reason, SyncRunReason.awaitingForeground);
         expect(result.pendingCount, 3);
-        expect(result.message, contains('open the app'));
-        expect(result.message, contains('register'));
+        expect(result.message, SyncWorker.registrationNeededMessage(3));
+        expect(result.message, contains('tap Collect Now'));
       },
     );
 
@@ -477,7 +477,7 @@ void main() {
     });
 
     test(
-      'a background run only records: open the app to re-register',
+      'a background run only records: tap Collect Now to re-register',
       () async {
         await alreadyRegistered();
         backend.collectPubkey = _oldKey;
@@ -486,7 +486,7 @@ void main() {
         final result = await worker(foreground: false).syncPendingReadings();
 
         expect(result.reason, SyncRunReason.awaitingReRegistration);
-        expect(result.message, contains('open the app'));
+        expect(result.message, contains('tap Collect Now'));
         expect(result.message, contains('re-register'));
         expect(result.pendingCount, 3);
         expect(backend.count('/weather/stations/mobile'), 0);
