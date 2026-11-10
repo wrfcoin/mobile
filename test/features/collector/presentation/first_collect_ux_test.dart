@@ -273,16 +273,32 @@ void main() {
     );
     expect(find.textContaining('50 minutes'), findsOneWidget);
   });
-  testWidgets('unregistered phone explains the one-time wallet approval', (
+  testWidgets('unregistered phone names the one step: Collect Now, one approval', (
     tester,
   ) async {
     await pump(tester, null);
     expect(statusCalls, 1);
     expect(
-      find.textContaining('Register your phone as a weather station'),
+      find.text(MobileStationStatus.notRegisteredMessage),
       findsOneWidget,
     );
   });
+  for (final (name, size) in screenshotSizes) {
+    testWidgets('not registered screenshot $name', (tester) async {
+      await loadScreenshotFonts();
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await pump(tester, null);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          '../../../../docs/screens/first-steps/not-registered-$name.png',
+        ),
+      );
+    }, skip: Platform.environment['SCREENSHOT_FONT_DIR'] == null);
+  }
   testWidgets(
     'background stale notice remains visible and is acknowledged once',
     (tester) async {

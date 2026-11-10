@@ -52,17 +52,23 @@ class SyncWorker {
       '$count saved ${count == 1 ? 'reading was' : 'readings were'} unable '
       'to earn rewards and ${count == 1 ? 'was' : 'were'} removed.';
 
+  // Opening the app is not enough: only Collect Now opens the wallet prompt
+  // (`syncOnResume` never does). And a waiting reading is kept 50 minutes
+  // (`maxReadingAge`), so these must not promise that it will upload.
   static String registrationNeededMessage(int count) =>
-      '$count ${count == 1 ? 'reading is' : 'readings are'} waiting — '
-      'open the app to register your weather station.';
+      '$count ${count == 1 ? 'reading is' : 'readings are'} waiting. In the '
+      'app, tap Collect Now and approve once to register your weather '
+      'station. Readings older than 50 minutes can\'t earn and are removed.';
 
   static String reRegistrationNeededMessage(int count) =>
-      '$count ${count == 1 ? 'reading is' : 'readings are'} waiting — '
-      'open the app to re-register your weather station.';
+      '$count ${count == 1 ? 'reading is' : 'readings are'} waiting. In the '
+      'app, tap Collect Now and approve once to re-register your weather '
+      'station. Readings older than 50 minutes can\'t earn and are removed.';
 
   static const String signingRefusedMessage =
-      'Upload needs your fingerprint or PIN. Readings are saved; try again '
-      'from the app.';
+      'Upload needs your fingerprint or PIN, so nothing was sent. Tap '
+      'Collect Now to approve. Readings older than 50 minutes can\'t earn '
+      'and are removed.';
 
   static const String signingUnavailableMessage =
       'This wallet cannot sign uploads. Readings are saved.';

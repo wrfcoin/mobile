@@ -257,7 +257,7 @@ void main() {
 
       expectInOrder(tester, [
         find.text('Review'),
-        find.textContaining('Register your phone as a weather station'),
+        find.text(MobileStationStatus.notRegisteredMessage),
         find.text('Current Readings'),
       ]);
     });

@@ -267,7 +267,7 @@ void main() {
         expect(signer.openAttempts, 0);
         expect(result.reason, SyncRunReason.awaitingForeground);
         expect(result.pendingCount, 4);
-        expect(result.message, contains('open the app'));
+        expect(result.message, contains('tap Collect Now'));
         expect(result.message, contains('4'));
         final metadata = await db.getSyncMetadata(sensorReadingsSyncTableName);
         expect(metadata?.lastSyncError, result.message);
