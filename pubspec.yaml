@@ -15,8 +15,8 @@ dependencies:
   cupertino_icons: ^2.0.0
 
   # State management
-  flutter_riverpod: 3.4.3
-  riverpod_annotation: 4.0.7
+  flutter_riverpod: 3.5.0
+  riverpod_annotation: 4.0.8
 
   # Routing
   go_router: ^18.0.2
@@ -24,7 +24,7 @@ dependencies:
   # Networking
   dio: ^5.11.1
   connectivity_plus: ^7.3.1
-  crypto: ^3.0.6
+  crypto: ^3.0.8
   cryptography: ^2.7.0
   bip39: ^1.0.6
   pointycastle: ^3.9.1
@@ -48,7 +48,7 @@ dependencies:
 
   # Sensors & location
   sensors_plus: ^7.1.1
-  geolocator: ^14.1.1
+  geolocator: ^14.1.2
   battery_plus: ^7.1.2
 
   # Maps
@@ -70,7 +70,7 @@ dependencies:
 
   # UI
   fl_chart: ^1.2.0
-  lottie: ^3.6.1
+  lottie: ^3.8.2
   shimmer: ^4.0.0
 
   # Codegen annotations
@@ -92,9 +92,9 @@ dev_dependencies:
   sqlite3: ^3.7.0
   # Codegen
   freezed: ^4.0.1
-  json_serializable: 6.14.1
+  json_serializable: 6.15.2
   build_runner: ^2.16.1
-  riverpod_generator: 4.0.9
+  riverpod_generator: 4.0.10
   drift_dev: 2.35.1
 flutter:
   uses-material-design: true
