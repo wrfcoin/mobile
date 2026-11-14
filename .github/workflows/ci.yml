@@ -46,6 +46,48 @@ jobs:
       - run: flutter analyze --no-pub
       - run: flutter test --no-pub --concurrency=2
 
+  # JVM tests of the app's own Android code (android/app/src/test). They need a
+  # Gradle build, which is slow, so on a PR they run only when android/ changed.
+  android-unit-test:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: changed
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ] ||
+            git diff --name-only "$BASE_SHA"...HEAD | grep -q '^android/'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No android/ change: skipping the Gradle tests."
+          fi
+      - uses: subosito/flutter-action@v2
+        if: steps.changed.outputs.run == 'true'
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+      # The runner's default Java is newer than this Gradle accepts.
+      - uses: actions/setup-java@v5
+        if: steps.changed.outputs.run == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - if: steps.changed.outputs.run == 'true'
+        run: bash scripts/ci_pub_get.sh
+      - name: Android unit tests
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          flutter build apk --debug --config-only
+          cd android
+          ./gradlew :app:testDebugUnitTest --console=plain
+
   # APK build + dependency drift stay on the nightly cron (#209): too slow
   # for a PR gate and the drift report only makes sense against main.
   nightly-build:

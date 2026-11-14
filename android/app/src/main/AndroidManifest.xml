@@ -9,13 +9,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <!-- Lets the app show the system "ignore battery limits" dialog, once. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- The Collect service keeps the CPU awake for one tick at a time
+         (CollectionWake.kt). The foreground task plugin already brought this
+         permission in; it is named here because the app now takes the lock. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="Wrfcoin"
-        android:name="${applicationName}"
+        android:name=".WrfcoinApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
@@ -42,6 +46,10 @@
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="location"
+            android:exported="false"/>
+        <!-- Wakes the Collect service for its next tick. -->
+        <receiver
+            android:name=".CollectionAlarmReceiver"
             android:exported="false"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
