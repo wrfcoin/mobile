@@ -19,6 +19,8 @@ String? emptyRunReason(String outcome) => switch (outcome) {
   CollectionOutcome.locationUnavailable => 'no location is saved yet',
   CollectionOutcome.locationTooOld => 'the saved location is over a day old',
   CollectionOutcome.error => 'something went wrong on the phone',
+  CollectionOutcome.serviceStopped =>
+    'the phone stopped collection in the background',
   _ => null,
 };
 
@@ -54,10 +56,8 @@ CollectionStatus describeCollection({
   }
   if (!serviceRunning) {
     final why = switch (issue) {
-      CollectionServiceIssue.noLocationPermission =>
-        'WRFCoin needs location while in use. Allow it, then open the app again.',
-      CollectionServiceIssue.startRefused =>
-        'Android would not start it. Open the app again, or turn this off and on.',
+      CollectionServiceIssue.noLocationPermission => 'WRFCoin needs location while in use. Allow it, then open the app again.',
+      CollectionServiceIssue.startRefused => 'Android would not start it. Open the app again, or turn this off and on.',
       _ => 'Open the app again to restart it.',
     };
     return CollectionStatus(

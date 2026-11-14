@@ -27,6 +27,7 @@ import '../location/location_service.dart';
 import '../storage/db_path_stub.dart'
     if (dart.library.io) '../storage/db_path.dart';
 import '../storage/local_db.dart';
+import 'collection_stopped_notice.dart';
 import 'collection_wake.dart';
 import 'sensor_worker.dart';
 import 'sync_worker.dart';
@@ -129,6 +130,7 @@ class CollectionServiceController {
     try {
       if (await FlutterForegroundTask.isRunningService) {
         _init(intervalMinutes, pluginWakeLock: await pluginWakeLockFallback());
+        await clearCollectionStoppedNotice();
         return CollectionServiceStart.started;
       }
       // A fresh start tries the service's own lock again.
@@ -144,9 +146,12 @@ class CollectionServiceController {
         ],
         callback: collectionServiceEntry,
       );
-      return result is ServiceRequestSuccess
-          ? CollectionServiceStart.started
-          : CollectionServiceStart.failed;
+      if (result is! ServiceRequestSuccess) {
+        return CollectionServiceStart.failed;
+      }
+      // Running again: the "collection stopped" notice no longer applies.
+      await clearCollectionStoppedNotice();
+      return CollectionServiceStart.started;
     } on MissingPluginException {
       return CollectionServiceStart.failed;
     } on PlatformException {
@@ -157,6 +162,7 @@ class CollectionServiceController {
   Future<void> stop() async {
     if (!_supported) return;
     try {
+      await clearCollectionStoppedNotice();
       await FlutterForegroundTask.stopService();
     } on MissingPluginException {
       return;
