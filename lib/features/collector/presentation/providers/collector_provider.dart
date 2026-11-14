@@ -214,7 +214,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
     );
     ref.onDispose(stopListening);
 
-    unawaited(_restoreState());
+    _restored = _restoreState();
+    unawaited(_restored);
     if (!kIsWeb) {
       _connectivitySubscription = _syncWorker.onConnectivityChanged.listen((
         results,
@@ -628,6 +629,13 @@ class CollectorNotifier extends Notifier<CollectorState> {
       await _scheduleWorkers();
     }
   }
+
+  late Future<void> _restored;
+
+  /// Completes when the saved state has been loaded and, with Collect on, the
+  /// service and jobs have been checked. Tests wait on it instead of a timer.
+  @visibleForTesting
+  Future<void> get restored => _restored;
 
   Future<void> _restoreState() async {
     final preferences = await _preferences.load();
