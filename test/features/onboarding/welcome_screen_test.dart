@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
+import 'package:wrfcoin_mobile/features/collector/data/datasources/sensor_data_source.dart';
 import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
 import 'package:wrfcoin_mobile/services/auth/biometric_service.dart';
 import 'package:wrfcoin_mobile/features/onboarding/presentation/providers/welcome_controller.dart';
@@ -22,6 +23,13 @@ class _FakeLocationService extends LocationService {
   Future<bool> requestPermission() async => grant;
 }
 
+class _Barometer extends SensorDataSource {
+  _Barometer(this.has) : super(LocationService());
+  final bool? has;
+  @override
+  Future<bool?> hasBarometer() async => has;
+}
+
 class _TestApp extends StatelessWidget {
   const _TestApp({required this.child});
 
@@ -33,10 +41,15 @@ class _TestApp extends StatelessWidget {
   }
 }
 
-Widget _wrap({required Widget child, LocationService? location}) {
+Widget _wrap({
+  required Widget child,
+  LocationService? location,
+  bool? barometer,
+}) {
   return ProviderScope(
     overrides: [
       if (location != null) locationServiceProvider.overrideWithValue(location),
+      sensorDataSourceProvider.overrideWithValue(_Barometer(barometer)),
     ],
     child: _TestApp(child: child),
   );
@@ -80,6 +93,51 @@ void main() {
       const state = WelcomeState(loaded: true, seenWelcome: true);
       expect(state.shouldShowWelcome, isFalse);
     });
+  });
+
+  group('a phone without a barometer', () {
+    testWidgets('is not promised earning by itself, and is pointed at a '
+        'station on the web', (tester) async {
+      await tester.pumpWidget(
+        _wrap(child: const WelcomeScreen(), barometer: false),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('welcome-no-barometer')), findsOneWidget);
+      expect(
+        find.text('Earn test WRF for your local weather data'),
+        findsNothing,
+      );
+      expect(find.textContaining('no barometer'), findsOneWidget);
+      expect(find.textContaining('wrfcoin.com'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('This phone has no barometer'), findsOneWidget);
+      expect(
+        find.text("Your phone's barometer is already a sensor"),
+        findsNothing,
+      );
+      expect(find.text('Allow sensors and location'), findsNothing);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Next'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('collects and earns here'), findsNothing);
+      expect(find.textContaining('Collecting on this phone'), findsNothing);
+    });
+
+    for (final has in const [true, null]) {
+      testWidgets('a barometer ($has) keeps the usual slides', (tester) async {
+        await tester.pumpWidget(
+          _wrap(child: const WelcomeScreen(), barometer: has),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Earn test WRF for your local weather data'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('welcome-no-barometer')), findsNothing);
+      });
+    }
   });
 
   group('WelcomeScreen slides', () {
@@ -243,6 +301,7 @@ void main() {
     test('a phone that already has a wallet is past first run', () async {
       final storage = InMemoryKeyValueStorage();
       await storage.write(key: 'wrf_address', value: '0xabc');
+      await storage.write(key: 'wrf_private_key', value: '0xkey');
       final container = ProviderContainer(
         overrides: [
           keyManagerProvider.overrideWithValue(

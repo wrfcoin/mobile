@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
@@ -13,6 +14,21 @@ class SensorDataSource {
   final LocationService _locationService;
 
   SensorDataSource(this._locationService);
+
+  /// Whether this phone has a barometer: true once it gives a reading, false
+  /// only when the platform says there is no such sensor, null when it could
+  /// not tell (no sensor plugin, as on the web). No timer: a barometer answers
+  /// at once, and a missing one is an immediate error.
+  Future<bool?> hasBarometer() async {
+    try {
+      await barometerEventStream().first;
+      return true;
+    } on PlatformException catch (error) {
+      return error.code == 'NO_SENSOR' ? false : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Reads barometric pressure from the device barometer sensor.
   /// Returns pressure in hPa, or null if unavailable.

@@ -82,6 +82,8 @@ Future<Future<Object> Function()> _operation(
     key: 'wrf_address',
     value: '0x2222222222222222222222222222222222222222',
   );
+  // A wallet is its address and its private key (KeyManager.hasWallet).
+  await storage.write(key: 'wrf_private_key', value: 'test-private-key');
   final keys = KeyManager(
     biometric: BiometricService(client: FakeLocalAuthClient()),
     storage: storage,

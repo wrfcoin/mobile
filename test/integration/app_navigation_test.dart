@@ -62,6 +62,8 @@ void main() {
       key: 'wrf_address',
       value: '0x1234567890abcdef1234567890abcdef12345678',
     );
+    // A wallet is its address and its private key (KeyManager.hasWallet).
+    await keyStorage.write(key: 'wrf_private_key', value: 'test-private-key');
 
     await tester.pumpWidget(
       ProviderScope(
