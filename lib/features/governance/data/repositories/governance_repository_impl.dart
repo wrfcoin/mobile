@@ -36,31 +36,90 @@ class GovernanceRepository {
     this._ensureAuthenticated,
   });
 
+  /// Page size for the proposal list. Same as the website (frontend
+  /// `GOVERNANCE_PAGE_SIZE`); the public edge admits `limit=<1..100>&offset=<n>`.
+  static const int proposalPageSize = 20;
+
+  /// Upper bound on pages read for one list load (1000 proposals), so an API
+  /// that keeps saying "more" can never loop forever.
+  static const int maxProposalPages = 50;
+
+  /// Reads every page of `/governance/proposals?limit=20&offset=n` (the same
+  /// endpoint and parameters as the website, frontend PR #102), not just the
+  /// first 20. Stops when the backend says `hasMore: false`, when `total` is
+  /// reached, on a short or empty page, on a page with nothing new, or after
+  /// [maxProposalPages]. If a later page fails, the proposals already read are
+  /// kept; only a failed first page is an error.
   Future<Either<Failure, List<ProposalModel>>> getProposals() async {
-    try {
-      final response = await _dio.get(ApiConstants.proposals);
-      // Backend returns { success, count, proposals: [...] } — extract the list.
-      final payload = response.data as Map<String, dynamic>;
+    final proposals = <ProposalModel>[];
+    final seenIds = <String>{};
+    var offset = 0;
+    for (var page = 0; page < maxProposalPages; page++) {
+      final Map<String, dynamic> payload;
+      try {
+        final response = await _dio.get(
+          ApiConstants.proposals,
+          queryParameters: <String, dynamic>{
+            'limit': proposalPageSize,
+            'offset': offset,
+          },
+        );
+        // Backend returns { success, count, total, offset, limit, hasMore,
+        // proposals: [...] }.
+        payload = response.data as Map<String, dynamic>;
+      } on DioException catch (e) {
+        if (page == 0) return Left(DioErrorMapper.map(e));
+        _logPageFailure(offset, e);
+        break;
+      } catch (e) {
+        if (page == 0) return Left(ServerFailure(e.toString()));
+        _logPageFailure(offset, e);
+        break;
+      }
       final list =
           (payload['proposals'] ?? payload['data'] ?? []) as List<dynamic>;
+      var repeats = 0;
       // One unreadable item is skipped and logged; it must not blank the list.
-      final proposals = <ProposalModel>[];
       for (var i = 0; i < list.length; i++) {
         try {
-          proposals.add(ProposalModel.fromApiJson(list[i]));
+          final proposal = ProposalModel.fromApiJson(list[i]);
+          if (seenIds.add(proposal.id)) {
+            proposals.add(proposal);
+          } else {
+            repeats++;
+          }
         } on Object catch (e) {
           _logger?.warning(
             'governance_proposal_skipped',
-            fields: <String, dynamic>{'index': i, 'error': e.toString()},
+            fields: <String, dynamic>{
+              'index': offset + i,
+              'error': e.toString(),
+            },
           );
         }
       }
-      return Right(proposals);
-    } on DioException catch (e) {
-      return Left(DioErrorMapper.map(e));
-    } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      final hasMore = payload['hasMore'];
+      final total = payload['total'];
+      offset += list.length;
+      // An empty page, or a page of only proposals already read (an API that
+      // ignores offset), ends the load.
+      if (list.isEmpty || repeats == list.length) break;
+      if (hasMore is bool) {
+        if (!hasMore) break;
+      } else if (total is int) {
+        if (offset >= total) break;
+      } else if (list.length < proposalPageSize) {
+        break;
+      }
     }
+    return Right(proposals);
+  }
+
+  void _logPageFailure(int offset, Object error) {
+    _logger?.warning(
+      'governance_proposal_page_failed',
+      fields: <String, dynamic>{'offset': offset, 'error': error.toString()},
+    );
   }
 
   Future<Either<Failure, ProposalModel>> getProposal(String id) async {
