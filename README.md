@@ -15,7 +15,7 @@ Public launch: **2026-10-22**. This is a test network. It may be reset without n
 
 [Read the facts page](https://github.com/wrfcoin/docs/blob/main/testnet/facts.md).
 
-The Android APK is **not yet published**. Signing and distribution follow launch; see the [release recipe](docs/RELEASING.md). Source-build capabilities below do not establish device acceptance or a signed release.
+Download the signed Android APK from [wrfcoin.com/downloads](https://wrfcoin.com/downloads), which shows its version, SHA-256 and signing certificate; check the hash before installing. How releases are built and signed: the [release recipe](docs/RELEASING.md).
 
 ## Today (testnet build)
 
