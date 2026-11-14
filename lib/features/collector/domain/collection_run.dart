@@ -59,6 +59,10 @@ abstract final class CollectionOutcome {
 
   /// The step did not finish in time (see collectionTickTimeout).
   static const timeout = 'timeout';
+
+  /// The job found the collection service stopped while Collect is on, so it
+  /// took no reading (a background app gets no barometer data).
+  static const serviceStopped = 'service_stopped';
 }
 
 /// Thrown out of a WorkManager task that did not do its job. WorkManager then

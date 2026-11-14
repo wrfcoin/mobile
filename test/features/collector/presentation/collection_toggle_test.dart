@@ -167,7 +167,8 @@ void main() {
     );
     addTearDown(container.dispose);
     final notifier = container.read(collectorProvider.notifier);
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // The restore runs on its own; a fixed wait lost the race under load.
+    await notifier.restored;
     return notifier;
   }
 
