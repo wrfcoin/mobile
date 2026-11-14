@@ -33,6 +33,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.2
           cache: true
       # Existing hosted-only bootstrap: prefer cached packages before the same
       # network fallback this job already used. No self-hosted runner toolchain downloads.
@@ -97,6 +98,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.2
       - run: flutter pub get
       - run: bash scripts/dependency_drift_report.sh
       - uses: actions/upload-artifact@v7
