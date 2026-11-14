@@ -19,6 +19,7 @@ import '../../services/location/location_service.dart';
 import '../../services/storage/db_path_stub.dart'
     if (dart.library.io) '../../services/storage/db_path.dart';
 import '../../services/storage/local_db.dart';
+import 'collection_stopped_notice.dart';
 import 'sync_worker.dart';
 
 const sensorTaskName = 'com.wrfcoin.sensorCollection';
@@ -83,12 +84,42 @@ Future<void> runIfCollectionAllowed(
 Future<void> _collectSensorData() async {
   final db = AppDatabase(openAppDatabase());
   try {
-    final repository = _createRepository(db);
-    final preferences = await const CollectorPreferences().load();
-    await runSensorJob(repository, preferences);
+    await runSensorJobUnlessServiceStopped(
+      serviceStopped: collectionServiceStopped,
+      store: db,
+      job: () async {
+        final repository = _createRepository(db);
+        final preferences = await const CollectorPreferences().load();
+        await runSensorJob(repository, preferences);
+      },
+    );
   } finally {
     await db.close();
   }
+}
+
+/// The job's reading, unless the collection service is known to be stopped.
+/// A background app gets no barometer data, so without the service the
+/// reading only waits 5 s and fails. Instead the run row says why, and
+/// [serviceStopped] has told the user, once, to open the app.
+@visibleForTesting
+Future<void> runSensorJobUnlessServiceStopped({
+  required Future<bool> Function() serviceStopped,
+  required CollectorLocalStore store,
+  required Future<void> Function() job,
+  DateTime Function() now = DateTime.now,
+}) async {
+  final startedAt = now();
+  if (await serviceStopped()) {
+    await store.recordCollectionRun(
+      kind: ReadingSource.job.dbValue,
+      outcome: CollectionOutcome.serviceStopped,
+      startedAt: startedAt,
+      finishedAt: now(),
+    );
+    throw const CollectionRunFailed(CollectionOutcome.serviceStopped);
+  }
+  await job();
 }
 
 /// The WorkManager reading. It passes the user's own interval: the reading
