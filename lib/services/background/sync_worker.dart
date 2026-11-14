@@ -85,6 +85,9 @@ class SyncWorker {
       "The server's upload details did not match what your phone computed, "
       'so nothing was signed. Readings are saved.';
 
+  static const String collectionOffMessage =
+      'Collection is off, so nothing more was uploaded.';
+
   static const String stationNotRegisteredMessage =
       'Station ownership was rejected. This run stopped; readings are saved. '
       'Register your station from the app before the next sync.';
@@ -104,6 +107,12 @@ class SyncWorker {
 
   final CollectKeyStore _collectKeys;
 
+  /// Asked before each batch is sent. A background run passes a fresh read of
+  /// the user's consent and Collect switch, so a run already under way when
+  /// the user turns collection off sends nothing more. Null: always allowed
+  /// (the app itself checks before it syncs).
+  final Future<bool> Function()? collectionAllowed;
+
   SyncWorker({
     Connectivity? connectivity,
     WalletSecureStorage? walletSecureStorage,
@@ -116,6 +125,7 @@ class SyncWorker {
     // False in the Workmanager isolate: it may use or refresh a session but
     // never starts a wallet login (mobile#313).
     bool canStartLogin = true,
+    this.collectionAllowed,
   }) : _connectivity = connectivity ?? Connectivity(),
        _walletSecureStorage =
            walletSecureStorage ?? const WalletSecureStorage(),
@@ -585,6 +595,13 @@ class SyncWorker {
 
         final readings = await db.getUnsyncedReadings(limit: maxBatchSize);
         if (readings.isEmpty) break;
+        final allowed = collectionAllowed;
+        if (allowed != null && !await allowed()) {
+          // Consent or the Collect switch went off during this run.
+          lastError = collectionOffMessage;
+          reason = SyncRunReason.collectionOff;
+          break;
+        }
 
         final result = await repository.submitBatch(
           readings,
@@ -855,6 +872,10 @@ enum SyncRunReason {
 
   /// The server's prepare answer did not match the phone's own computation.
   commitRefused,
+
+  /// Consent or the Collect switch went off: a background run sent nothing
+  /// more. Not a failure; the job is cancelled, never retried.
+  collectionOff,
 }
 
 class SyncRunResult {

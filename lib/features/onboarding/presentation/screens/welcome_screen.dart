@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/preferences/app_preferences.dart';
 import '../../../../services/location/location_service.dart';
+import '../../../collector/data/datasources/sensor_data_source.dart';
 import '../providers/welcome_controller.dart';
 
 /// First-run welcome flow (issue #159).
@@ -31,12 +34,24 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   bool _locationRequested = false;
   bool? _locationGranted;
 
+  /// True only when the phone said it has no barometer. Until then (and when
+  /// it could not tell) the slides keep the usual words.
+  bool _noBarometer = false;
+
   static const int _totalSlides = 3;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    unawaited(_checkBarometer());
+  }
+
+  /// A phone without a barometer can't collect, so the slides must not
+  /// promise it will earn: they point at forecasts and a home station.
+  Future<void> _checkBarometer() async {
+    final has = await ref.read(sensorDataSourceProvider).hasBarometer();
+    if (mounted && has == false) setState(() => _noBarometer = true);
   }
 
   @override
@@ -97,13 +112,15 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 controller: _pageController,
                 onPageChanged: (index) => setState(() => _currentPage = index),
                 children: [
-                  _EarnSlide(),
+                  _EarnSlide(noBarometer: _noBarometer),
                   _SensorSlide(
+                    noBarometer: _noBarometer,
                     locationRequested: _locationRequested,
                     locationGranted: _locationGranted,
                     onRequestLocation: _requestLocation,
                   ),
                   _WalletSlide(
+                    noBarometer: _noBarometer,
                     onCreateWallet: () => _choose('/wallet/create'),
                     onUsePasskey: () => _choose('/wallet/passkey'),
                     onImportWallet: () => _choose('/wallet/import'),
@@ -138,8 +155,24 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 }
 
 class _EarnSlide extends StatelessWidget {
+  const _EarnSlide({required this.noBarometer});
+
+  final bool noBarometer;
+
   @override
   Widget build(BuildContext context) {
+    if (noBarometer) {
+      return const _SlidePanel(
+        key: Key('welcome-no-barometer'),
+        icon: Icons.cloud_outlined,
+        title: 'Follow the forecast, earn with a weather station',
+        body:
+            "This phone has no barometer, so it can't take readings or earn "
+            'WRF by itself. You can still follow forecasts here, and connect a '
+            'home weather station on wrfcoin.com to earn. This is a test '
+            'network, so the coins have no money value.',
+      );
+    }
     return const _SlidePanel(
       icon: Icons.savings_outlined,
       title: 'Earn test WRF for your local weather data',
@@ -152,11 +185,13 @@ class _EarnSlide extends StatelessWidget {
 }
 
 class _SensorSlide extends StatelessWidget {
+  final bool noBarometer;
   final bool locationRequested;
   final bool? locationGranted;
   final VoidCallback onRequestLocation;
 
   const _SensorSlide({
+    required this.noBarometer,
     required this.locationRequested,
     required this.locationGranted,
     required this.onRequestLocation,
@@ -164,6 +199,16 @@ class _SensorSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (noBarometer) {
+      // Nothing to collect, so nothing is asked for.
+      return const _SlidePanel(
+        icon: Icons.sensors_off_outlined,
+        title: 'This phone has no barometer',
+        body:
+            "So it doesn't collect readings, and the app won't ask for sensor "
+            'access. A home weather station can be connected on wrfcoin.com.',
+      );
+    }
     final theme = Theme.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
@@ -239,11 +284,13 @@ class _SensorSlide extends StatelessWidget {
 }
 
 class _WalletSlide extends StatelessWidget {
+  final bool noBarometer;
   final VoidCallback onCreateWallet;
   final VoidCallback onUsePasskey;
   final VoidCallback onImportWallet;
 
   const _WalletSlide({
+    required this.noBarometer,
     required this.onCreateWallet,
     required this.onUsePasskey,
     required this.onImportWallet,
@@ -286,9 +333,12 @@ class _WalletSlide extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          const _ChoiceNote(
-            'Lives on this phone, and collects and earns here. You write 12 '
-            'words on paper as your backup.',
+          _ChoiceNote(
+            noBarometer
+                ? 'Lives on this phone. You write 12 words on paper as your '
+                      'backup.'
+                : 'Lives on this phone, and collects and earns here. You '
+                      'write 12 words on paper as your backup.',
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -301,10 +351,13 @@ class _WalletSlide extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          const _ChoiceNote(
-            'Unlocks with your fingerprint or face in a browser tab, with no '
-            'words to write down. Collecting on this phone still needs a '
-            '12-word wallet.',
+          _ChoiceNote(
+            noBarometer
+                ? 'Unlocks with your fingerprint or face in a browser tab, '
+                      'with no words to write down.'
+                : 'Unlocks with your fingerprint or face in a browser tab, '
+                      'with no words to write down. Collecting on this phone '
+                      'still needs a 12-word wallet.',
           ),
           const SizedBox(height: 12),
           TextButton(
@@ -341,6 +394,7 @@ class _SlidePanel extends StatelessWidget {
   final String body;
 
   const _SlidePanel({
+    super.key,
     required this.icon,
     required this.title,
     required this.body,

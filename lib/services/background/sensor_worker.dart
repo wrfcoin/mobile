@@ -1,7 +1,10 @@
 import 'package:dio/dio.dart' show DioException;
 import 'package:flutter/foundation.dart'
     show kIsWeb, debugPrint, visibleForTesting;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
+
+import '../../core/preferences/app_preferences.dart';
 
 import '../../features/collector/data/datasources/battery_monitor.dart';
 import '../../features/collector/data/datasources/sensor_data_source.dart';
@@ -36,10 +39,10 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     switch (task) {
       case sensorTaskName:
-        await _collectSensorData();
+        await runIfCollectionAllowed(_collectSensorData);
         return true;
       case syncTaskName:
-        await _syncPendingData();
+        await runIfCollectionAllowed(_syncPendingData);
         return true;
       case payoutPollTaskName:
         await pollPayoutNotificationsInBackground();
@@ -50,22 +53,56 @@ void callbackDispatcher() {
   });
 }
 
+/// Whether the user still wants collection: both consents and the Collect
+/// switch, read fresh. This engine can outlive the app session that wrote
+/// them, so its copy of the preferences may be stale.
+Future<bool> collectionStillAllowed() async {
+  await (await SharedPreferences.getInstance()).reload();
+  final consent = (await const AppPreferencesStore().load()).consent;
+  if (!consent.canCollect) return false;
+  return (await const CollectorPreferences().load()).isCollecting;
+}
+
+/// Runs a collection or upload job only while the user still wants
+/// collection. A job left behind after consent was withdrawn (the app was
+/// killed between saving the choice and cancelling the jobs) cancels itself
+/// and reads or sends nothing.
+@visibleForTesting
+Future<void> runIfCollectionAllowed(
+  Future<void> Function() job, {
+  Future<bool> Function() allowed = collectionStillAllowed,
+  Future<void> Function() cancel = cancelCollectionWorkers,
+}) async {
+  if (!await allowed()) {
+    await cancel();
+    return;
+  }
+  await job();
+}
+
 Future<void> _collectSensorData() async {
   final db = AppDatabase(openAppDatabase());
   try {
     final repository = _createRepository(db);
     final preferences = await const CollectorPreferences().load();
-    await runCollectionJob(
-      CollectionRunner(repository),
-      batteryThreshold: preferences.batteryThreshold,
-      baseIntervalMinutes: await repository.recommendedIntervalMinutes(
-        preferences.intervalMinutes,
-      ),
-    );
+    await runSensorJob(repository, preferences);
   } finally {
     await db.close();
   }
 }
+
+/// The WorkManager reading. It passes the user's own interval: the reading
+/// applies the low-battery backoff itself, so passing the backed-off one
+/// doubled it twice (a reading every hour instead of every 30 minutes).
+@visibleForTesting
+Future<void> runSensorJob(
+  CollectorRepository repository,
+  CollectorPreferencesState preferences,
+) => runCollectionJob(
+  CollectionRunner(repository),
+  batteryThreshold: preferences.batteryThreshold,
+  baseIntervalMinutes: preferences.intervalMinutes,
+);
 
 /// How far past due a reading must be before the job takes it. The service and
 /// the job fire on the same 15 minutes; left equal they race, and one tick can
@@ -104,6 +141,8 @@ Future<void> _syncPendingData() async {
   final worker = SyncWorker(
     walletSecureStorage: const WalletSecureStorage(),
     canStartLogin: false,
+    // Asked again before each batch: consent can go off mid-run.
+    collectionAllowed: collectionStillAllowed,
   );
   final db = AppDatabase(openAppDatabase());
   try {

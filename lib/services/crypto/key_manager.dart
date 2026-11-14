@@ -65,9 +65,13 @@ class KeyManager {
   static const _maxAttempts = 5;
   static const _lockoutDuration = Duration(minutes: 2);
 
+  /// A wallet is there when its address and its private key both are. The
+  /// scheme marker is not required: installs that predate it are legacy
+  /// receive-only wallets ([getKeyScheme]).
   Future<bool> hasWallet() async {
     final address = await _storage.read(key: _addressKey);
-    return address != null;
+    if (address == null) return false;
+    return await _storage.read(key: _privateKeyKey) != null;
   }
 
   Future<void> storeKeys({
@@ -84,21 +88,26 @@ class KeyManager {
         'Use a native build for production wallets.',
       );
     }
-    await Future.wait([
-      _storage.write(key: _mnemonicKey, value: mnemonic),
-      _storage.write(key: _privateKeyKey, value: privateKey),
-      _storage.write(key: _addressKey, value: address),
-      _storage.write(key: _keySchemeKey, value: keyScheme),
-      _storage.write(
-        key: _loginPrivateKeyKey,
-        value: loginPrivateKey ?? privateKey,
-      ),
-      _storage.write(key: _loginAddressKey, value: loginAddress ?? address),
-      _storage.write(key: _jwtKey, value: null),
-      _storage.write(key: _refreshTokenKey, value: null),
-      _storage.write(key: _jwtExpiresAtKey, value: null),
-      _storage.write(key: _authWalletSchemeKey, value: null),
-    ]);
+    // One slot at a time, the address last: it is what marks a wallet as
+    // there. A write that fails part way leaves no address, so the app asks
+    // for the wallet again instead of showing one that cannot sign. (The
+    // phrase was shown and checked before this runs, so nothing is lost.)
+    await _storage.write(key: _addressKey, value: null);
+    final slots = <(String, String?)>[
+      (_mnemonicKey, mnemonic),
+      (_privateKeyKey, privateKey),
+      (_keySchemeKey, keyScheme),
+      (_loginPrivateKeyKey, loginPrivateKey ?? privateKey),
+      (_loginAddressKey, loginAddress ?? address),
+      (_jwtKey, null),
+      (_refreshTokenKey, null),
+      (_jwtExpiresAtKey, null),
+      (_authWalletSchemeKey, null),
+      (_addressKey, address),
+    ];
+    for (final (key, value) in slots) {
+      await _storage.write(key: key, value: value);
+    }
     // Creating or importing a wallet is an explicit user action: it
     // releases an automatic-login hold (mobile#313), but keeps the attempt
     // ledger, because the backend's login budget is per IP.

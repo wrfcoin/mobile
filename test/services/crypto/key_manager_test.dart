@@ -5,6 +5,21 @@ import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
 
 import '../../test_helpers/fakes.dart';
 
+/// Fails the write of one slot, as a secure-storage error would.
+class _FailingWriteStorage extends InMemoryKeyValueStorage {
+  _FailingWriteStorage(this.failKey);
+  final String failKey;
+  final written = <String>[];
+  @override
+  Future<void> write({required String key, String? value}) async {
+    if (key == failKey && value != null) {
+      throw StateError('secure storage write failed');
+    }
+    written.add(key);
+    return super.write(key: key, value: value);
+  }
+}
+
 void main() {
   group('KeyManager', () {
     late InMemoryKeyValueStorage storage;
@@ -29,6 +44,85 @@ void main() {
       expect(await manager.getAddress(), 'wrf1testwallet0000000000');
       expect(await manager.getKeyScheme(), KeyManager.canonicalKeyScheme);
       expect(await manager.canSignTransactions(), isTrue);
+    });
+
+    for (final failKey in const [
+      'wrf_mnemonic',
+      'wrf_private_key',
+      'wrf_key_scheme',
+      'wrf_login_private_key',
+      'wrf_login_address',
+    ]) {
+      test('a failed write of $failKey leaves no wallet', () async {
+        final failing = _FailingWriteStorage(failKey);
+        final manager = KeyManager(
+          biometric: BiometricService(client: FakeLocalAuthClient()),
+          storage: failing,
+        );
+        await expectLater(
+          manager.storeKeys(
+            mnemonic: 'seed phrase',
+            privateKey: '0xabc',
+            address: 'wrf1testwallet0000000000',
+          ),
+          throwsStateError,
+        );
+        expect(await manager.hasWallet(), isFalse);
+        expect(await manager.getAddress(), isNull);
+      });
+    }
+
+    test('the address is written last', () async {
+      final recording = _FailingWriteStorage('none');
+      final manager = KeyManager(
+        biometric: BiometricService(client: FakeLocalAuthClient()),
+        storage: recording,
+      );
+      await manager.storeKeys(
+        mnemonic: 'seed phrase',
+        privateKey: '0xabc',
+        address: 'wrf1testwallet0000000000',
+      );
+      expect(recording.written.last, 'wrf_address');
+    });
+
+    test('a failed re-import over an old wallet leaves no wallet', () async {
+      final failing = _FailingWriteStorage('wrf_private_key');
+      await failing.write(key: 'wrf_address', value: 'wrf1old');
+      await failing.write(key: 'wrf_private_key', value: null);
+      final manager = KeyManager(
+        biometric: BiometricService(client: FakeLocalAuthClient()),
+        storage: failing,
+      );
+      await expectLater(
+        manager.storeKeys(
+          mnemonic: 'seed phrase',
+          privateKey: '0xnew',
+          address: 'wrf1new',
+        ),
+        throwsStateError,
+      );
+      expect(await manager.getAddress(), isNull);
+      expect(await manager.hasWallet(), isFalse);
+    });
+
+    test('an address without a private key is not a wallet', () async {
+      await storage.write(key: 'wrf_address', value: 'wrf1halfsaved');
+      final manager = KeyManager(
+        biometric: BiometricService(client: FakeLocalAuthClient()),
+        storage: storage,
+      );
+      expect(await manager.hasWallet(), isFalse);
+    });
+
+    test('a legacy install (no scheme marker) is still a wallet', () async {
+      await storage.write(key: 'wrf_address', value: 'wrf1legacy');
+      await storage.write(key: 'wrf_private_key', value: '0xlegacy');
+      final manager = KeyManager(
+        biometric: BiometricService(client: FakeLocalAuthClient()),
+        storage: storage,
+      );
+      expect(await manager.hasWallet(), isTrue);
     });
 
     test(
