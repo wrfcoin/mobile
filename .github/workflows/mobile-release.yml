@@ -108,6 +108,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.2
           cache: true
 
       - name: Build, sign, and upload iOS
@@ -168,6 +169,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.2
           cache: true
 
       - name: Materialize Android signing secrets
