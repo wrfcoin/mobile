@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart' show LocationPermission;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 import 'package:wrfcoin_mobile/core/feature_flags/feature_flags.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/sensor_reading_model.dart';
@@ -13,6 +14,7 @@ import 'package:wrfcoin_mobile/features/collector/domain/collection_run.dart';
 import 'package:wrfcoin_mobile/features/collector/domain/collection_status.dart';
 import 'package:wrfcoin_mobile/features/collector/presentation/providers/collector_provider.dart';
 import 'package:wrfcoin_mobile/services/background/collection_service.dart';
+import 'package:wrfcoin_mobile/services/background/sensor_worker.dart';
 import 'package:wrfcoin_mobile/services/location/location_service.dart';
 import 'package:wrfcoin_mobile/services/observability/app_logger.dart';
 import 'package:wrfcoin_mobile/services/storage/local_db.dart';
@@ -27,6 +29,10 @@ class _Service extends CollectionServiceController {
   int? interval;
   void Function()? stopped;
 
+  /// The saved Collect switch at the moment the service was started: its
+  /// first tick reads it and stops itself when it is still off.
+  final savedAtStart = <bool>[];
+
   @override
   Future<bool> get isRunning async => running;
   @override
@@ -34,6 +40,7 @@ class _Service extends CollectionServiceController {
   @override
   Future<CollectionServiceStart> start({required int intervalMinutes}) async {
     starts++;
+    savedAtStart.add(await const CollectorPreferences().isCollectingNow());
     running = startResult == CollectionServiceStart.started;
     return startResult;
   }
@@ -50,12 +57,17 @@ class _Service extends CollectionServiceController {
   }
 
   @override
-  void Function() listen(
-    void Function() onStopped, {
-    void Function()? onTick,
-  }) {
+  void Function() listen(void Function() onStopped, {void Function()? onTick}) {
     stopped = onStopped;
     return () {};
+  }
+}
+
+class _BackgroundWork extends WorkmanagerPlatform {
+  final cancelled = <String>[];
+  @override
+  Future<void> cancelByUniqueName(String uniqueName) async {
+    cancelled.add(uniqueName);
   }
 }
 
@@ -173,6 +185,12 @@ void main() {
       expect(service.starts, 1);
       expect(notifier.state.isCollecting, isTrue);
       expect(await const CollectorPreferences().isCollectingNow(), isTrue);
+    });
+
+    test('on: the switch is saved before the service starts', () async {
+      final notifier = await build();
+      await notifier.startCollecting();
+      expect(service.savedAtStart, [true]);
     });
 
     test('location refused: stays off and says why', () async {
@@ -320,6 +338,29 @@ void main() {
       await build(collecting: true, consent: false);
       expect(repo.calls, isEmpty);
       expect(service.starts, 0);
+    });
+
+    test('no consent: background jobs left behind are cancelled', () async {
+      Workmanager(); // Resolve the platform once, then replace it.
+      final original = WorkmanagerPlatform.instance;
+      final background = _BackgroundWork();
+      WorkmanagerPlatform.instance = background;
+      addTearDown(() => WorkmanagerPlatform.instance = original);
+      await build(collecting: true, consent: false);
+      expect(
+        background.cancelled,
+        containsAll(<String>[sensorTaskName, syncTaskName]),
+      );
+    });
+
+    test('consent given: opening the app cancels no jobs', () async {
+      Workmanager();
+      final original = WorkmanagerPlatform.instance;
+      final background = _BackgroundWork();
+      WorkmanagerPlatform.instance = background;
+      addTearDown(() => WorkmanagerPlatform.instance = original);
+      await build(collecting: true);
+      expect(background.cancelled, isEmpty);
     });
 
     test('returning to the app checks again', () async {

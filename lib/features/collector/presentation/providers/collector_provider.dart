@@ -247,13 +247,19 @@ class CollectorNotifier extends Notifier<CollectorState> {
     await _service.requestNotificationPermission();
     // Before the service and the jobs start: they run in their own engines.
     await ref.read(collectKeyStorePreparerProvider)();
+    // Saved before the service and the jobs start: each reads this switch
+    // fresh on its first run and stops itself when it is still off.
+    state = state.copyWith(isCollecting: true);
+    await _persistPreferences();
     final started = await _service.start(
       intervalMinutes: state.intervalMinutes,
     );
     if (started == CollectionServiceStart.failed) {
       state = state.copyWith(
+        isCollecting: false,
         syncMessage: 'Android would not start collection. Try again.',
       );
+      await _persistPreferences();
       return;
     }
     await _scheduleWorkers();
@@ -641,6 +647,12 @@ class CollectorNotifier extends Notifier<CollectorState> {
       settingsLoaded: true,
     );
     if (kIsWeb) return;
+    if (preferences.isCollecting && !canCollect) {
+      // Jobs can outlive a consent withdrawal when the app was killed before
+      // it cancelled them. They also check consent themselves, so this need
+      // not hold up the rest of the restore.
+      unawaited(cancelCollectionWorkers());
+    }
     await _refreshSyncMetadata();
     await _refreshServiceState();
 
@@ -851,6 +863,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
         return 'station_registration_refused';
       case SyncRunReason.commitRefused:
         return 'sync_commit_refused';
+      case SyncRunReason.collectionOff:
+        return 'sync_collection_off';
     }
   }
 

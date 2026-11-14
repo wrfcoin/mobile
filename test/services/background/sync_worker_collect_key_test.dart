@@ -62,7 +62,11 @@ void main() {
   late DateTime clock;
   StationSigningSession? openedSession;
 
-  SyncWorker worker({bool foreground = true}) => SyncWorker(
+  SyncWorker worker({
+    bool foreground = true,
+    Future<bool> Function()? collectionAllowed,
+  }) => SyncWorker(
+    collectionAllowed: collectionAllowed,
     connectivity: _Online(),
     walletSecureStorage: const _Wallet(),
     dbFactory: () => db,
@@ -309,6 +313,29 @@ void main() {
       expect(signer.openAttempts, 0, reason: 'no wallet session in background');
       expect(backend.count('/weather/stations/mobile'), 0);
     });
+
+    test(
+      'collection turned off: a background run sends nothing and keeps no error',
+      () async {
+        await alreadyRegistered();
+        await seed(2);
+        var asked = 0;
+
+        final result = await worker(
+          foreground: false,
+          collectionAllowed: () async {
+            asked++;
+            return false;
+          },
+        ).syncPendingReadings();
+
+        expect(asked, 1);
+        expect(result.reason, SyncRunReason.collectionOff);
+        expect(backend.count('/oracle/submit-data/prepare'), 0);
+        expect(backend.count('/oracle/submit-data'), 0);
+        expect(result.acceptedCount, 0);
+      },
+    );
 
     test('a background run that cannot read the collect key says so, '
         'instead of asking for registration', () async {

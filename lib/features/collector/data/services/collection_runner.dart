@@ -64,4 +64,7 @@ class CollectionRunner {
 /// Whether an upload run did its job. Nothing to upload is fine; anything
 /// that left readings behind for a reason is not.
 bool syncRunSucceeded(SyncRunReason reason) =>
-    reason == SyncRunReason.success || reason == SyncRunReason.idle;
+    reason == SyncRunReason.success ||
+    reason == SyncRunReason.idle ||
+    // Stopping because the user turned collection off is the job working.
+    reason == SyncRunReason.collectionOff;
