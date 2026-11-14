@@ -387,26 +387,59 @@ void main() {
       return screen;
     }
 
-    testWidgets('words are hidden in every state but the foreground', (
+    testWidgets('a moment away (inactive) hides the words, then shows them', (
       tester,
     ) async {
       final screen = await showWords(tester);
-      for (final state in const [
-        AppLifecycleState.inactive,
-        AppLifecycleState.hidden,
-        AppLifecycleState.paused,
-        AppLifecycleState.hidden,
-        AppLifecycleState.inactive,
-      ]) {
-        tester.binding.handleAppLifecycleStateChanged(state);
-        await tester.pump();
-        expect(find.text('12. about'), findsNothing, reason: state.name);
-        expect(screen.protectionEnabled, isTrue, reason: state.name);
-      }
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(find.text('12. about'), findsNothing);
+      expect(screen.protectionEnabled, isTrue);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(find.text('12. about'), findsOneWidget);
     });
+
+    // Real transitions: out through inactive and hidden, back the same way.
+    for (final (name, out, back) in const [
+      (
+        'hidden',
+        [AppLifecycleState.inactive, AppLifecycleState.hidden],
+        [AppLifecycleState.inactive, AppLifecycleState.resumed],
+      ),
+      (
+        'paused',
+        [
+          AppLifecycleState.inactive,
+          AppLifecycleState.hidden,
+          AppLifecycleState.paused,
+        ],
+        [
+          AppLifecycleState.hidden,
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ],
+      ),
+    ]) {
+      testWidgets('leaving the app ($name) forgets the words: coming '
+          'back needs the confirmation and a fresh unlock', (tester) async {
+        final screen = await showWords(tester);
+        for (final state in out) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('12. about'), findsNothing);
+        expect(screen.protectionEnabled, isFalse);
+        for (final state in back) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('12. about'), findsNothing);
+        expect(find.byKey(const Key('recovery-words')), findsNothing);
+        final reveal = find.byKey(const Key('recovery-reveal'));
+        expect(tester.widget<FilledButton>(reveal).onPressed, isNull);
+      });
+    }
 
     testWidgets('leaving with the words showing turns the screen block off', (
       tester,

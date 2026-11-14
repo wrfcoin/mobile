@@ -55,17 +55,24 @@ Future<void> _collectSensorData() async {
   try {
     final repository = _createRepository(db);
     final preferences = await const CollectorPreferences().load();
-    await runCollectionJob(
-      CollectionRunner(repository),
-      batteryThreshold: preferences.batteryThreshold,
-      baseIntervalMinutes: await repository.recommendedIntervalMinutes(
-        preferences.intervalMinutes,
-      ),
-    );
+    await runSensorJob(repository, preferences);
   } finally {
     await db.close();
   }
 }
+
+/// The WorkManager reading. It passes the user's own interval: the reading
+/// applies the low-battery backoff itself, so passing the backed-off one
+/// doubled it twice (a reading every hour instead of every 30 minutes).
+@visibleForTesting
+Future<void> runSensorJob(
+  CollectorRepository repository,
+  CollectorPreferencesState preferences,
+) => runCollectionJob(
+  CollectionRunner(repository),
+  batteryThreshold: preferences.batteryThreshold,
+  baseIntervalMinutes: preferences.intervalMinutes,
+);
 
 /// How far past due a reading must be before the job takes it. The service and
 /// the job fire on the same 15 minutes; left equal they race, and one tick can

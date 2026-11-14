@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bip39/bip39.dart' as bip39;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,6 +55,14 @@ class _RecoveryPhraseScreenState extends ConsumerState<RecoveryPhraseScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app forgets the words: coming back needs the typed
+    // confirmation and a fresh device unlock. The unlock prompt itself can
+    // send the app to the background, so that transition is ignored.
+    final left =
+        state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    if (left && _stage == _Stage.shown && !_unlocking) {
+      unawaited(_hide());
+    }
     final hide = state != AppLifecycleState.resumed;
     if (hide != _obscured) setState(() => _obscured = hide);
   }

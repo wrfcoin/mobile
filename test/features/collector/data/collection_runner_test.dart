@@ -10,6 +10,7 @@ import 'package:sqlite3/sqlite3.dart' as sql;
 import 'package:wrfcoin_mobile/features/collector/data/datasources/sensor_data_source.dart';
 import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/collection_runner.dart';
+import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
 import 'package:wrfcoin_mobile/features/collector/domain/collection_run.dart';
 import 'package:wrfcoin_mobile/services/api/api_client.dart';
 import 'package:wrfcoin_mobile/services/background/sensor_worker.dart';
@@ -65,6 +66,38 @@ void main() {
       ),
     );
   }
+
+  group('low battery backs the interval off once', () {
+    // Battery 18%: above the 15% pause, below the 20% backoff. A 15 minute
+    // interval becomes 30, plus the job's 5 minute grace: due after 35.
+    CollectorRepository lowBattery() => CollectorRepository(
+      sensorDataSource: _Sensors(),
+      batteryMonitor: FakeBatteryMonitor(batteryLevel: 18),
+      apiClient: ApiClient(dio: Dio()),
+      db: db,
+    );
+    const prefs = CollectorPreferencesState(
+      isCollecting: true,
+      intervalMinutes: 15,
+      batteryThreshold: 15,
+    );
+
+    test('40 minutes after the last reading, the job takes one', () async {
+      await seedFresh(const Duration(minutes: 40));
+      await runSensorJob(lowBattery(), prefs);
+      expect(await db.getReadingHistory(), hasLength(2));
+      expect(
+        (await db.getCollectionRuns()).single.outcome,
+        CollectionOutcome.readingSaved,
+      );
+    });
+
+    test('30 minutes after, it is not due yet', () async {
+      await seedFresh(const Duration(minutes: 30));
+      await runSensorJob(lowBattery(), prefs);
+      expect(await db.getReadingHistory(), hasLength(1));
+    });
+  });
 
   test('a job that saves a reading succeeds and tags it', () async {
     await seedFresh(const Duration(hours: 1));
