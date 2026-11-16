@@ -148,7 +148,6 @@ void main() {
     expect(result.droppedStaleCount, 1);
     expect(await noticeCount(), 1);
     expect(result.acceptedCount, 0);
-    expect(result.rewardTotalsAvailable, isFalse);
     expect(backend.requests, isEmpty);
     expect(backend.statusRequests, isEmpty);
   });

@@ -55,8 +55,6 @@ class CollectorState {
   final int pendingSyncCount;
   final int staleReadingsCount;
   final int syncedSubmissionCount;
-  final bool rewardTotalsAvailable;
-  final double earnedRewardWrf;
   final int intervalMinutes;
   final int batteryThreshold;
   final DateTime? lastSyncAt;
@@ -84,8 +82,6 @@ class CollectorState {
     this.pendingSyncCount = 0,
     this.staleReadingsCount = 0,
     this.syncedSubmissionCount = 0,
-    this.rewardTotalsAvailable = false,
-    this.earnedRewardWrf = 0,
     this.intervalMinutes = 15,
     this.batteryThreshold = 15,
     this.lastSyncAt,
@@ -112,8 +108,6 @@ class CollectorState {
     int? pendingSyncCount,
     int? staleReadingsCount,
     int? syncedSubmissionCount,
-    bool? rewardTotalsAvailable,
-    double? earnedRewardWrf,
     int? intervalMinutes,
     int? batteryThreshold,
     Object? lastSyncAt = _noChange,
@@ -140,9 +134,6 @@ class CollectorState {
       staleReadingsCount: staleReadingsCount ?? this.staleReadingsCount,
       syncedSubmissionCount:
           syncedSubmissionCount ?? this.syncedSubmissionCount,
-      rewardTotalsAvailable:
-          rewardTotalsAvailable ?? this.rewardTotalsAvailable,
-      earnedRewardWrf: earnedRewardWrf ?? this.earnedRewardWrf,
       intervalMinutes: intervalMinutes ?? this.intervalMinutes,
       batteryThreshold: batteryThreshold ?? this.batteryThreshold,
       lastSyncAt: identical(lastSyncAt, _noChange)
@@ -240,8 +231,7 @@ class CollectorNotifier extends Notifier<CollectorState> {
     }
     if (!await _location.requestPermission()) {
       state = state.copyWith(
-        syncMessage:
-            'Collection needs location while the app is in use. Allow it, then turn this on again.',
+        syncMessage: 'Collection needs location while the app is in use. Allow it, then turn this on again.',
       );
       return;
     }
@@ -330,7 +320,8 @@ class CollectorNotifier extends Notifier<CollectorState> {
       baseIntervalMinutes: state.intervalMinutes,
     );
     await _refreshSyncMetadata(currentReading: result.reading);
-    if (result.isSuccess) await _publishHomeWidgetCollectionSlice(reading: result.reading);
+    if (result.isSuccess)
+      await _publishHomeWidgetCollectionSlice(reading: result.reading);
   }
 
   /// Opening the app is the one chance to restart a service Android stopped.
@@ -515,16 +506,11 @@ class CollectorNotifier extends Notifier<CollectorState> {
       _signingRefused = result.reason == SyncRunReason.signingRefused;
       final syncedSubmissionCount =
           state.syncedSubmissionCount + result.acceptedCount;
-      final rewardTotalsAvailable =
-          state.rewardTotalsAvailable || result.rewardTotalsAvailable;
-      final earnedRewardWrf = state.earnedRewardWrf + result.rewardWrfTotal;
 
       state = state.copyWith(
         isSyncing: false,
         pendingSyncCount: result.pendingCount,
         syncedSubmissionCount: syncedSubmissionCount,
-        rewardTotalsAvailable: rewardTotalsAvailable,
-        earnedRewardWrf: earnedRewardWrf,
         lastSyncAt: result.lastSyncAt,
         lastSyncAttemptAt: result.lastSyncAttemptAt,
         syncMessage: result.message,
@@ -539,8 +525,6 @@ class CollectorNotifier extends Notifier<CollectorState> {
           'acceptedCount': result.acceptedCount,
           'failedCount': result.failedCount,
           'pendingCount': result.pendingCount,
-          'rewardTotalsAvailable': result.rewardTotalsAvailable,
-          'rewardWrfTotal': result.rewardWrfTotal,
           'lastSubmissionId': result.lastSubmissionId,
           'lastSubmissionStatus': result.lastSubmissionStatus,
           'message': result.message,
@@ -584,8 +568,6 @@ class CollectorNotifier extends Notifier<CollectorState> {
       reading: reading,
       pendingSyncCount: state.pendingSyncCount,
       lastSubmissionStatus: state.lastSubmissionStatus,
-      rewardTotalsAvailable: state.rewardTotalsAvailable,
-      earnedRewardWrf: state.earnedRewardWrf,
     );
   }
 
@@ -646,8 +628,6 @@ class CollectorNotifier extends Notifier<CollectorState> {
       intervalMinutes: preferences.intervalMinutes,
       batteryThreshold: preferences.batteryThreshold,
       syncedSubmissionCount: preferences.syncedSubmissionCount,
-      rewardTotalsAvailable: preferences.rewardTotalsAvailable,
-      earnedRewardWrf: preferences.earnedRewardWrf,
       lastSubmissionId: preferences.lastSubmissionId,
       lastCommitId: preferences.lastCommitId,
       lastSubmissionStatus: preferences.lastSubmissionStatus,
@@ -695,8 +675,6 @@ class CollectorNotifier extends Notifier<CollectorState> {
         intervalMinutes: state.intervalMinutes,
         batteryThreshold: state.batteryThreshold,
         syncedSubmissionCount: state.syncedSubmissionCount,
-        rewardTotalsAvailable: state.rewardTotalsAvailable,
-        earnedRewardWrf: state.earnedRewardWrf,
         lastSubmissionId: state.lastSubmissionId,
         lastCommitId: state.lastCommitId,
         lastSubmissionStatus: state.lastSubmissionStatus,

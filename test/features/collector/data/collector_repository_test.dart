@@ -90,8 +90,6 @@ void main() {
 
       expect(result.acceptedCount, 0);
       expect(result.failedCount, 0);
-      expect(result.rewardWrfTotal, 0);
-      expect(result.rewardTotalsAvailable, isFalse);
       expect(result.lastSubmissionId, isNull);
       expect(result.lastCommitId, isNull);
     });
@@ -121,20 +119,36 @@ void main() {
       // The phone's own commit id for the last accepted reading (proof card link).
       expect(result.lastCommitId, matches(RegExp(r'^[0-9a-f]{64}$')));
       expect(result.lastSubmissionStatus, 'pending');
-      expect(result.rewardTotalsAvailable, isFalse);
       expect(store.syncedIds, [1, 2]);
       expect(await store.getPendingSyncCount(), 0);
     });
 
-    test('parses direct reward fields when backend provides them', () async {
+    test('real submit answer: rewardAmount is the lifetime total and is not summed', () async {
+      // Shape of backend oracle-submit-routes.ts: rewardAmount is the
+      // account's earned_balance_total in base units (8 decimals), the same
+      // lifetime figure on every answer. It is not this reading's reward.
       final repository = await buildRepository(
         handler: (options, requestIndex) async => Response(
           requestOptions: options,
           data: <String, dynamic>{
             'success': true,
-            'submissionId': 'sub-$requestIndex',
-            'status': 'accepted',
-            'rewardAmount': '1.25',
+            'submissionId': 'c' * 63 + '$requestIndex',
+            'commitHash': 'c' * 63 + '$requestIndex',
+            'status': 'revealed_pending_attestation',
+            'stationId': 'st_0123456789abcdef01234567',
+            'attestation': <String, dynamic>{
+              'approvals': 0,
+              'rejections': 0,
+              'hasQuorum': false,
+              'oracleQuorum': null,
+            },
+            'blockInclusion': <String, dynamic>{
+              'commitAccepted': true,
+              'revealAccepted': true,
+              'txId': null,
+            },
+            'rewardAmount': '100000000',
+            'message': 'Data submitted successfully through core4 contribution pipeline',
           },
         ),
       );
@@ -146,31 +160,10 @@ void main() {
       );
 
       expect(result.acceptedCount, 2);
-      expect(result.rewardTotalsAvailable, isTrue);
-      expect(result.rewardWrfTotal, closeTo(2.5, 0.0001));
-    });
-
-    test('parses nested reward totals without inventing zeros', () async {
-      final repository = await buildRepository(
-        handler: (options, requestIndex) async => Response(
-          requestOptions: options,
-          data: <String, dynamic>{
-            'success': true,
-            'submissionId': 'sub-$requestIndex',
-            'status': 'accepted',
-            'rewards': <String, dynamic>{'totalAmount': 0.5},
-          },
-        ),
-      );
-
-      final result = await repository.submitBatch(
-        seedReadings(2),
-        walletAddress: 'wrf1wallet',
-        signer: session,
-      );
-
-      expect(result.rewardTotalsAvailable, isTrue);
-      expect(result.rewardWrfTotal, closeTo(1.0, 0.0001));
+      expect(result.failedCount, 0);
+      expect(result.lastSubmissionStatus, 'revealed_pending_attestation');
+      expect(result.lastSubmissionId, '${'c' * 63}2');
+      expect(store.syncedIds, [1, 2]);
     });
 
     test('keeps rejected or failed readings unsynced', () async {
@@ -237,52 +230,6 @@ void main() {
         expect(store.syncedIds, isEmpty);
       },
     );
-
-    test('parses reward from wrfEarned key', () async {
-      final repository = await buildRepository(
-        handler: (options, requestIndex) async => Response(
-          requestOptions: options,
-          data: <String, dynamic>{
-            'success': true,
-            'submissionId': 'sub-$requestIndex',
-            'status': 'accepted',
-            'wrfEarned': '0.75',
-          },
-        ),
-      );
-
-      final result = await repository.submitBatch(
-        seedReadings(1),
-        walletAddress: 'wrf1wallet',
-        signer: session,
-      );
-
-      expect(result.rewardTotalsAvailable, isTrue);
-      expect(result.rewardWrfTotal, closeTo(0.75, 0.0001));
-    });
-
-    test('parses reward from rewards.amount nested path', () async {
-      final repository = await buildRepository(
-        handler: (options, requestIndex) async => Response(
-          requestOptions: options,
-          data: <String, dynamic>{
-            'success': true,
-            'submissionId': 'sub-$requestIndex',
-            'status': 'accepted',
-            'rewards': <String, dynamic>{'amount': 0.33},
-          },
-        ),
-      );
-
-      final result = await repository.submitBatch(
-        seedReadings(1),
-        walletAddress: 'wrf1wallet',
-        signer: session,
-      );
-
-      expect(result.rewardTotalsAvailable, isTrue);
-      expect(result.rewardWrfTotal, closeTo(0.33, 0.0001));
-    });
 
     test('accepts responses with accepted:true flag', () async {
       final repository = await buildRepository(
