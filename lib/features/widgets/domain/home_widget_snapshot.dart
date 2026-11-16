@@ -13,8 +13,6 @@ class HomeWidgetSnapshot {
     this.readingCapturedAt,
     required this.pendingSyncCount,
     this.lastSubmissionStatus,
-    required this.rewardTotalsAvailable,
-    this.earnedRewardWrf,
   });
 
   final String? weatherLocation;
@@ -27,18 +25,6 @@ class HomeWidgetSnapshot {
   final DateTime? readingCapturedAt;
   final int pendingSyncCount;
   final String? lastSubmissionStatus;
-  final bool rewardTotalsAvailable;
-  final double? earnedRewardWrf;
-
-  bool get isLiveEarningRateVerified =>
-      rewardTotalsAvailable && earnedRewardWrf != null;
-
-  String get earningRateClaim {
-    if (!rewardTotalsAvailable || earnedRewardWrf == null) {
-      return 'UNVERIFIED: reward totals unavailable from backend contract';
-    }
-    return '${earnedRewardWrf!.toStringAsFixed(2)} WRF';
-  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -53,15 +39,10 @@ class HomeWidgetSnapshot {
         'capturedAt': readingCapturedAt!.toUtc().toIso8601String(),
       'pendingSyncCount': pendingSyncCount,
       'lastSubmissionStatus': lastSubmissionStatus,
-      'rewardTotalsAvailable': rewardTotalsAvailable,
-      if (rewardTotalsAvailable && earnedRewardWrf != null)
-        'earnedRewardWrf': earnedRewardWrf,
     };
   }
 
   static HomeWidgetSnapshot? tryParse(Map<String, dynamic> value) {
-    final rewardTotalsAvailable =
-        _asBool(value['rewardTotalsAvailable']) ?? false;
     return HomeWidgetSnapshot(
       weatherLocation: _asString(value['weatherLocation']),
       weatherTimestamp: _asString(value['weatherTimestamp']),
@@ -73,23 +54,17 @@ class HomeWidgetSnapshot {
       readingCapturedAt: _asDateTime(value['capturedAt']),
       pendingSyncCount: _asInt(value['pendingSyncCount']) ?? 0,
       lastSubmissionStatus: _asString(value['lastSubmissionStatus']),
-      rewardTotalsAvailable: rewardTotalsAvailable,
-      earnedRewardWrf: _asDouble(value['earnedRewardWrf']),
     );
   }
 
   static HomeWidgetSnapshot fromParts({
     required int pendingSyncCount,
-    required bool rewardTotalsAvailable,
-    required double? earnedRewardWrf,
     required String? lastSubmissionStatus,
     SensorReadingModel? reading,
     ForecastModel? weather,
   }) {
     return HomeWidgetSnapshot(
       pendingSyncCount: pendingSyncCount,
-      rewardTotalsAvailable: rewardTotalsAvailable,
-      earnedRewardWrf: earnedRewardWrf,
       lastSubmissionStatus: lastSubmissionStatus,
       pressureHpa: reading?.pressureHpa,
       readingCapturedAt: reading?.timestamp,
@@ -101,11 +76,6 @@ class HomeWidgetSnapshot {
       weatherWindSpeed: weather?.windSpeed,
     );
   }
-}
-
-bool? _asBool(Object? value) {
-  if (value is bool) return value;
-  return null;
 }
 
 String? _asString(Object? value) {

@@ -68,27 +68,21 @@ void main() {
       expect(syncWorker.calls, 0);
     });
 
-    test('syncPendingData accumulates reward totals in state', () async {
+    test('syncPendingData counts accepted readings, never a reward', () async {
       syncWorker.nextResult = const SyncRunResult(
         acceptedCount: 3,
         failedCount: 0,
         pendingCount: 0,
         reason: SyncRunReason.success,
-        rewardWrfTotal: 1.5,
-        rewardTotalsAvailable: true,
       );
 
       await notifier.syncPendingData();
-
       expect(notifier.state.syncedSubmissionCount, 3);
-      expect(notifier.state.earnedRewardWrf, closeTo(1.5, 0.0001));
-      expect(notifier.state.rewardTotalsAvailable, isTrue);
 
-      // Sync again — totals accumulate
+      // Sync again: the count accumulates. Earnings are not kept here; they
+      // come from the wallet's public balance read.
       await notifier.syncPendingData();
-
       expect(notifier.state.syncedSubmissionCount, 6);
-      expect(notifier.state.earnedRewardWrf, closeTo(3.0, 0.0001));
     });
 
     test('syncPendingData records submission metadata in state', () async {
@@ -145,26 +139,32 @@ void main() {
         },
       );
 
-      test('an explicit sync prompts again and resumes automatic syncs', () async {
-        syncWorker.nextResult = refused;
-        await notifier.autoSyncPendingData();
-        expect(syncWorker.calls, 1);
+      test(
+        'an explicit sync prompts again and resumes automatic syncs',
+        () async {
+          syncWorker.nextResult = refused;
+          await notifier.autoSyncPendingData();
+          expect(syncWorker.calls, 1);
 
-        syncWorker.nextResult = ok;
-        await notifier.syncPendingData();
-        expect(syncWorker.calls, 2);
+          syncWorker.nextResult = ok;
+          await notifier.syncPendingData();
+          expect(syncWorker.calls, 2);
 
-        await notifier.autoSyncPendingData();
-        expect(syncWorker.calls, 3);
-      });
+          await notifier.autoSyncPendingData();
+          expect(syncWorker.calls, 3);
+        },
+      );
 
-      test('an explicit sync that is refused again keeps automatic syncs off', () async {
-        syncWorker.nextResult = refused;
-        await notifier.syncPendingData();
-        await notifier.autoSyncPendingData();
+      test(
+        'an explicit sync that is refused again keeps automatic syncs off',
+        () async {
+          syncWorker.nextResult = refused;
+          await notifier.syncPendingData();
+          await notifier.autoSyncPendingData();
 
-        expect(syncWorker.calls, 1);
-      });
+          expect(syncWorker.calls, 1);
+        },
+      );
 
       test('other outcomes never pause automatic syncs', () async {
         syncWorker.nextResult = const SyncRunResult(
@@ -193,7 +193,9 @@ class _FakeSyncWorker extends SyncWorker {
       const Stream<List<ConnectivityResult>>.empty();
 
   @override
-  Future<SyncRunResult> syncPendingReadings({bool includeIdempotencyKey = false}) async {
+  Future<SyncRunResult> syncPendingReadings({
+    bool includeIdempotencyKey = false,
+  }) async {
     calls++;
     return nextResult;
   }

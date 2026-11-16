@@ -503,31 +503,39 @@ void main() {
     );
   }
 
-  testWidgets('shows settled WRF only when reward totals are available', (
-    tester,
-  ) async {
-    await pumpDashboard(
-      tester,
-      preferencesState: const CollectorPreferencesState(
-        isCollecting: true,
-        intervalMinutes: 15,
-        batteryThreshold: 15,
-        syncedSubmissionCount: 5,
-        rewardTotalsAvailable: true,
-        earnedRewardWrf: 4.25,
-      ),
-      pendingCount: 0,
-    );
+  testWidgets(
+    'total earned is the public balance figure in WRF, never a settled sum',
+    (tester) async {
+      // A wallet that has earned 1 WRF: the node reports 100000000 base units.
+      await pumpDashboard(
+        tester,
+        preferencesState: const CollectorPreferencesState(
+          isCollecting: true,
+          intervalMinutes: 15,
+          batteryThreshold: 15,
+          syncedSubmissionCount: 5,
+        ),
+        pendingCount: 0,
+        wallet: WalletModel(
+          address: 'wrf1wallet',
+          balance: '100000000',
+          earnedBalanceTotal: '100000000',
+        ),
+      );
 
-    await tester.scrollUntilVisible(find.text('Rewards Breakdown'), 300);
-    await tester.pump(const Duration(milliseconds: 100));
+      await tester.scrollUntilVisible(find.text('Rewards Breakdown'), 300);
+      await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('4.25 WRF settled'), findsOneWidget);
-    expect(
-      find.text('Reward totals unavailable until the backend returns them.'),
-      findsNothing,
-    );
-  });
+      expect(find.text('Total earned'), findsOneWidget);
+      expect(find.text('1 WRF'), findsWidgets);
+      expect(find.textContaining('settled'), findsNothing);
+      expect(find.textContaining('100000000'), findsNothing);
+      expect(
+        find.text('Total earned includes all reward sources.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   for (final (baseUnits, wrf) in [
     ('150000000', '1.5'),

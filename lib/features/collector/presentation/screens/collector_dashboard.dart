@@ -494,9 +494,7 @@ class CollectorDashboard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    state.rewardTotalsAvailable
-                        ? '${state.earnedRewardWrf.toStringAsFixed(2)} WRF settled'
-                        : walletAsync.asData?.value?.earnedBalanceTotal != null
+                    walletAsync.asData?.value?.earnedBalanceTotal != null
                         ? 'Total earned includes all reward sources.'
                         : 'Reward totals unavailable until the backend returns them.',
                     style: const TextStyle(

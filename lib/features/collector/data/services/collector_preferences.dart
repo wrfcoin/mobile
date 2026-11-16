@@ -14,8 +14,13 @@ class CollectorPreferences {
   static const _intervalMinutesKey = 'collector.intervalMinutes';
   static const _batteryThresholdKey = 'collector.batteryThreshold';
   static const _syncedSubmissionCountKey = 'collector.syncedSubmissionCount';
-  static const _rewardTotalsAvailableKey = 'collector.rewardTotalsAvailable';
-  static const _earnedRewardWrfKey = 'collector.earnedRewardWrf';
+  // Older builds saved a 'WRF settled' figure summed from submit answers
+  // (each one the lifetime total in base units). It was wrong, so it is
+  // never read and is removed on the next save.
+  static const _retiredRewardKeys = [
+    'collector.rewardTotalsAvailable',
+    'collector.earnedRewardWrf',
+  ];
   static const _lastSubmissionIdKey = 'collector.lastSubmissionId';
   static const _lastCommitIdKey = 'collector.lastCommitId';
   static const _lastSubmissionStatusKey = 'collector.lastSubmissionStatus';
@@ -61,8 +66,6 @@ class CollectorPreferences {
       intervalMinutes: prefs.getInt(_intervalMinutesKey) ?? 15,
       batteryThreshold: prefs.getInt(_batteryThresholdKey) ?? 15,
       syncedSubmissionCount: prefs.getInt(_syncedSubmissionCountKey) ?? 0,
-      rewardTotalsAvailable: prefs.getBool(_rewardTotalsAvailableKey) ?? false,
-      earnedRewardWrf: prefs.getDouble(_earnedRewardWrfKey) ?? 0,
       lastSubmissionId: prefs.getString(_lastSubmissionIdKey),
       lastCommitId: prefs.getString(_lastCommitIdKey),
       lastSubmissionStatus: prefs.getString(_lastSubmissionStatusKey),
@@ -76,8 +79,7 @@ class CollectorPreferences {
       prefs.setInt(_intervalMinutesKey, state.intervalMinutes),
       prefs.setInt(_batteryThresholdKey, state.batteryThreshold),
       prefs.setInt(_syncedSubmissionCountKey, state.syncedSubmissionCount),
-      prefs.setBool(_rewardTotalsAvailableKey, state.rewardTotalsAvailable),
-      prefs.setDouble(_earnedRewardWrfKey, state.earnedRewardWrf),
+      for (final key in _retiredRewardKeys) prefs.remove(key),
       _setNullableString(
         prefs,
         key: _lastSubmissionIdKey,
@@ -147,8 +149,6 @@ class CollectorPreferencesState {
   final int intervalMinutes;
   final int batteryThreshold;
   final int syncedSubmissionCount;
-  final bool rewardTotalsAvailable;
-  final double earnedRewardWrf;
   final String? lastSubmissionId;
 
   /// core4 commit id of the newest accepted reading; the proof card link is built from it.
@@ -160,8 +160,6 @@ class CollectorPreferencesState {
     required this.intervalMinutes,
     required this.batteryThreshold,
     this.syncedSubmissionCount = 0,
-    this.rewardTotalsAvailable = false,
-    this.earnedRewardWrf = 0,
     this.lastSubmissionId,
     this.lastCommitId,
     this.lastSubmissionStatus,
@@ -173,8 +171,6 @@ class CollectorPreferencesState {
         intervalMinutes: intervalMinutes,
         batteryThreshold: batteryThreshold,
         syncedSubmissionCount: syncedSubmissionCount,
-        rewardTotalsAvailable: rewardTotalsAvailable,
-        earnedRewardWrf: earnedRewardWrf,
         lastSubmissionId: lastSubmissionId,
         lastCommitId: lastCommitId,
         lastSubmissionStatus: lastSubmissionStatus,

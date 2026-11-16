@@ -230,8 +230,6 @@ class CollectorRepository {
     String? lastSubmissionStatus;
     SubmitFailure? failure;
     SubmitRefusal? refusal;
-    var rewardWrfTotal = 0.0;
-    var rewardTotalsAvailable = false;
     final authenticated = await apiClient.ensureWalletSession();
     if (!authenticated) {
       return BatchSubmissionResult(
@@ -342,12 +340,9 @@ class CollectorRepository {
           lastSubmissionId = _asString(payload['submissionId']);
           lastCommitId = localCommitId;
           lastSubmissionStatus = _asString(payload['status']);
-
-          final rewardAmount = _extractRewardWrf(payload);
-          if (rewardAmount != null) {
-            rewardTotalsAvailable = true;
-            rewardWrfTotal += rewardAmount;
-          }
+          // The response's rewardAmount is the wallet's lifetime earned total
+          // in base units, not this reading's reward. Earnings are read from
+          // the public balance (`earned`), never summed from submit answers.
         }
       } catch (error) {
         lastErrorMessage = error.toString();
@@ -388,8 +383,6 @@ class CollectorRepository {
       lastSubmissionId: lastSubmissionId,
       lastCommitId: lastCommitId,
       lastSubmissionStatus: lastSubmissionStatus,
-      rewardWrfTotal: rewardWrfTotal,
-      rewardTotalsAvailable: rewardTotalsAvailable,
       failure: failure,
       refusal: refusal,
       expiredCount: expiredCount,
@@ -493,8 +486,6 @@ class BatchSubmissionResult {
   /// core4 commit id (64 lowercase hex) of the last reading the server accepted, computed on the phone.
   final String? lastCommitId;
   final String? lastSubmissionStatus;
-  final double rewardWrfTotal;
-  final bool rewardTotalsAvailable;
 
   /// Set when the batch was stopped by a terminal 4xx,429 or upstream502.
   final SubmitFailure? failure;
@@ -511,8 +502,6 @@ class BatchSubmissionResult {
     this.lastSubmissionId,
     this.lastCommitId,
     this.lastSubmissionStatus,
-    this.rewardWrfTotal = 0,
-    this.rewardTotalsAvailable = false,
     this.failure,
     this.refusal,
   });
@@ -801,31 +790,4 @@ String? _asString(dynamic value) {
   if (value == null) return null;
   final text = value.toString().trim();
   return text.isEmpty ? null : text;
-}
-
-double? _extractRewardWrf(Map<String, dynamic> payload) {
-  for (final key in const [
-    'rewardAmount',
-    'rewardTotal',
-    'earnedWrf',
-    'wrfEarned',
-    'totalReward',
-  ]) {
-    final parsed = _parseDouble(payload[key]);
-    if (parsed != null) return parsed;
-  }
-
-  final rewards = payload['rewards'];
-  if (rewards is Map) {
-    final parsed = _parseDouble(rewards['totalAmount'] ?? rewards['amount']);
-    if (parsed != null) return parsed;
-  }
-
-  return null;
-}
-
-double? _parseDouble(dynamic value) {
-  if (value is num) return value.toDouble();
-  if (value is String) return double.tryParse(value);
-  return null;
 }
