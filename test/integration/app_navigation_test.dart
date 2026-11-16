@@ -189,7 +189,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Govern'));
     await tester.pumpAndSettle();
-    expect(find.text('Proposals'), findsOneWidget);
+    expect(find.text('Advisory proposals'), findsOneWidget);
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
