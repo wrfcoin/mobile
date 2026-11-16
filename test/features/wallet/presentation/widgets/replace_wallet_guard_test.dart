@@ -79,8 +79,19 @@ void main() {
       find.text('This phone already has a wallet (0xabcd…1234).'),
       findsOneWidget,
     );
-    expect(find.textContaining('12 recovery words'), findsOneWidget);
-    expect(find.textContaining('gone for good'), findsOneWidget);
+    expect(
+      find.text(
+        'Making or importing another one replaces it here. Without its '
+        'recovery words or private key, the old wallet and its WRF are gone '
+        'for good.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('I have my recovery words or key saved, replace it'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('12 recovery words'), findsNothing);
     expect(find.text('CREATE FORM'), findsNothing);
     expect(find.byKey(ReplaceWalletGuard.keepKey), findsOneWidget);
     expect(find.byKey(ReplaceWalletGuard.replaceKey), findsOneWidget);

@@ -157,8 +157,8 @@ class _ExistingWalletView extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'Making or importing another one replaces it here. Without '
-                'its 12 recovery words, the old wallet and its WRF are gone '
-                'for good.',
+                'its recovery words or private key, the old wallet and its '
+                'WRF are gone for good.',
                 style: theme.textTheme.bodyLarge,
               ),
               const SizedBox(height: 32),
@@ -175,7 +175,7 @@ class _ExistingWalletView extends StatelessWidget {
                   foregroundColor: theme.colorScheme.error,
                 ),
                 child: const Text(
-                  'I have my words written down, replace it',
+                  'I have my recovery words or key saved, replace it',
                   textAlign: TextAlign.center,
                 ),
               ),
