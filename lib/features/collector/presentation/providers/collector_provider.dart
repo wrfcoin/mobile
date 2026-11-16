@@ -320,8 +320,9 @@ class CollectorNotifier extends Notifier<CollectorState> {
       baseIntervalMinutes: state.intervalMinutes,
     );
     await _refreshSyncMetadata(currentReading: result.reading);
-    if (result.isSuccess)
+    if (result.isSuccess) {
       await _publishHomeWidgetCollectionSlice(reading: result.reading);
+    }
   }
 
   /// Opening the app is the one chance to restart a service Android stopped.
