@@ -1,15 +1,13 @@
-// The proposal list used to stop at the first 20 (one page of the
+// The older proposal list (no longer shown by the app; the governance
+// screen reads the advisory list) used to stop at the first 20 (one page of the
 // governance list). These tests serve more than 20 proposals across pages
 // from a fake API and check that the app reads every page, with the same
 // `limit`/`offset` parameters as the website (frontend PR #102), and that a
 // broken API cannot make it loop forever.
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/core/constants/api_constants.dart';
 import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
-import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_list_screen.dart';
 
 Map<String, dynamic> _proposal(int n) => <String, dynamic>{
   'id': 'prop-$n',
@@ -166,31 +164,5 @@ void main() {
 
       expect(result.isLeft(), isTrue);
     });
-  });
-
-  testWidgets('the list screen shows proposal 45 of 45', (tester) async {
-    final api = _FakeGovernanceApi(45);
-    final dio = api.dio();
-    addTearDown(() => dio.close(force: true));
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          governanceRepositoryProvider.overrideWithValue(
-            GovernanceRepository(dio),
-          ),
-        ],
-        child: const MaterialApp(home: ProposalListScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.text('Proposal number 45'),
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Proposal number 45'), findsOneWidget);
-    expect(api.queries, hasLength(3));
   });
 }

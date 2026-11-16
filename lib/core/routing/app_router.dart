@@ -50,6 +50,7 @@ import '../../features/governance/presentation/screens/proposal_list_screen.dart
 import '../../features/more/presentation/screens/more_screen.dart';
 import '../../features/governance/presentation/screens/proposal_detail_screen.dart';
 import '../../features/governance/presentation/screens/vote_screen.dart';
+import '../../features/governance/data/models/advisory_proposal.dart';
 import '../../features/governance/data/models/proposal_model.dart';
 import '../../features/gamification/presentation/screens/achievements_screen.dart';
 import '../../features/gamification/presentation/screens/data_desert_map_screen.dart';
@@ -514,16 +515,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ),
                 routes: [
+                  // An advisory proposal: from the list (extra) or by id
+                  // (`/govern/proposal?id=adv-…`). Anything else goes back
+                  // to the list.
                   GoRoute(
                     path: 'proposal',
                     redirect: (context, state) =>
-                        state.extra == null ? '/govern' : null,
-                    pageBuilder: (context, state) => _fadePage(
-                      key: state.pageKey,
-                      child: ProposalDetailScreen(
-                        proposal: state.extra! as ProposalModel,
-                      ),
-                    ),
+                        _advisoryProposalId(state) == null ? '/govern' : null,
+                    pageBuilder: (context, state) {
+                      final extra = state.extra;
+                      return _fadePage(
+                        key: state.pageKey,
+                        child: ProposalDetailScreen(
+                          proposalId: _advisoryProposalId(state)!,
+                          initial: extra is AdvisoryProposal ? extra : null,
+                        ),
+                      );
+                    },
                   ),
                   GoRoute(
                     path: 'vote',
@@ -830,4 +838,12 @@ class _NavigationGate extends ChangeNotifier {
     _handoff.removeListener(_onHandoffChanged);
     super.dispose();
   }
+}
+
+/// The advisory proposal id a `/govern/proposal` link carries, or null.
+String? _advisoryProposalId(GoRouterState state) {
+  final extra = state.extra;
+  if (extra is AdvisoryProposal) return extra.id;
+  final id = state.uri.queryParameters['id'];
+  return id != null && isAdvisoryProposalId(id) ? id : null;
 }

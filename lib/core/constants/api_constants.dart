@@ -239,6 +239,12 @@ class ApiConstants {
   static String proposal(String id) => '/governance/proposals/$id';
   static String vote(String id) => '/governance/proposals/$id/vote';
 
+  // Advisory governance (chain 888, core4 `advisory_governance`). The public
+  // edge admits the list with no query or exactly `limit=<1..100>&offset=<n>`.
+  static const String advisoryProposals = '/governance/advisory/proposals';
+  static String advisoryProposal(String id) =>
+      '/governance/advisory/proposals/$id';
+
   // Oracle / Sensor
   static const String oracleSubmitData = '/oracle/submit-data';
   static const String oracleSubmitDataPrepare = '/oracle/submit-data/prepare';

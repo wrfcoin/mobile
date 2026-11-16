@@ -6,8 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wrfcoin_mobile/core/auth/auth_handoff.dart';
 import 'package:wrfcoin_mobile/core/theme/app_theme.dart';
-import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
-import 'package:wrfcoin_mobile/features/governance/presentation/widgets/proposal_card.dart';
+import 'package:wrfcoin_mobile/features/governance/data/models/advisory_proposal.dart';
+import 'package:wrfcoin_mobile/features/governance/presentation/widgets/advisory_proposal_card.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/widgets/auth_handoff_banner.dart';
 
 /// The near-white [AppColors.textPrimary] only reads on a surface that stays
@@ -39,16 +39,16 @@ void main() {
   });
 
   testWidgets('a proposal title is dark on the light theme', (tester) async {
-    const proposal = ProposalModel(
-      id: 'p1',
+    const proposal = AdvisoryProposal(
+      id: 'adv-0000000000000001',
       title: 'Sample proposal',
-      description: 'Text',
+      summary: 'Text',
       status: 'active',
     );
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.lightTheme,
-        home: const Scaffold(body: ProposalCard(proposal: proposal)),
+        home: const Scaffold(body: AdvisoryProposalCard(proposal: proposal)),
       ),
     );
     expect(_colorOf(tester, 'Sample proposal'), AppColors.lightTextPrimary);
