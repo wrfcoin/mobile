@@ -99,6 +99,21 @@ class CollectionServiceController {
     }
   }
 
+  /// Whether this app may post notifications. Null when unknown or when this
+  /// platform has no collection service. Without it, the "collection stopped"
+  /// notice cannot reach the user (Android 13+ asks; the user can say no).
+  Future<bool?> get notificationsAllowed async {
+    if (!_supported) return null;
+    try {
+      return await FlutterForegroundTask.checkNotificationPermission() ==
+          NotificationPermission.granted;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   /// Whether Android's battery limits apply to this app. Null when unknown.
   Future<bool?> get isBatteryLimited async {
     if (!_supported) return null;
