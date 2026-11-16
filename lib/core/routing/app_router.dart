@@ -42,6 +42,7 @@ import '../../features/wallet/presentation/screens/send_screen.dart';
 import '../../features/wallet/presentation/screens/receive_screen.dart';
 import '../../features/wallet/presentation/screens/create_wallet_screen.dart';
 import '../../features/wallet/presentation/screens/import_wallet_screen.dart';
+import '../../features/wallet/presentation/widgets/replace_wallet_guard.dart';
 import '../../features/carbon_lottery/presentation/screens/carbon_lottery_dashboard_screen.dart';
 import '../../features/faucet/presentation/screens/faucet_screen.dart';
 import '../../features/explorer/presentation/screens/chain_screen.dart';
@@ -200,9 +201,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _fadePage(
           key: state.pageKey,
           child: _BackToWallet(
-            builder: (context, leading) => CreateWalletScreen(
+            // Every way here (wallet tab, passkey screen, welcome, a link)
+            // passes this guard: a stored wallet is never replaced unasked.
+            builder: (context, leading) => ReplaceWalletGuard(
               leading: leading,
-              doneLocation: _walletDoneLocation(state),
+              child: CreateWalletScreen(
+                leading: leading,
+                doneLocation: _walletDoneLocation(state),
+              ),
             ),
           ),
         ),
@@ -212,9 +218,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _fadePage(
           key: state.pageKey,
           child: _BackToWallet(
-            builder: (context, leading) => ImportWalletScreen(
+            builder: (context, leading) => ReplaceWalletGuard(
               leading: leading,
-              doneLocation: _walletDoneLocation(state),
+              child: ImportWalletScreen(
+                leading: leading,
+                doneLocation: _walletDoneLocation(state),
+              ),
             ),
           ),
         ),

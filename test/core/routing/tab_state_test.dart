@@ -22,6 +22,7 @@ import 'package:wrfcoin_mobile/features/wallet/data/models/transaction_page.dart
 import 'package:wrfcoin_mobile/features/wallet/domain/repositories/wallet_repository.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/create_wallet_screen.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/import_wallet_screen.dart';
+import 'package:wrfcoin_mobile/features/wallet/presentation/widgets/replace_wallet_guard.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/forecast_model.dart';
 import 'package:wrfcoin_mobile/features/weather/data/weather_location_resolver.dart';
 import 'package:wrfcoin_mobile/features/wallet/presentation/screens/recovery_phrase_screen.dart';
@@ -139,7 +140,13 @@ void main() {
     FeatureFlags? flags,
     WalletRepository? walletRepository,
     bool signedIn = false,
+    bool withWallet = true,
   }) async {
+    if (!withWallet) {
+      // Past the welcome flow, which a phone with no wallet would show first.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('welcome.seen', true);
+    }
     await loadFlutterCacheFonts();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockStreamHandler(
@@ -157,6 +164,7 @@ void main() {
         weatherLocationResolver: resolver,
         walletRepository: walletRepository,
         signedIn: signedIn,
+        withWallet: withWallet,
         extraOverrides: [
           appClockProvider.overrideWithValue(() => now),
           if (flags != null)
@@ -456,6 +464,8 @@ void main() {
   });
 
   group('the screens that hold a recovery phrase', () {
+    // A fresh phone: with a wallet stored these routes show the
+    // ReplaceWalletGuard first (see the group below).
     final screens = <String, Type>{
       '/wallet/create': CreateWalletScreen,
       '/wallet/import': ImportWalletScreen,
@@ -469,7 +479,7 @@ void main() {
       for (final size in const [Size(390, 500), Size(1280, 800)]) {
         testWidgets('$path opens over the shell at ${size.width.toInt()} px, '
             'with no tab to leave it for', (tester) async {
-          final router = await pumpApp(tester, size: size);
+          final router = await pumpApp(tester, size: size, withWallet: false);
           router.go(path);
           await pumpFrames(tester);
           expect(find.byType(type), findsOneWidget);
@@ -491,7 +501,11 @@ void main() {
         for (final landing in landings.entries) {
           testWidgets('$path opened by $open closes when a '
               '${landing.key} notification jumps away', (tester) async {
-            final router = await pumpApp(tester, size: const Size(390, 844));
+            final router = await pumpApp(
+              tester,
+              size: const Size(390, 844),
+              withWallet: false,
+            );
             if (open == 'push') {
               router.go('/wallet');
               await pumpFrames(tester);
@@ -527,7 +541,7 @@ void main() {
         testWidgets('$path opened by $open: Back returns to Wallet', (
           tester,
         ) async {
-          final router = await pumpApp(tester);
+          final router = await pumpApp(tester, withWallet: false);
           if (open == 'push') {
             router.go('/wallet');
             await pumpFrames(tester);
@@ -549,7 +563,7 @@ void main() {
       testWidgets('$path opened by go: system Back goes to Wallet, not out', (
         tester,
       ) async {
-        final router = await pumpApp(tester);
+        final router = await pumpApp(tester, withWallet: false);
         router.go(path);
         await pumpFrames(tester);
 
@@ -561,7 +575,7 @@ void main() {
       });
 
       testWidgets('$path going home to Wallet closes it', (tester) async {
-        final router = await pumpApp(tester);
+        final router = await pumpApp(tester, withWallet: false);
         router.go(path);
         await pumpFrames(tester);
         // How the create and import flows finish.
@@ -571,6 +585,30 @@ void main() {
         expect(selectedTab(tester), 2);
         expect(kept(type), findsNothing);
       });
+    }
+  });
+
+  group('a phone that already has a wallet', () {
+    for (final path in const ['/wallet/create', '/wallet/import']) {
+      for (final open in const ['go', 'push']) {
+        testWidgets('$path opened by $open shows the replace guard first', (
+          tester,
+        ) async {
+          final router = await pumpApp(tester, size: const Size(390, 844));
+          if (open == 'push') {
+            router.go('/wallet');
+            await pumpFrames(tester);
+            unawaited(router.push(path));
+          } else {
+            router.go(path);
+          }
+          await pumpFrames(tester);
+          expect(find.byType(ReplaceWalletGuard), findsOneWidget);
+          expect(find.textContaining('already has a wallet'), findsOneWidget);
+          expect(find.byType(CreateWalletScreen), findsNothing);
+          expect(find.byType(ImportWalletScreen), findsNothing);
+        });
+      }
     }
   });
 
