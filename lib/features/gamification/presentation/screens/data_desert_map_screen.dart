@@ -91,7 +91,7 @@ class _DataDesertMapScreenState extends ConsumerState<DataDesertMapScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => _ZoneDetailSheet(zone: zone),
+      builder: (_) => ZoneDetailSheet(zone: zone),
     );
   }
 
@@ -211,8 +211,9 @@ class _DataDesertMapScreenState extends ConsumerState<DataDesertMapScreen> {
 
 // ── Zone detail bottom sheet ──────────────────────────────────────────────────
 
-class _ZoneDetailSheet extends StatelessWidget {
-  const _ZoneDetailSheet({required this.zone});
+/// What a tapped zone shows. Public for its test.
+class ZoneDetailSheet extends StatelessWidget {
+  const ZoneDetailSheet({super.key, required this.zone});
   final CoverageZone zone;
 
   @override
@@ -245,7 +246,12 @@ class _ZoneDetailSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _InfoRow(label: 'Reward multiplier', value: multiplierText),
+          _InfoRow(
+            label: 'Reward multiplier',
+            value: multiplierText == kMultiplierUnavailable
+                ? multiplierText
+                : '$multiplierText (as the node reports)',
+          ),
           _InfoRow(
             label: 'Zone type',
             value: zone.type[0].toUpperCase() + zone.type.substring(1),
@@ -256,18 +262,13 @@ class _ZoneDetailSheet extends StatelessWidget {
                 '${zone.lat.toStringAsFixed(3)}, ${zone.lng.toStringAsFixed(3)}',
           ),
           const SizedBox(height: 16),
+          // This sheet only describes the zone: there is nothing to deploy
+          // from here, and the multiplier is the node's, not a promise.
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
+            child: OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.sensors),
-              label: Text(
-                zone.type == 'covered'
-                    ? 'Browse nearby'
-                    : multiplierText == kMultiplierUnavailable
-                        ? 'Deploy sensor here'
-                        : 'Deploy sensor here ($multiplierText WRF)',
-              ),
+              child: const Text('Close'),
             ),
           ),
         ],
@@ -276,8 +277,8 @@ class _ZoneDetailSheet extends StatelessWidget {
   }
 
   String _typeLabel(String type) => switch (type) {
-        'desert' => 'Data Desert — highest rewards',
-        'sparse' => 'Sparse Coverage — elevated rewards',
+        'desert' => 'Data Desert — few or no stations',
+        'sparse' => 'Sparse Coverage — few stations',
         _ => 'Good Coverage',
       };
 }
@@ -354,7 +355,7 @@ class _Legend extends StatelessWidget {
 
   String _label(String name, String type) {
     final text = _multiplierText(type);
-    return text == kMultiplierUnavailable ? '$name ($text)' : '$name ($text WRF)';
+    return '$name ($text)';
   }
 
   @override

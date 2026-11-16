@@ -18,6 +18,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlarmManager
+import org.robolectric.shadows.ShadowSystemClock
+import java.time.Duration
 
 // The rule under test: the lock is only given back while an alarm is set to
 // bring the next tick. Run with: ./gradlew :app:testDebugUnitTest
@@ -243,6 +245,66 @@ class CollectionWakeCoreTest {
         ShadowAlarmManager.setCanScheduleExactAlarms(true)
         assertFalse(core.reschedule(1000, interval, hold))
         assertNull(exact())
+        assertTrue(core.heldBetweenTicks)
+    }
+
+    // Moves the clock on by [ms] and says whether the lock still holds (the
+    // shadow lock expires by the clock).
+    private fun heldAfter(ms: Long): Boolean {
+        ShadowSystemClock.advanceBy(Duration.ofMillis(ms))
+        return core.lockHeld
+    }
+
+    @Test
+    fun `the lock held without an alarm has a time limit of one interval plus a tick`() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        core.beginTick(interval, hold)
+        core.endTick(0)
+        assertTrue(core.heldBetweenTicks)
+        assertTrue(heldAfter(interval + hold - 1))
+        assertFalse(heldAfter(2))
+    }
+
+    @Test
+    fun `without an alarm the lock is held between ticks for two hours at most`() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        core.beginTick(interval, hold)
+        core.endTick(0)
+        ShadowSystemClock.advanceBy(Duration.ofMillis(CollectionWakeCore.MAX_HELD_BETWEEN_TICKS_MS - 60_000))
+        core.beginTick(interval, hold)
+        assertTrue(core.lockHeld)
+        // Near the end of the budget the limit shrinks, but never below a tick.
+        core.endTick(0)
+        assertTrue(core.heldBetweenTicks)
+        assertTrue(heldAfter(hold - 1))
+        assertFalse(heldAfter(2))
+
+        // Budget spent: the tick still gets its lock, but it is given back after.
+        assertFalse(core.beginTick(interval, hold))
+        assertTrue(core.lockHeld)
+        assertFalse(core.heldBetweenTicks)
+        assertFalse(core.endTick(0))
+        assertFalse(core.lockHeld)
+    }
+
+    @Test
+    fun `the held budget starts again once an alarm can be set or the service restarts`() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        core.beginTick(interval, hold)
+        ShadowSystemClock.advanceBy(Duration.ofMillis(CollectionWakeCore.MAX_HELD_BETWEEN_TICKS_MS + 1))
+        core.endTick(0)
+        assertFalse(core.lockHeld)
+
+        core.stop()
+        core.beginTick(interval, hold)
+        core.endTick(0)
+        assertTrue(core.heldBetweenTicks)
+
+        ShadowSystemClock.advanceBy(Duration.ofMillis(CollectionWakeCore.MAX_HELD_BETWEEN_TICKS_MS + 1))
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        assertTrue(core.beginTick(interval, hold))
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        assertFalse(core.endTick(0))
         assertTrue(core.heldBetweenTicks)
     }
 }

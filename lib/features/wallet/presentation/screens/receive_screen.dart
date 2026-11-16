@@ -7,6 +7,13 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../services/crypto/key_manager.dart';
 import '../../data/repositories/wallet_repository_impl.dart';
 
+/// Stealth (one-time) receive addresses. Off: the public edge has no route for
+/// `POST /privacy/stealth-address` (the backend route needs core4), so the
+/// switch always failed, and its wording promised privacy the chain does not
+/// give. Flip to `true` only once the route is live and a phone can spend from
+/// such an address.
+const bool kStealthReceiveEnabled = false;
+
 /// The Receive QR. Exposes the encoded [address] so tests can pin it.
 class AddressQr extends StatelessWidget {
   const AddressQr({super.key, required this.address});
@@ -114,22 +121,23 @@ class _ReceiveScreenState extends ConsumerState<ReceiveScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('Standard'),
-                    Switch(
-                      value: _showStealth,
-                      onChanged: (v) {
-                        setState(() => _showStealth = v);
-                        if (v && _stealthAddress == null) {
-                          _generateStealthAddress(address);
-                        }
-                      },
-                    ),
-                    const Text('Stealth (private)'),
-                  ],
-                ),
+                if (kStealthReceiveEnabled)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Standard'),
+                      Switch(
+                        value: _showStealth,
+                        onChanged: (v) {
+                          setState(() => _showStealth = v);
+                          if (v && _stealthAddress == null) {
+                            _generateStealthAddress(address);
+                          }
+                        },
+                      ),
+                      const Text('Stealth (private)'),
+                    ],
+                  ),
                 if (_showStealth) ...[
                   const SizedBox(height: 4),
                   Text(
