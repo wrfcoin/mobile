@@ -5,17 +5,18 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../auth/biometric_service.dart';
 import '../auth/login_attempt_guard.dart';
 
-/// Saving a new or imported wallet on this phone failed part way. Every
-/// wallet slot was cleared again (as far as the store allowed), and the
-/// address is never left behind, so the app shows no wallet rather than one
-/// that cannot sign. [message] is safe to show to the user.
+/// Saving a new or imported wallet on this phone failed part way. The
+/// wallet slots were put back as they were before the save (a wallet that
+/// was there is still there), as far as the store allowed. A half-restored
+/// wallet never gets its address back, so the app never shows a wallet that
+/// cannot sign. [message] is safe to show to the user.
 class WalletSaveFailure implements Exception {
   const WalletSaveFailure(this.cause);
 
   final Object cause;
 
   String get message =>
-      'The wallet could not be saved on this phone, so nothing was kept. '
+      'The wallet could not be saved on this phone, so nothing changed. '
       'Try again. Your recovery words still work.';
 
   @override
@@ -109,6 +110,23 @@ class KeyManager {
     // there. A write that fails part way leaves no address, so the app asks
     // for the wallet again instead of showing one that cannot sign. (The
     // phrase was shown and checked before this runs, so nothing is lost.)
+    // Create and import can run while another wallet is stored (the routes
+    // are reachable directly), so the old values are kept to put back.
+    final walletKeys = [
+      _mnemonicKey,
+      _privateKeyKey,
+      _keySchemeKey,
+      _loginPrivateKeyKey,
+      _loginAddressKey,
+      _jwtKey,
+      _refreshTokenKey,
+      _jwtExpiresAtKey,
+      _authWalletSchemeKey,
+    ];
+    final previous = {
+      for (final key in [...walletKeys, _addressKey])
+        key: await _storage.read(key: key),
+    };
     // If clearing the old address fails, nothing has changed yet.
     await _storage.write(key: _addressKey, value: null);
     final slots = <(String, String?)>[
@@ -128,11 +146,27 @@ class KeyManager {
         await _storage.write(key: key, value: value);
       }
     } catch (error) {
-      // Do not leave half a wallet's secrets behind: clear every slot, the
-      // address first. Each clear is tried even when another one fails.
-      for (final key in [_addressKey, for (final (key, _) in slots) key]) {
+      // Put every slot back as it was: an old wallet stays usable, and with
+      // no old wallet the new one's secrets are cleared. The address goes
+      // first (cleared) and last (restored), and only when every other slot
+      // came back, so a mix of old and new keys is never shown as a wallet.
+      var restored = true;
+      try {
+        await _storage.write(key: _addressKey, value: null);
+      } catch (_) {
+        restored = false;
+      }
+      for (final key in walletKeys) {
         try {
-          await _storage.write(key: key, value: null);
+          await _storage.write(key: key, value: previous[key]);
+        } catch (_) {
+          // A write that failed may not have changed the slot at all.
+          if (!await _holds(key, previous[key])) restored = false;
+        }
+      }
+      if (restored && previous[_addressKey] != null) {
+        try {
+          await _storage.write(key: _addressKey, value: previous[_addressKey]);
         } catch (_) {}
       }
       throw WalletSaveFailure(error);
@@ -144,6 +178,14 @@ class KeyManager {
       read: readLoginGuardState,
       write: writeLoginGuardState,
     );
+  }
+
+  Future<bool> _holds(String key, String? value) async {
+    try {
+      return await _storage.read(key: key) == value;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Persisted login-guard state (mobile#313), in its own storage namespace.
