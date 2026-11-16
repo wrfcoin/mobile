@@ -46,6 +46,15 @@ void main() {
     expect(find.byKey(const Key('receive-only-notice')), findsNothing);
   });
 
+  testWidgets('no stealth switch: the edge has no route and the chain gives '
+      'no such privacy', (tester) async {
+    expect(kStealthReceiveEnabled, isFalse);
+    await _pump(tester, scheme: KeyManager.canonicalKeyScheme);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.textContaining('Stealth'), findsNothing);
+    expect(find.textContaining('cannot link'), findsNothing);
+  });
+
   for (final scheme in [KeyManager.legacyKeyScheme, null]) {
     testWidgets(
       'legacy/unmarked wallet ($scheme) withholds send-here controls',

@@ -1,6 +1,5 @@
 package com.wrfcoin.wrfcoin_mobile
 
-import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
@@ -36,9 +35,16 @@ class WrfcoinApplication : Application() {
 /**
  * The lock and the alarms. One rule holds everything together: the lock is
  * only ever given back while an alarm is set to bring the next tick. Whenever
- * that cannot be said, the lock is held with no time limit, as the service
- * always used to hold it, so a reading never depends on an alarm that is not
- * there.
+ * that cannot be said, the lock is held between ticks instead, so a reading
+ * never depends on an alarm that is not there.
+ *
+ * That held lock always has a time limit: one interval plus one tick, renewed
+ * by each tick, so a service that stops ticking cannot keep the phone awake.
+ * And it is held for at most [MAX_HELD_BETWEEN_TICKS_MS] in a row. After that
+ * the lock covers each tick only and the phone may sleep; the service's own
+ * timer then ticks whenever the phone is awake anyway. Without the battery
+ * exemption (no exact alarms) this trades readings for battery, instead of
+ * keeping the phone awake all night as the service used to.
  */
 class CollectionWakeCore(
     context: Context,
@@ -55,6 +61,12 @@ class CollectionWakeCore(
 
         /** The lock's limit until Dart has said what it wants. */
         const val DEFAULT_HOLD_MS = 11 * 60 * 1000L
+
+        /** The longest the lock is held between ticks without an alarm, in a row. */
+        const val MAX_HELD_BETWEEN_TICKS_MS = 2 * 60 * 60 * 1000L
+
+        /** The interval assumed until Dart has said what it is. */
+        const val DEFAULT_INTERVAL_MS = 15 * 60 * 1000L
 
         /** How long after the exact alarm the inexact one is due. */
         const val WATCHDOG_GRACE_MS = 2 * 60 * 1000L
@@ -75,9 +87,14 @@ class CollectionWakeCore(
     var alarmArmed = false
         private set
 
-    /** Whether the lock is held with no time limit. */
+    /** Whether the lock is held between ticks (always with a time limit). */
     var heldBetweenTicks = false
         private set
+
+    /** When the lock began to be held between ticks, or null. */
+    private var heldSinceMs: Long? = null
+    private var lastIntervalMs = DEFAULT_INTERVAL_MS
+    private var lastHoldMs = DEFAULT_HOLD_MS
 
     /** Counts alarms delivered, so a tick that ends can tell one is on its way. */
     var alarmSeq = 0L
@@ -98,6 +115,7 @@ class CollectionWakeCore(
     /** A tick starts: lock for the tick, alarm for the next. Returns [alarmArmed]. */
     @Synchronized
     fun beginTick(intervalMs: Long, holdMs: Long): Boolean {
+        remember(intervalMs, holdMs)
         acquireTimed(holdMs)
         return armOrHold(intervalMs, intervalMs, holdMs)
     }
@@ -112,7 +130,7 @@ class CollectionWakeCore(
     fun endTick(seenAlarmSeq: Long): Boolean {
         if (!alarmArmed || !canScheduleExact()) {
             cancelAlarms()
-            hold()
+            if (!hold(lastIntervalMs, lastHoldMs)) release()
             return false
         }
         if (alarmSeq <= seenAlarmSeq) release()
@@ -123,6 +141,7 @@ class CollectionWakeCore(
     @Synchronized
     fun reschedule(delayMs: Long, intervalMs: Long, holdMs: Long): Boolean {
         if (!alarmArmed) return false
+        remember(intervalMs, holdMs)
         return armOrHold(delayMs, intervalMs, holdMs)
     }
 
@@ -131,6 +150,7 @@ class CollectionWakeCore(
     fun stop() {
         cancelAlarms()
         release()
+        heldSinceMs = null
     }
 
     /**
@@ -146,6 +166,7 @@ class CollectionWakeCore(
             cancelAlarms()
             return
         }
+        remember(intervalMs, holdMs)
         acquireTimed(holdMs)
         alarmSeq++
         armOrHold(intervalMs, intervalMs, holdMs)
@@ -185,9 +206,11 @@ class CollectionWakeCore(
         }
         if (armed) {
             alarmArmed = true
+            heldSinceMs = null
         } else {
             cancelAlarms()
-            hold()
+            // A tick is running and keeps its own timed lock either way.
+            hold(intervalMs, holdMs)
         }
         return armed
     }
@@ -226,10 +249,26 @@ class CollectionWakeCore(
         heldBetweenTicks = false
     }
 
-    @SuppressLint("WakelockTimeout")
-    private fun hold() {
-        wakeLock.acquire()
+    private fun remember(intervalMs: Long, holdMs: Long) {
+        lastIntervalMs = intervalMs
+        lastHoldMs = holdMs
+    }
+
+    // Holds the lock until the next tick is due, with a limit. Returns false,
+    // holding nothing new, once the lock has been held between ticks for
+    // MAX_HELD_BETWEEN_TICKS_MS in a row.
+    private fun hold(intervalMs: Long, holdMs: Long): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val since = heldSinceMs ?: now.also { heldSinceMs = it }
+        val left = MAX_HELD_BETWEEN_TICKS_MS - (now - since)
+        if (left <= 0) {
+            heldBetweenTicks = false
+            return false
+        }
+        // Never shorter than a tick, so a running tick keeps its lock.
+        wakeLock.acquire(maxOf(holdMs, minOf(intervalMs + holdMs, left)))
         heldBetweenTicks = true
+        return true
     }
 
     private fun release() {

@@ -162,7 +162,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('zone markers are keyed and tapping opens bottom sheet', (tester) async {
+    testWidgets('zone markers are keyed and can be tapped', (tester) async {
       await tester.pumpWidget(_buildScreen());
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -174,8 +174,48 @@ void main() {
       // Drain flutter_map tap-debounce timer (~250ms)
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Bottom sheet should show reward text
-      expect(find.textContaining('WRF'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('zone sheet shows the node multiplier and promises nothing', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  builder: (_) => const ZoneDetailSheet(
+                    zone: CoverageZone(
+                      lat: 39.8,
+                      lng: -98.5,
+                      radius: 30,
+                      type: 'desert',
+                      color: Colors.red,
+                      rewardMultiplier: 2.0,
+                    ),
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2× (as the node reports)'), findsOneWidget);
+      expect(find.text('Data Desert — few or no stations'), findsOneWidget);
+      expect(find.textContaining('Deploy'), findsNothing);
+      expect(find.textContaining('highest rewards'), findsNothing);
+      expect(find.textContaining('WRF'), findsNothing);
+
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Close'), findsNothing);
     });
 
     testWidgets('empty zones list renders without error', (tester) async {

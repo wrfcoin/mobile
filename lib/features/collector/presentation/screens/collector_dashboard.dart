@@ -21,6 +21,7 @@ import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../providers/collector_provider.dart';
 import '../providers/mobile_station_status_provider.dart';
 import '../widgets/battery_exemption_dialog.dart';
+import '../widgets/notifications_off_banner.dart';
 import '../widgets/owner_ledger_banner.dart';
 import '../../data/services/collector_preferences.dart';
 import '../../data/services/mobile_station_status_service.dart';
@@ -134,6 +135,7 @@ class CollectorDashboard extends ConsumerWidget {
                 ),
               ),
             ),
+          const NotificationsOffBanner(),
           if (stationMessage != null)
             Card(
               child: Padding(
