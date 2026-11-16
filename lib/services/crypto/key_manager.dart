@@ -5,6 +5,23 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../auth/biometric_service.dart';
 import '../auth/login_attempt_guard.dart';
 
+/// Saving a new or imported wallet on this phone failed part way. Every
+/// wallet slot was cleared again (as far as the store allowed), and the
+/// address is never left behind, so the app shows no wallet rather than one
+/// that cannot sign. [message] is safe to show to the user.
+class WalletSaveFailure implements Exception {
+  const WalletSaveFailure(this.cause);
+
+  final Object cause;
+
+  String get message =>
+      'The wallet could not be saved on this phone, so nothing was kept. '
+      'Try again. Your recovery words still work.';
+
+  @override
+  String toString() => 'WalletSaveFailure: $cause';
+}
+
 final keyManagerProvider = Provider<KeyManager>((ref) {
   return KeyManager(
     biometric: ref.read(biometricServiceProvider),
@@ -92,6 +109,7 @@ class KeyManager {
     // there. A write that fails part way leaves no address, so the app asks
     // for the wallet again instead of showing one that cannot sign. (The
     // phrase was shown and checked before this runs, so nothing is lost.)
+    // If clearing the old address fails, nothing has changed yet.
     await _storage.write(key: _addressKey, value: null);
     final slots = <(String, String?)>[
       (_mnemonicKey, mnemonic),
@@ -105,8 +123,19 @@ class KeyManager {
       (_authWalletSchemeKey, null),
       (_addressKey, address),
     ];
-    for (final (key, value) in slots) {
-      await _storage.write(key: key, value: value);
+    try {
+      for (final (key, value) in slots) {
+        await _storage.write(key: key, value: value);
+      }
+    } catch (error) {
+      // Do not leave half a wallet's secrets behind: clear every slot, the
+      // address first. Each clear is tried even when another one fails.
+      for (final key in [_addressKey, for (final (key, _) in slots) key]) {
+        try {
+          await _storage.write(key: key, value: null);
+        } catch (_) {}
+      }
+      throw WalletSaveFailure(error);
     }
     // Creating or importing a wallet is an explicit user action: it
     // releases an automatic-login hold (mobile#313), but keeps the attempt

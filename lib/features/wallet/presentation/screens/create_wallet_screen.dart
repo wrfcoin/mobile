@@ -266,7 +266,12 @@ class _CreateWalletScreenState extends ConsumerState<CreateWalletScreen>
       context.go(widget.doneLocation);
     } catch (e) {
       if (!mounted) return;
-      AppSnackbars.error(context, ServerFailure(e.toString()));
+      AppSnackbars.error(
+        context,
+        e is WalletSaveFailure
+            ? CacheFailure(e.message)
+            : ServerFailure(e.toString()),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
