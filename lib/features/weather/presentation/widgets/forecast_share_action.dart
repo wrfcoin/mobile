@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../analytics/presentation/providers/analytics_provider.dart';
+import '../../../wallet/presentation/providers/wallet_earned_provider.dart';
 import '../../../social/weather_social_card.dart';
 import '../../data/models/forecast_model.dart';
 
-/// Earned-WRF figure shown on the shareable weather card, derived from the
-/// analytics snapshot (mobile#254). Kept as its own provider so the share
-/// sheet reads one nullable string and tests can override it without building a full
-/// [AnalyticsSnapshot].
-final forecastShareRewardsProvider = FutureProvider<String?>((ref) async {
-  final snapshot = await ref.watch(analyticsSnapshotProvider.future);
-  if (!snapshot.summary.rewardTotalsAvailable) return null;
-  return snapshot.summary.earnedWrf.toStringAsFixed(2);
-});
+/// Earned-WRF figure shown on the shareable weather card (mobile#254): the
+/// wallet's total earned from the public balance read, or null when unknown.
+/// Kept as its own provider so tests can override it.
+final forecastShareRewardsProvider = FutureProvider<String?>(
+  (ref) => ref.watch(walletEarnedWrfProvider.future),
+);
 
 /// App-bar action that opens the existing [WeatherSocialCard] capture-and-share
 /// flow for a forecast (mobile#254). Purely a call site: the card's

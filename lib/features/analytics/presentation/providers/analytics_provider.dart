@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../collector/data/repositories/collector_repository_impl.dart';
 import '../../../collector/data/services/collector_preferences.dart';
 import '../../../collector/presentation/providers/collector_provider.dart';
+import '../../../wallet/presentation/providers/wallet_earned_provider.dart';
 import '../../data/analytics_calculations.dart';
 import '../../data/analytics_models.dart';
 import '../../../../services/storage/local_db.dart';
@@ -28,6 +29,9 @@ final analyticsSnapshotProvider = FutureProvider<AnalyticsSnapshot>((
       .watch(collectorPreferencesProvider)
       .loadValidationEvents();
 
+  // Total earned comes from the public balance read, never from submit answers.
+  final earned = await ref.watch(walletEarnedWrfProvider.future);
+
   final readings = <AnalyticsReadingSample>[];
   if (!kIsWeb) {
     final db = ref.watch(appDatabaseProvider);
@@ -39,7 +43,7 @@ final analyticsSnapshotProvider = FutureProvider<AnalyticsSnapshot>((
     readings: readings,
     validationEvents: validationEvents,
     syncedSubmissionCount: collectorState.syncedSubmissionCount,
-    earnedRewardWrf: collectorState.earnedRewardWrf,
-    rewardTotalsAvailable: collectorState.rewardTotalsAvailable,
+    earnedRewardWrf: earned == null ? 0 : double.parse(earned),
+    rewardTotalsAvailable: earned != null,
   );
 });

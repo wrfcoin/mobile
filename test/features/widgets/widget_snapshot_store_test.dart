@@ -5,9 +5,12 @@ import 'package:wrfcoin_mobile/features/widgets/data/widget_snapshot_store.dart'
 
 void main() {
   test(
-    'snapshot preserves pending state without inventing an unavailable reward',
+    'snapshot keeps pending state and drops an old cached reward figure',
     () async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        'home_widget_snapshot_v1':
+            '{"rewardTotalsAvailable":true,"earnedRewardWrf":300000000.0}',
+      });
       final store = WidgetSnapshotStore();
 
       await store.write(
@@ -19,14 +22,12 @@ void main() {
         ),
         pendingSyncCount: 2,
         lastSubmissionStatus: 'queued',
-        rewardTotalsAvailable: false,
-        earnedRewardWrf: 45,
       );
 
       final snapshot = await store.read();
       expect(snapshot!['pressureHpa'], 1009.5);
       expect(snapshot['pendingSyncCount'], 2);
-      expect(snapshot['rewardTotalsAvailable'], isFalse);
+      expect(snapshot.containsKey('rewardTotalsAvailable'), isFalse);
       expect(snapshot.containsKey('earnedRewardWrf'), isFalse);
     },
   );

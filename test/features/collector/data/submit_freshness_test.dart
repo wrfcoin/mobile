@@ -107,8 +107,6 @@ void main() {
         expect(result.acceptedCount, 0);
         expect(result.failedCount, 0);
         expect(result.expiredCount, 1);
-        expect(result.rewardTotalsAvailable, isFalse);
-        expect(result.rewardWrfTotal, 0);
       },
     );
   }

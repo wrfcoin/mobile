@@ -3,10 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wrfcoin_mobile/features/analytics/data/analytics_calculations.dart';
-import 'package:wrfcoin_mobile/features/analytics/data/analytics_models.dart';
-import 'package:wrfcoin_mobile/features/analytics/presentation/providers/analytics_provider.dart';
-import 'package:wrfcoin_mobile/features/collector/data/services/collector_preferences.dart';
+import 'package:wrfcoin_mobile/features/wallet/data/models/wallet_model.dart';
+import 'package:wrfcoin_mobile/features/wallet/presentation/providers/wallet_earned_provider.dart';
 import 'package:wrfcoin_mobile/features/social/weather_social_card.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/forecast_model.dart';
 import 'package:wrfcoin_mobile/features/weather/presentation/widgets/forecast_share_action.dart';
@@ -17,53 +15,39 @@ const _forecast = ForecastModel(
   timestamp: '2026-09-29T12:00:00Z',
 );
 
-AnalyticsSnapshot snapshot(bool available, double amount) =>
-    buildAnalyticsSnapshot(
-      readings: const [],
-      validationEvents: [
-        CollectorValidationEvent(
-          timestamp: DateTime.utc(2026, 9, 29),
-          code: 'sync_accepted',
-          message: 'accepted=5',
-        ),
-      ],
-      syncedSubmissionCount: 5,
-      earnedRewardWrf: amount,
-      rewardTotalsAvailable: available,
-    );
-
 void main() {
-  for (final available in [false, true]) {
-    for (final amount in [0.0, 12.34]) {
-      test(
-        'actual share provider: available=$available amount=$amount',
-        () async {
-          final analytics = snapshot(available, amount);
-          expect(analytics.summary.earnedWrf, amount);
-          final container = ProviderContainer(
-            overrides: [
-              analyticsSnapshotProvider.overrideWith((ref) async => analytics),
-            ],
-          );
-          addTearDown(container.dispose);
-          // The share provider body is real; only its upstream snapshot is supplied.
-          final rewards = await container.read(
-            forecastShareRewardsProvider.future,
-          );
-          expect(rewards, available ? amount.toStringAsFixed(2) : isNull);
-          final caption = WeatherSocialCardShareService.buildShareText(
-            forecast: _forecast,
-            weatherRewards: rewards,
-          );
-          expect(
-            caption,
-            contains(
-              available ? '${amount.toStringAsFixed(2)} WRF' : 'Not available',
+  // Real public-balance shape: `earned` is base units with 8 decimals.
+  for (final (earned, shown) in [
+    (null, null),
+    ('0', '0'),
+    ('100000000', '1'),
+    ('1234000000', '12.34'),
+  ]) {
+    test('share text from wallet earned=$earned', () async {
+      final container = ProviderContainer(
+        overrides: [
+          walletEarnedWrfProvider.overrideWith(
+            (ref) async => walletEarnedWrfDisplay(
+              WalletModel(
+                address: 'wrf1wallet',
+                balance: '0',
+                earnedBalanceTotal: earned,
+              ),
             ),
-          );
-        },
+          ),
+        ],
       );
-    }
+      addTearDown(container.dispose);
+      // The share provider body is real; only the wallet read is supplied.
+      final rewards = await container.read(forecastShareRewardsProvider.future);
+      expect(rewards, shown);
+      final caption = WeatherSocialCardShareService.buildShareText(
+        forecast: _forecast,
+        weatherRewards: rewards,
+      );
+      expect(caption, contains(shown == null ? 'Not available' : '$shown WRF'));
+      expect(caption, isNot(contains('100000000')));
+    });
   }
 
   testWidgets(
@@ -80,9 +64,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            analyticsSnapshotProvider.overrideWith(
-              (ref) async => snapshot(false, 0),
-            ),
+            walletEarnedWrfProvider.overrideWith((ref) async => null),
           ],
           child: MaterialApp(
             home: Scaffold(

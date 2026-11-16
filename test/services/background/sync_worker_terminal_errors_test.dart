@@ -252,7 +252,6 @@ void main() {
       expect(delays, isEmpty);
       expect(result.pendingCount, 0);
       expect(result.acceptedCount, 0);
-      expect(result.rewardTotalsAvailable, isFalse);
     },
   );
 
