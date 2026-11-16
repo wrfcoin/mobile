@@ -17,15 +17,11 @@ class WidgetSnapshotStore {
     required SensorReadingModel reading,
     required int pendingSyncCount,
     required String? lastSubmissionStatus,
-    required bool rewardTotalsAvailable,
-    required double earnedRewardWrf,
   }) async {
     await writeCollectionSlice(
       reading: reading,
       pendingSyncCount: pendingSyncCount,
       lastSubmissionStatus: lastSubmissionStatus,
-      rewardTotalsAvailable: rewardTotalsAvailable,
-      earnedRewardWrf: earnedRewardWrf,
     );
   }
 
@@ -33,14 +29,10 @@ class WidgetSnapshotStore {
     SensorReadingModel? reading,
     required int pendingSyncCount,
     required String? lastSubmissionStatus,
-    required bool rewardTotalsAvailable,
-    required double earnedRewardWrf,
   }) async {
     final Map<String, dynamic> patch = {
       'pendingSyncCount': pendingSyncCount,
       'lastSubmissionStatus': lastSubmissionStatus,
-      'rewardTotalsAvailable': rewardTotalsAvailable,
-      if (rewardTotalsAvailable) 'earnedRewardWrf': earnedRewardWrf,
     };
     if (reading != null) {
       patch['pressureHpa'] = reading.pressureHpa;
@@ -81,6 +73,9 @@ class WidgetSnapshotStore {
 
   Future<void> _writePatch(Map<String, dynamic> patch) async {
     final current = await read() ?? {};
+    // Older builds cached a wrong 'WRF earned' figure here; drop it.
+    current.remove('rewardTotalsAvailable');
+    current.remove('earnedRewardWrf');
     current.addAll(patch);
     await _write(current);
   }

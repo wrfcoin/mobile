@@ -260,8 +260,6 @@ void main() {
         expect(store.pendingCount, 0);
         expect(result.failedCount, 0);
         expect(result.acceptedCount, 0);
-        expect(result.rewardTotalsAvailable, isFalse);
-        expect(result.rewardWrfTotal, 0);
       },
     );
   }

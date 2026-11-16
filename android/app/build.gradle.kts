@@ -70,6 +70,15 @@ android {
             // or the release owner's shell. Without it the release is unsigned, and
             // the check below refuses to build it unless the dry run asked for that.
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
+            // A wallet app must never be debuggable: with USB debugging on,
+            // `adb run-as` could read its private files and a debugger could attach.
+            isDebuggable = false
+        }
+        // Flutter's Gradle plugin creates "profile" with initWith(debug), which
+        // makes it debuggable. Profile APKs go to testers' phones, so turn that off.
+        // scripts/tests/test_android_build_types.py and build_profile_apk.sh check this.
+        maybeCreate("profile").apply {
+            isDebuggable = false
         }
     }
 }

@@ -20,8 +20,6 @@ void main() {
           intervalMinutes: 20,
           batteryThreshold: 12,
           syncedSubmissionCount: 7,
-          rewardTotalsAvailable: true,
-          earnedRewardWrf: 3.75,
           lastSubmissionId: 'submission-123',
           lastCommitId: 'c0ffee000000000000000000000000000000000000000000000000004d2a91e7',
           lastSubmissionStatus: 'pending',
@@ -34,8 +32,6 @@ void main() {
       expect(restored.intervalMinutes, 20);
       expect(restored.batteryThreshold, 12);
       expect(restored.syncedSubmissionCount, 7);
-      expect(restored.rewardTotalsAvailable, isTrue);
-      expect(restored.earnedRewardWrf, 3.75);
       expect(restored.lastSubmissionId, 'submission-123');
       expect(
         restored.lastCommitId,
@@ -43,6 +39,23 @@ void main() {
       );
       expect(restored.lastSubmissionStatus, 'pending');
     });
+
+    test(
+      'drops the old summed "WRF settled" figure on the next save',
+      () async {
+        // Older builds saved the sum of submit answers (each the lifetime
+        // total in base units) as WRF. It is never read back and is removed.
+        SharedPreferences.setMockInitialValues(const <String, Object>{
+          'collector.rewardTotalsAvailable': true,
+          'collector.earnedRewardWrf': 300000000.0,
+        });
+        final restored = await preferences.load();
+        await preferences.save(restored);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.containsKey('collector.rewardTotalsAvailable'), isFalse);
+        expect(prefs.containsKey('collector.earnedRewardWrf'), isFalse);
+      },
+    );
 
     test('appends and clears validation events', () async {
       await preferences.appendValidationEvent(

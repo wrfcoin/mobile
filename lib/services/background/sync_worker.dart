@@ -365,8 +365,6 @@ class SyncWorker {
       String? lastSubmissionId;
       String? lastCommitId;
       String? lastSubmissionStatus;
-      var rewardWrfTotal = 0.0;
-      var rewardTotalsAvailable = false;
       var reason = SyncRunReason.success;
       int? rejectedStatus;
       String? rejectedCode;
@@ -624,9 +622,6 @@ class SyncWorker {
         lastCommitId = result.lastCommitId ?? lastCommitId;
         lastSubmissionStatus =
             result.lastSubmissionStatus ?? lastSubmissionStatus;
-        rewardWrfTotal += result.rewardWrfTotal;
-        rewardTotalsAvailable =
-            rewardTotalsAvailable || result.rewardTotalsAvailable;
 
         if (result.refusal != null) {
           // The server's prepare disagreed with the phone's own computation:
@@ -730,8 +725,6 @@ class SyncWorker {
         lastSubmissionId: lastSubmissionId,
         lastCommitId: lastCommitId,
         lastSubmissionStatus: lastSubmissionStatus,
-        rewardWrfTotal: rewardWrfTotal,
-        rewardTotalsAvailable: rewardTotalsAvailable,
         rejectedStatus: rejectedStatus,
         rejectedCode: rejectedCode,
         retryAfterUntil: retryAfterUntil,
@@ -808,8 +801,6 @@ class SyncWorker {
     String? lastSubmissionId,
     String? lastCommitId,
     String? lastSubmissionStatus,
-    double rewardWrfTotal = 0,
-    bool rewardTotalsAvailable = false,
     int? rejectedStatus,
     String? rejectedCode,
     DateTime? retryAfterUntil,
@@ -828,8 +819,6 @@ class SyncWorker {
       lastSubmissionId: lastSubmissionId,
       lastCommitId: lastCommitId,
       lastSubmissionStatus: lastSubmissionStatus,
-      rewardWrfTotal: rewardWrfTotal,
-      rewardTotalsAvailable: rewardTotalsAvailable,
       rejectedStatus: rejectedStatus,
       rejectedCode: rejectedCode,
       retryAfterUntil: retryAfterUntil,
@@ -889,8 +878,6 @@ class SyncRunResult {
   final String? lastSubmissionId;
   final String? lastCommitId;
   final String? lastSubmissionStatus;
-  final double rewardWrfTotal;
-  final bool rewardTotalsAvailable;
 
   /// HTTP status when [reason] is [SyncRunReason.rejected].
   final int? rejectedStatus;
@@ -915,8 +902,6 @@ class SyncRunResult {
     this.lastSubmissionId,
     this.lastCommitId,
     this.lastSubmissionStatus,
-    this.rewardWrfTotal = 0,
-    this.rewardTotalsAvailable = false,
     this.rejectedStatus,
     this.rejectedCode,
     this.retryAfterUntil,
