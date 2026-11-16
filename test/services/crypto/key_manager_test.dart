@@ -5,20 +5,67 @@ import 'package:wrfcoin_mobile/services/crypto/key_manager.dart';
 
 import '../../test_helpers/fakes.dart';
 
-/// Fails the write of one slot, as a secure-storage error would.
+/// Fails the write of one slot, as a secure-storage error would. With
+/// [failClearsAfterFailure] every later clear fails too (a store that broke
+/// for good), so the rollback itself cannot finish.
 class _FailingWriteStorage extends InMemoryKeyValueStorage {
-  _FailingWriteStorage(this.failKey);
+  _FailingWriteStorage(
+    this.failKey, {
+    this.failClears = false,
+    this.failClearsAfterFailure = false,
+    this.failAllAfterFailure = false,
+    this.failOnce = false,
+  });
   final String failKey;
+  final bool failClears;
+  final bool failClearsAfterFailure;
+  final bool failAllAfterFailure;
+  final bool failOnce;
+  var _failed = false;
   final written = <String>[];
   @override
   Future<void> write({required String key, String? value}) async {
-    if (key == failKey && value != null) {
+    if (_failed &&
+        (failAllAfterFailure || (value == null && failClearsAfterFailure))) {
+      throw StateError('secure storage clear failed');
+    }
+    if (key == failKey &&
+        (value != null || failClears) &&
+        !(failOnce && _failed)) {
+      _failed = true;
       throw StateError('secure storage write failed');
     }
     written.add(key);
     return super.write(key: key, value: value);
   }
+
+  /// Puts a value in place without going through the failing [write].
+  void seed(String key, String value) {
+    super.write(key: key, value: value);
+  }
+
+  Future<Map<String, String>> kept() async => {
+    for (final key in const [
+      'wrf_address',
+      'wrf_mnemonic',
+      'wrf_private_key',
+      'wrf_key_scheme',
+      'wrf_login_private_key',
+      'wrf_login_address',
+    ])
+      key: ?await read(key: key),
+  };
 }
+
+/// Every slot storeKeys writes a value into, in order.
+const _valueSlots = [
+  'wrf_mnemonic',
+  'wrf_private_key',
+  'wrf_key_scheme',
+  'wrf_login_private_key',
+  'wrf_login_address',
+  'wrf_address',
+];
 
 void main() {
   group('KeyManager', () {
@@ -46,31 +93,86 @@ void main() {
       expect(await manager.canSignTransactions(), isTrue);
     });
 
-    for (final failKey in const [
-      'wrf_mnemonic',
-      'wrf_private_key',
-      'wrf_key_scheme',
-      'wrf_login_private_key',
-      'wrf_login_address',
-    ]) {
-      test('a failed write of $failKey leaves no wallet', () async {
-        final failing = _FailingWriteStorage(failKey);
+    for (final failKey in _valueSlots) {
+      test(
+        'a failed write of $failKey leaves no wallet and no secrets',
+        () async {
+          final failing = _FailingWriteStorage(failKey);
+          final manager = KeyManager(
+            biometric: BiometricService(client: FakeLocalAuthClient()),
+            storage: failing,
+          );
+          await expectLater(
+            manager.storeKeys(
+              mnemonic: 'seed phrase',
+              privateKey: '0xabc',
+              address: 'wrf1testwallet0000000000',
+            ),
+            throwsA(isA<WalletSaveFailure>()),
+          );
+          expect(await manager.hasWallet(), isFalse);
+          expect(await manager.getAddress(), isNull);
+          // Rolled back: no half wallet's phrase or keys stay on the phone.
+          expect(await failing.kept(), isEmpty);
+        },
+      );
+
+      test(
+        'a failed write of $failKey with a broken rollback still shows no wallet',
+        () async {
+          final failing = _FailingWriteStorage(
+            failKey,
+            failClearsAfterFailure: true,
+          );
+          final manager = KeyManager(
+            biometric: BiometricService(client: FakeLocalAuthClient()),
+            storage: failing,
+          );
+          await expectLater(
+            manager.storeKeys(
+              mnemonic: 'seed phrase',
+              privateKey: '0xabc',
+              address: 'wrf1testwallet0000000000',
+            ),
+            throwsA(isA<WalletSaveFailure>()),
+          );
+          expect(await manager.hasWallet(), isFalse);
+          expect(await manager.getAddress(), isNull);
+        },
+      );
+    }
+
+    test('the error shown to the user is plain and keeps no detail', () {
+      final failure = WalletSaveFailure(StateError('keystore said no'));
+      expect(failure.message, contains('could not be saved'));
+      expect(failure.message, isNot(contains('keystore')));
+    });
+
+    test(
+      'if the old address cannot be cleared, the old wallet stays as it was',
+      () async {
+        final failing = _FailingWriteStorage('wrf_address', failClears: true);
+        await failing.write(key: 'wrf_mnemonic', value: 'old phrase');
+        await failing.write(key: 'wrf_private_key', value: '0xold');
+        // Seed the old address past the failing fake.
+        failing.seed('wrf_address', 'wrf1old');
         final manager = KeyManager(
           biometric: BiometricService(client: FakeLocalAuthClient()),
           storage: failing,
         );
         await expectLater(
           manager.storeKeys(
-            mnemonic: 'seed phrase',
-            privateKey: '0xabc',
-            address: 'wrf1testwallet0000000000',
+            mnemonic: 'new phrase',
+            privateKey: '0xnew',
+            address: 'wrf1new',
           ),
           throwsStateError,
         );
-        expect(await manager.hasWallet(), isFalse);
-        expect(await manager.getAddress(), isNull);
-      });
-    }
+        expect(await manager.getAddress(), 'wrf1old');
+        expect((await failing.kept())['wrf_private_key'], '0xold');
+        expect(await manager.hasWallet(), isTrue);
+      },
+    );
 
     test('the address is written last', () async {
       final recording = _FailingWriteStorage('none');
@@ -86,24 +188,133 @@ void main() {
       expect(recording.written.last, 'wrf_address');
     });
 
-    test('a failed re-import over an old wallet leaves no wallet', () async {
-      final failing = _FailingWriteStorage('wrf_private_key');
-      await failing.write(key: 'wrf_address', value: 'wrf1old');
-      await failing.write(key: 'wrf_private_key', value: null);
+    Future<void> seedOldWallet(_FailingWriteStorage failing) async {
+      failing
+        ..seed('wrf_mnemonic', 'old phrase')
+        ..seed('wrf_private_key', '0xold')
+        ..seed('wrf_key_scheme', KeyManager.canonicalKeyScheme)
+        ..seed('wrf_login_private_key', '0xoldlogin')
+        ..seed('wrf_login_address', 'wrf1old')
+        ..seed('wrf_jwt', 'old.jwt')
+        ..seed('wrf_address', 'wrf1old');
+    }
+
+    Future<void> expectOldWalletIntact(
+      KeyManager manager,
+      _FailingWriteStorage failing,
+    ) async {
+      expect(await manager.hasWallet(), isTrue);
+      expect(await manager.getAddress(), 'wrf1old');
+      expect(await manager.canSignTransactions(), isTrue);
+      expect(await manager.getPrivateKey(), '0xold');
+      expect(await manager.getMnemonic(), 'old phrase');
+      expect(await manager.getLoginPrivateKey(), '0xoldlogin');
+      expect(await manager.getLoginAddress(), 'wrf1old');
+      expect(await failing.read(key: 'wrf_jwt'), 'old.jwt');
+    }
+
+    for (final failKey in _valueSlots) {
+      for (final once in [true, false]) {
+        final kind = once ? 'a one-off' : 'a lasting';
+        test('existing wallet + $kind failure writing $failKey: the old '
+            'wallet is kept', () async {
+          final failing = _FailingWriteStorage(failKey, failOnce: once);
+          await seedOldWallet(failing);
+          final manager = KeyManager(
+            biometric: BiometricService(client: FakeLocalAuthClient()),
+            storage: failing,
+          );
+          await expectLater(
+            manager.storeKeys(
+              mnemonic: 'new phrase',
+              privateKey: '0xnew',
+              address: 'wrf1new',
+            ),
+            throwsA(isA<WalletSaveFailure>()),
+          );
+          if (!once && failKey == 'wrf_address') {
+            // The address slot cannot be written at all, so the cleared
+            // address cannot come back. Every old secret is still there and
+            // nothing new is mixed in; no wallet is shown.
+            expect(await manager.hasWallet(), isFalse);
+            expect(await failing.read(key: 'wrf_mnemonic'), 'old phrase');
+            expect(await failing.read(key: 'wrf_private_key'), '0xold');
+            expect(
+              await failing.read(key: 'wrf_login_private_key'),
+              '0xoldlogin',
+            );
+          } else {
+            await expectOldWalletIntact(manager, failing);
+          }
+        });
+      }
+    }
+
+    test('existing wallet + a store that breaks for good: no mixed wallet is '
+        'shown', () async {
+      // The phrase slot already holds the new phrase when the private key
+      // write fails, and nothing can be written back.
+      final failing = _FailingWriteStorage(
+        'wrf_private_key',
+        failAllAfterFailure: true,
+      );
+      await seedOldWallet(failing);
       final manager = KeyManager(
         biometric: BiometricService(client: FakeLocalAuthClient()),
         storage: failing,
       );
       await expectLater(
         manager.storeKeys(
-          mnemonic: 'seed phrase',
+          mnemonic: 'new phrase',
           privateKey: '0xnew',
           address: 'wrf1new',
         ),
-        throwsStateError,
+        throwsA(isA<WalletSaveFailure>()),
       );
       expect(await manager.getAddress(), isNull);
       expect(await manager.hasWallet(), isFalse);
+      // The old private key was never overwritten and is not deleted.
+      expect(await failing.read(key: 'wrf_private_key'), '0xold');
+    });
+
+    test(
+      'a failed save over a half-saved address puts it back as it was',
+      () async {
+        final failing = _FailingWriteStorage('wrf_private_key');
+        failing.seed('wrf_address', 'wrf1old');
+        final manager = KeyManager(
+          biometric: BiometricService(client: FakeLocalAuthClient()),
+          storage: failing,
+        );
+        await expectLater(
+          manager.storeKeys(
+            mnemonic: 'seed phrase',
+            privateKey: '0xnew',
+            address: 'wrf1new',
+          ),
+          throwsA(isA<WalletSaveFailure>()),
+        );
+        expect(await manager.getAddress(), 'wrf1old');
+        expect(await manager.hasWallet(), isFalse);
+        expect(await failing.read(key: 'wrf_mnemonic'), isNull);
+      },
+    );
+
+    test('a successful save over an old wallet replaces it', () async {
+      final failing = _FailingWriteStorage('none');
+      await seedOldWallet(failing);
+      final manager = KeyManager(
+        biometric: BiometricService(client: FakeLocalAuthClient()),
+        storage: failing,
+      );
+      await manager.storeKeys(
+        mnemonic: 'new phrase',
+        privateKey: '0xnew',
+        address: 'wrf1new',
+      );
+      expect(await manager.getAddress(), 'wrf1new');
+      expect(await manager.getPrivateKey(), '0xnew');
+      expect(await failing.read(key: 'wrf_jwt'), isNull);
     });
 
     test('an address without a private key is not a wallet', () async {
