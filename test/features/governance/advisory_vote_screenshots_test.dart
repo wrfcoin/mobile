@@ -52,10 +52,12 @@ void main() {
         Map<String, dynamic> eligibility, {
         Widget home = const ProposalDetailScreen(proposalId: id),
         String balance = '10900000000',
+        bool resumeAfterUnlock = true,
       }) async {
         LoginAttemptGuard.resetIsolateStateForTest();
+        final auth = FakeLocalAuthClient();
         final keys = KeyManager(
-          biometric: BiometricService(client: FakeLocalAuthClient()),
+          biometric: BiometricService(client: auth),
           storage: InMemoryKeyValueStorage(),
         );
         await keys.storeKeys(
@@ -86,7 +88,10 @@ void main() {
                       chainId: '888',
                       networkId: 'testnet',
                     ),
-                    isForeground: () => true,
+                    isForeground: () =>
+                        resumeAfterUnlock ||
+                        auth.authenticateBiometricOnlyCalls.isEmpty,
+                    resumeTimeout: const Duration(milliseconds: 300),
                   ),
                 ),
               ),
@@ -192,6 +197,24 @@ void main() {
       await tester.tap(find.byKey(const Key('sheet-confirm')));
       await tester.pumpAndSettle();
       await shot('propose-refused');
+
+      // Propose: the app was not back on screen after the unlock.
+      await show(
+        eligibleJson(),
+        home: const AdvisoryProposeScreen(),
+        resumeAfterUnlock: false,
+      );
+      await tester.enterText(find.byKey(const Key('advisory-title')), 'T');
+      await tester.enterText(find.byKey(const Key('advisory-summary')), 'S');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('advisory-propose-review')));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('sheet-confirm')));
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+      });
+      await tester.pumpAndSettle();
+      await shot('propose-not-on-screen');
     }, skip: fonts == null);
   }
 }
