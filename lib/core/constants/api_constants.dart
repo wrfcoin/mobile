@@ -245,6 +245,17 @@ class ApiConstants {
   static String advisoryProposal(String id) =>
       '/governance/advisory/proposals/$id';
 
+  // The advisory relay (backend governance-routes.ts; edge
+  // public_onboarding.caddy). The edge admits eligibility only with exactly
+  // `address=0x<40 lowercase hex>`, the
+  // nonce read with a lowercase address and no query, and the POST only with
+  // `Content-Type: application/json` (no charset) and no query.
+  static const String advisoryActions = '/governance/advisory/actions';
+  static String advisoryEligibility(String id) =>
+      '/governance/advisory/proposals/$id/eligibility';
+  static String advisoryNonce(String address) =>
+      '/governance/advisory/accounts/$address/nonce';
+
   // Oracle / Sensor
   static const String oracleSubmitData = '/oracle/submit-data';
   static const String oracleSubmitDataPrepare = '/oracle/submit-data/prepare';

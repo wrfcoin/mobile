@@ -9,6 +9,7 @@ import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../settings/presentation/widgets/settings_gear_button.dart';
 import '../providers/proposals_provider.dart';
 import '../widgets/advisory_proposal_card.dart';
+import 'advisory_propose_screen.dart';
 
 /// The governance tab: chain 888's advisory proposals.
 class ProposalListScreen extends ConsumerWidget {
@@ -65,6 +66,22 @@ class ProposalListScreen extends ConsumerWidget {
                 'so results count wallets, not people.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
+              if (list.featureActive) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.tonalIcon(
+                    key: const Key('advisory-new-proposal'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('New proposal'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AdvisoryProposeScreen(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               if (list.incomplete)
                 const Padding(
@@ -107,8 +124,8 @@ class _EmptyState extends StatelessWidget {
         padding: const EdgeInsets.all(32),
         child: Text(
           featureActive
-              ? 'No advisory proposals yet. Proposals are made with the '
-                    'WRFCoin CLI or on wrfcoin.com for now.'
+              ? 'No advisory proposals yet. When one is proposed it shows '
+                    'here, and you can vote on it from the app.'
               : "Governance isn't active on this network yet, so there are "
                     'no proposals to show.',
           textAlign: TextAlign.center,

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../services/crypto/advisory_action_signing.dart';
 import '../../data/models/advisory_proposal.dart';
+import '../../data/models/advisory_vote.dart';
 import '../../data/repositories/governance_repository_impl.dart';
 
 /// The advisory proposal list (chain 888). The older `/governance/proposals`
@@ -23,4 +25,20 @@ final advisoryProposalProvider =
           .read(governanceRepositoryProvider)
           .getAdvisoryProposal(id);
       return result.fold((failure) => throw failure, (detail) => detail);
+    }, retry: (_, _) => null);
+
+/// The app wallet that would vote (address and whether it can sign). Reads
+/// storage only; never prompts for an unlock.
+final advisoryVoterProvider = FutureProvider.autoDispose<AdvisoryVoter>(
+  (ref) => ref.read(governanceRepositoryProvider).advisoryVoter(),
+  retry: (_, _) => null,
+);
+
+/// Whether that wallet may vote on one proposal: (proposal id, address).
+final advisoryEligibilityProvider = FutureProvider.autoDispose
+    .family<AdvisoryEligibility, (String, String)>((ref, key) async {
+      final result = await ref
+          .read(governanceRepositoryProvider)
+          .getAdvisoryEligibility(key.$1, key.$2);
+      return result.fold((failure) => throw failure, (e) => e);
     }, retry: (_, _) => null);

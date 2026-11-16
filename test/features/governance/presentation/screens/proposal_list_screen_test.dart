@@ -72,15 +72,14 @@ void main() {
     expect(pushed, 'adv-a75dae543f5f9e16');
   });
 
-  testWidgets('empty list while active says how proposals are made', (
-    tester,
-  ) async {
+  testWidgets('empty list while active: no website pointer', (tester) async {
     await tester.pumpWidget(_app(FakeAdvisoryApi(const [])));
     await tester.pumpAndSettle();
+    expect(find.textContaining('wrfcoin.com'), findsNothing);
     expect(
       find.text(
-        'No advisory proposals yet. Proposals are made with the WRFCoin CLI '
-        'or on wrfcoin.com for now.',
+        'No advisory proposals yet. When one is proposed it shows here, and '
+        'you can vote on it from the app.',
       ),
       findsOneWidget,
     );
