@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/failures.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -8,23 +7,20 @@ import '../../../../core/widgets/app_error_widget.dart';
 import '../../data/models/advisory_proposal.dart';
 import '../providers/proposals_provider.dart';
 import '../widgets/advisory_proposal_card.dart';
-
-/// Opens a URL in the browser; [launchUrl] outside tests.
-typedef UrlOpener = Future<bool> Function(Uri url, {LaunchMode mode});
+import '../widgets/advisory_vote_panel.dart';
 
 /// One advisory proposal, read fresh by id. [initial] (the list's copy)
-/// shows at once while the fresh read loads, and stays if it fails.
+/// shows at once while the fresh read loads, and stays if it fails. An open
+/// proposal gets the in-app vote panel (signed with the app's own wallet key).
 class ProposalDetailScreen extends ConsumerWidget {
   const ProposalDetailScreen({
     super.key,
     required this.proposalId,
     this.initial,
-    this.openUrl = launchUrl,
   });
 
   final String proposalId;
   final AdvisoryProposal? initial;
-  final UrlOpener openUrl;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,7 +49,6 @@ class ProposalDetailScreen extends ConsumerWidget {
                 proposal: proposal,
                 observedAtHeight: observed,
                 stale: detail.hasError,
-                openUrl: openUrl,
               ),
             ),
     );
@@ -65,13 +60,11 @@ class _Body extends StatelessWidget {
     required this.proposal,
     required this.observedAtHeight,
     required this.stale,
-    required this.openUrl,
   });
 
   final AdvisoryProposal proposal;
   final int? observedAtHeight;
   final bool stale;
-  final UrlOpener openUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +156,10 @@ class _Body extends StatelessWidget {
             ),
           ),
         ),
+        if (p.isActive) ...[
+          const SizedBox(height: 12),
+          AdvisoryVotePanel(proposal: p),
+        ],
         const SizedBox(height: 12),
         Card(
           child: Padding(
@@ -173,38 +170,7 @@ class _Body extends StatelessWidget {
             ),
           ),
         ),
-        if (p.isActive) ...[
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Vote on wrfcoin.com'),
-            onPressed: () => _openVotePage(context),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "The app can't sign advisory votes yet. Vote with your wallet on "
-            'the website.',
-            textAlign: TextAlign.center,
-            style: muted,
-          ),
-        ],
       ],
     );
-  }
-
-  Future<void> _openVotePage(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final uri = Uri.parse(advisoryVoteWebUrl);
-    var opened = false;
-    try {
-      opened = await openUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (error) {
-      debugPrint('Vote page did not open: $error');
-    }
-    if (!opened) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Open $advisoryVoteWebUrl to vote.')),
-      );
-    }
   }
 }

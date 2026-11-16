@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:wrfcoin_mobile/features/governance/data/models/advisory_proposal.dart';
 import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_detail_screen.dart';
@@ -10,24 +9,14 @@ import '../../fixtures/advisory_api.dart';
 
 const _id = 'adv-a75dae543f5f9e16';
 
-Widget _app(
-  FakeAdvisoryApi api, {
-  AdvisoryProposal? initial,
-  UrlOpener? openUrl,
-}) => ProviderScope(
+Widget _app(FakeAdvisoryApi api, {AdvisoryProposal? initial}) => ProviderScope(
   overrides: [
     governanceRepositoryProvider.overrideWithValue(
       GovernanceRepository(api.dio()),
     ),
   ],
   child: MaterialApp(
-    home: openUrl == null
-        ? ProposalDetailScreen(proposalId: _id, initial: initial)
-        : ProposalDetailScreen(
-            proposalId: _id,
-            initial: initial,
-            openUrl: openUrl,
-          ),
+    home: ProposalDetailScreen(proposalId: _id, initial: initial),
   ),
 );
 
@@ -35,6 +24,11 @@ void main() {
   testWidgets('reads the proposal by id and shows votes, deadline, deposit', (
     tester,
   ) async {
+    // Tall enough that the whole list (vote panel, then deposit) is built.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = FakeAdvisoryApi([welcomeProposalJson()]);
     await tester.pumpWidget(_app(api));
     await tester.pumpAndSettle();
@@ -72,28 +66,24 @@ void main() {
     );
   });
 
-  testWidgets('"Vote on wrfcoin.com" opens the website and posts nothing', (
+  testWidgets('no website vote link: nothing that could ask for words', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = FakeAdvisoryApi([welcomeProposalJson()]);
-    final opened = <Uri>[];
-    await tester.pumpWidget(
-      _app(
-        api,
-        openUrl: (url, {mode = LaunchMode.platformDefault}) async {
-          opened.add(url);
-          return true;
-        },
-      ),
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('wrfcoin.com'), findsNothing);
+    // Without a wallet signer the panel says so, and nothing is posted.
+    expect(find.text("This wallet type can't vote yet."), findsNothing);
+    expect(
+      find.text('Create or import a wallet in the app to vote.'),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Vote on wrfcoin.com'), 200);
-    await tester.tap(find.text('Vote on wrfcoin.com'));
-    await tester.pumpAndSettle();
-
-    expect(opened, [Uri.parse('https://wrfcoin.com/governance/public')]);
     expect(api.calls.where((c) => !c.startsWith('GET ')), isEmpty);
-    expect(api.calls.where((c) => c.contains('/vote')), isEmpty);
   });
 
   testWidgets('a decided proposal has no vote button', (tester) async {
@@ -113,7 +103,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('TOO FEW VOTES'), findsOneWidget);
     expect(find.text('Decided at block 28149'), findsOneWidget);
-    expect(find.text('Vote on wrfcoin.com'), findsNothing);
+    expect(find.byKey(const Key('advisory-vote-panel')), findsNothing);
   });
 
   testWidgets('read failure with nothing to show: an error with retry', (
@@ -123,7 +113,7 @@ void main() {
     await tester.pumpWidget(_app(api));
     await tester.pumpAndSettle();
     expect(find.text('Retry'), findsOneWidget);
-    expect(find.text('Vote on wrfcoin.com'), findsNothing);
+    expect(find.byKey(const Key('advisory-vote-panel')), findsNothing);
   });
 
   testWidgets('read failure with the list copy: keeps it and says so', (

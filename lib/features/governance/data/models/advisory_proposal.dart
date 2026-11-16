@@ -166,11 +166,6 @@ String formatApproxDuration(Duration d) {
   return '$minutes min';
 }
 
-/// Where a person votes until the app signs advisory votes itself. The
-/// website's vote buttons are on the list page; its `/governance/public/:id`
-/// page reads the older proposal list and does not know advisory ids.
-const String advisoryVoteWebUrl = 'https://wrfcoin.com/governance/public';
-
 /// The website's deposit note (frontend AdvisoryActions `DEPOSIT_NOTE`),
 /// with the amount and quorum taken from the proposal when it has them.
 String advisoryDepositNote(AdvisoryProposal p) {

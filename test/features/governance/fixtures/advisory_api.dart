@@ -46,6 +46,52 @@ const Map<String, dynamic> limitsJson = <String, dynamic>{
   'voting_period_blocks': 1120,
 };
 
+/// The relay's eligibility answer for a wallet that may vote (nonce 7).
+Map<String, dynamic> eligibleJson({int? nextNonce = 7}) => <String, dynamic>{
+  'votingOpen': true,
+  'eligible': true,
+  'voted': null,
+  'canVote': true,
+  'reason': null,
+  'nextNonce': nextNonce,
+};
+
+/// Live wording from core4's eligibility route (2026-11-15 probe).
+Map<String, dynamic> notEligibleJson() => <String, dynamic>{
+  'votingOpen': true,
+  'eligible': false,
+  'voted': null,
+  'canVote': false,
+  'reason':
+      'this wallet held under 1 WRF spendable when the proposal was created',
+  'nextNonce': null,
+};
+
+Map<String, dynamic> votedJson(String choice) => <String, dynamic>{
+  'votingOpen': true,
+  'eligible': true,
+  'voted': choice,
+  'canVote': false,
+  'reason': 'this wallet already voted',
+  'nextNonce': 8,
+};
+
+Map<String, dynamic> closedJson() => <String, dynamic>{
+  'votingOpen': false,
+  'eligible': true,
+  'voted': null,
+  'canVote': false,
+  'reason': 'voting has closed',
+  'nextNonce': 7,
+};
+
+/// A relay or node error body: `{success:false, error:{code, message}}`.
+Map<String, dynamic> errorBody(String code, String message) =>
+    <String, dynamic>{
+      'success': false,
+      'error': <String, dynamic>{'code': code, 'message': message},
+    };
+
 /// Serves [proposals] in pages the way the backend does. Records every
 /// request as "METHOD path?query".
 class FakeAdvisoryApi {
@@ -57,7 +103,14 @@ class FakeAdvisoryApi {
     this.alwaysMore = false,
     this.listStatus,
     this.detailStatus,
-  });
+    Map<String, dynamic>? eligibility,
+    this.eligibilityStatus,
+    this.actionStatus = 202,
+    this.actionBody,
+    this.actionTransportError,
+    this.nonce = 3,
+    this.balance = '10900000000',
+  }) : eligibility = eligibility ?? eligibleJson();
 
   final List<Map<String, dynamic>> proposals;
   final bool featureActive;
@@ -69,6 +122,28 @@ class FakeAdvisoryApi {
   final int? listStatus;
   final int? detailStatus;
   final List<String> calls = <String>[];
+
+  /// Eligibility answer (the relay's camelCase shape) for any address.
+  Map<String, dynamic> eligibility;
+  final int? eligibilityStatus;
+
+  /// The relay's answer to POST /governance/advisory/actions.
+  int actionStatus;
+  Object? actionBody;
+
+  /// When set, the POST fails with this transport error and no response
+  /// (after the body was recorded as posted).
+  DioExceptionType? actionTransportError;
+
+  /// The account nonce the relay reports (GET .../accounts/:a/nonce).
+  int nonce;
+
+  /// The public balance read (base units), or null for a 404 (switched off).
+  String? balance;
+
+  /// Bodies and Content-Type headers of every POST to the relay.
+  final List<Map<String, dynamic>> posted = <Map<String, dynamic>>[];
+  final List<String?> postedContentTypes = <String?>[];
 
   Dio dio() {
     final dio = Dio(BaseOptions(baseUrl: 'https://wrfcoin.com/api'));
@@ -164,6 +239,121 @@ class FakeAdvisoryApi {
                 },
               ),
             );
+            return;
+          }
+          if (RegExp(
+            r'^/api/governance/advisory/proposals/adv-[0-9a-f]{16}/eligibility$',
+          ).hasMatch(path)) {
+            // The edge admits exactly `address=0x<40 lowercase hex>`.
+            if (!RegExp(r'^address=0x[0-9a-f]{40}$').hasMatch(q) ||
+                eligibilityStatus != null) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.badResponse,
+                  response: Response(
+                    requestOptions: options,
+                    statusCode: eligibilityStatus ?? 404,
+                    data: {'success': false, 'error': 'Not found'},
+                  ),
+                ),
+              );
+              return;
+            }
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'success': true,
+                  'proposalId': path.split('/')[5],
+                  'address': options.queryParameters['address'],
+                  'observedAtHeight': observedAtHeight,
+                  ...eligibility,
+                },
+              ),
+            );
+            return;
+          }
+          final nonceMatch = RegExp(
+            r'^/api/governance/advisory/accounts/(0x[0-9a-f]{40})/nonce$',
+          ).firstMatch(path);
+          if (nonceMatch != null && q.isEmpty) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'success': true,
+                  'address': nonceMatch.group(1),
+                  'nonce': nonce,
+                },
+              ),
+            );
+            return;
+          }
+          final balanceMatch = RegExp(r'^/api/public/balance/(0x[0-9a-f]{40})$')
+              .firstMatch(path);
+          if (balanceMatch != null && balance != null) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{
+                  'address': balanceMatch.group(1),
+                  'balance': balance,
+                  'height': observedAtHeight,
+                  'earned': '0',
+                },
+              ),
+            );
+            return;
+          }
+          if (options.method == 'POST' &&
+              path == '/api/governance/advisory/actions') {
+            posted.add(Map<String, dynamic>.from(options.data as Map));
+            postedContentTypes.add(options.contentType);
+            final transport = actionTransportError;
+            if (transport != null) {
+              handler.reject(
+                DioException(requestOptions: options, type: transport),
+              );
+              return;
+            }
+            final body =
+                actionBody ??
+                <String, dynamic>{
+                  'success': true,
+                  'txId': 'ab' * 32,
+                  'proposalId':
+                      (options.data as Map)['action'] is Map &&
+                          ((options.data as Map)['action'] as Map).containsKey(
+                            'propose',
+                          )
+                      ? 'adv-bb41213ed8b391ca'
+                      : null,
+                  'nonce': (options.data as Map)['nonce'],
+                  'action': ((options.data as Map)['action'] as Map).keys.first,
+                  'signer': 'ed25519',
+                  'status': 'submitted',
+                  'included': false,
+                };
+            final response = Response(
+              requestOptions: options,
+              statusCode: actionStatus,
+              data: body,
+            );
+            if (actionStatus >= 400) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.badResponse,
+                  response: response,
+                ),
+              );
+            } else {
+              handler.resolve(response);
+            }
             return;
           }
           handler.reject(
