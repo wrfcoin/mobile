@@ -11,6 +11,7 @@ import '../../../../services/api/api_response.dart';
 import '../../../../services/crypto/governance_vote_signing.dart';
 import '../../../../services/crypto/key_manager.dart';
 import '../../../../services/observability/app_logger.dart';
+import '../models/advisory_proposal.dart';
 import '../models/proposal_model.dart';
 
 final governanceRepositoryProvider = Provider<GovernanceRepository>((ref) {
@@ -122,6 +123,131 @@ class GovernanceRepository {
     );
   }
 
+  /// Reads every page of the advisory list (chain 888 `advisory_governance`,
+  /// `GET /governance/advisory/proposals?limit=20&offset=n`, the same
+  /// parameters and order as the website, which the public edge requires).
+  /// Bounded like [getProposals]: stops on `hasMore: false`, at `total`, on a
+  /// short, empty or all-repeat page, or after [maxProposalPages]. A failed
+  /// later page keeps what was read and marks the list incomplete; only a
+  /// failed first page is an error.
+  Future<Either<Failure, AdvisoryProposalList>> getAdvisoryProposals() async {
+    final proposals = <AdvisoryProposal>[];
+    final seenIds = <String>{};
+    var featureActive = false;
+    int? observedAtHeight;
+    int? total;
+    var incomplete = false;
+    var offset = 0;
+    for (var page = 0; page < maxProposalPages; page++) {
+      final Map<String, dynamic> payload;
+      try {
+        final response = await _dio.get(
+          ApiConstants.advisoryProposals,
+          queryParameters: <String, dynamic>{
+            'limit': proposalPageSize,
+            'offset': offset,
+          },
+        );
+        final data = response.data;
+        if (data is! Map || data['proposals'] is! List) {
+          throw const FormatException('Unexpected advisory proposal list');
+        }
+        payload = Map<String, dynamic>.from(data);
+      } on DioException catch (e) {
+        if (page == 0) return Left(DioErrorMapper.map(e));
+        _logPageFailure(offset, e);
+        incomplete = true;
+        break;
+      } catch (e) {
+        if (page == 0) {
+          return const Left(
+            ServerFailure(
+              'The governance list came back in an unexpected form.',
+            ),
+          );
+        }
+        _logPageFailure(offset, e);
+        incomplete = true;
+        break;
+      }
+      if (page == 0) {
+        featureActive = payload['featureActive'] == true;
+        final h = payload['observedAtHeight'];
+        observedAtHeight = h is int ? h : null;
+      }
+      final t = payload['total'];
+      if (t is int && t >= 0) total = t;
+      final list = payload['proposals'] as List<dynamic>;
+      var repeats = 0;
+      for (var i = 0; i < list.length; i++) {
+        try {
+          final proposal = AdvisoryProposal.fromJson(list[i]);
+          if (seenIds.add(proposal.id)) {
+            proposals.add(proposal);
+          } else {
+            repeats++;
+          }
+        } on Object catch (e) {
+          _logger?.warning(
+            'governance_advisory_proposal_skipped',
+            fields: <String, dynamic>{
+              'index': offset + i,
+              'error': e.toString(),
+            },
+          );
+        }
+      }
+      final hasMore = payload['hasMore'];
+      offset += list.length;
+      if (list.isEmpty || repeats == list.length) break;
+      if (hasMore is bool) {
+        if (!hasMore) break;
+      } else if (t is int) {
+        if (offset >= t) break;
+      } else if (list.length < proposalPageSize) {
+        break;
+      }
+    }
+    return Right(
+      AdvisoryProposalList(
+        proposals: proposals,
+        featureActive: featureActive,
+        observedAtHeight: observedAtHeight,
+        total: total,
+        incomplete: incomplete,
+      ),
+    );
+  }
+
+  /// One advisory proposal by id (`GET /governance/advisory/proposals/:id`).
+  Future<Either<Failure, AdvisoryProposalDetail>> getAdvisoryProposal(
+    String id,
+  ) async {
+    if (!isAdvisoryProposalId(id)) {
+      return const Left(ValidationFailure('Not an advisory proposal id.'));
+    }
+    try {
+      final response = await _dio.get(ApiConstants.advisoryProposal(id));
+      final data = response.data;
+      if (data is! Map) {
+        throw const FormatException('Unexpected advisory proposal');
+      }
+      final h = data['observedAtHeight'];
+      return Right(
+        AdvisoryProposalDetail(
+          proposal: AdvisoryProposal.fromJson(data['proposal']),
+          observedAtHeight: h is int ? h : null,
+        ),
+      );
+    } on DioException catch (e) {
+      return Left(DioErrorMapper.map(e));
+    } catch (e) {
+      return const Left(
+        ServerFailure('The proposal came back in an unexpected form.'),
+      );
+    }
+  }
+
   Future<Either<Failure, ProposalModel>> getProposal(String id) async {
     try {
       final response = await _dio.get(ApiConstants.proposal(id));
@@ -141,6 +267,13 @@ class GovernanceRepository {
     required String voteType,
     String? reason,
   }) async {
+    // Advisory proposals are voted with a signed advisory action, never
+    // through this older route (integer ids).
+    if (isAdvisoryProposalId(proposalId)) {
+      return const Left(
+        ValidationFailure('Vote on advisory proposals at wrfcoin.com.'),
+      );
+    }
     try {
       final choice = voteType.toUpperCase();
       if (choice != 'FOR' && choice != 'AGAINST') {

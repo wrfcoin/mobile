@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/core/theme/app_theme.dart';
-import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
-import 'package:wrfcoin_mobile/features/governance/presentation/widgets/proposal_card.dart';
+import 'package:wrfcoin_mobile/features/governance/data/models/advisory_proposal.dart';
+import 'package:wrfcoin_mobile/features/governance/presentation/widgets/advisory_proposal_card.dart';
 
 // Renders with SCREENSHOT_FONTS set to Flutter's bin/cache/artifacts/material_fonts:
 // flutter test --update-goldens test/core/theme/light_mode_screenshots_test.dart
@@ -42,13 +42,19 @@ void main() {
             padding: EdgeInsets.all(16),
             child: Align(
               alignment: Alignment.topCenter,
-              child: ProposalCard(
-                proposal: ProposalModel(
-                  id: 'synthetic-1',
+              child: AdvisoryProposalCard(
+                proposal: AdvisoryProposal(
+                  id: 'adv-0000000000000001',
                   title: 'Sample proposal',
-                  description: 'Synthetic text for this screenshot.',
+                  summary: 'Synthetic text for this screenshot.',
                   status: 'active',
+                  yesVotes: 1,
+                  noVotes: 0,
+                  quorumMinVotes: 3,
+                  approvalPercent: 51,
+                  votingDeadline: 28148,
                 ),
+                observedAtHeight: 27412,
               ),
             ),
           ),

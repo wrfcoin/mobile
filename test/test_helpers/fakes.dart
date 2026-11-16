@@ -17,6 +17,7 @@ import 'package:wrfcoin_mobile/features/collector/data/repositories/collector_re
 import 'package:wrfcoin_mobile/features/gamification/data/models/achievement_model.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/models/leaderboard_entry_model.dart';
 import 'package:wrfcoin_mobile/features/gamification/data/repositories/gamification_repository_impl.dart';
+import 'package:wrfcoin_mobile/features/governance/data/models/advisory_proposal.dart';
 import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
 import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/weather/data/models/alert_model.dart';
@@ -548,10 +549,36 @@ class FakeGovernanceRepository extends GovernanceRepository {
   FakeGovernanceRepository({
     this.proposals = const <ProposalModel>[],
     this.treasury = const <String, dynamic>{'balance': '1000'},
+    this.advisory = const AdvisoryProposalList(
+      proposals: <AdvisoryProposal>[],
+      featureActive: true,
+    ),
   }) : super(Dio());
 
   final List<ProposalModel> proposals;
   final Map<String, dynamic> treasury;
+  final AdvisoryProposalList advisory;
+
+  @override
+  Future<Either<Failure, AdvisoryProposalList>> getAdvisoryProposals() async =>
+      Right(advisory);
+
+  @override
+  Future<Either<Failure, AdvisoryProposalDetail>> getAdvisoryProposal(
+    String id,
+  ) async {
+    for (final p in advisory.proposals) {
+      if (p.id == id) {
+        return Right(
+          AdvisoryProposalDetail(
+            proposal: p,
+            observedAtHeight: advisory.observedAtHeight,
+          ),
+        );
+      }
+    }
+    return const Left(ServerFailure('no advisory proposal with this id'));
+  }
 
   @override
   Future<Either<Failure, List<ProposalModel>>> getProposals() async {

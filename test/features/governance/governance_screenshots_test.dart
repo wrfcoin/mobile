@@ -7,21 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
 import 'package:wrfcoin_mobile/core/theme/app_theme.dart';
 import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
-import 'package:wrfcoin_mobile/features/governance/presentation/providers/proposals_provider.dart';
+import 'package:wrfcoin_mobile/features/governance/data/models/advisory_proposal.dart';
+import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_detail_screen.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_list_screen.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/screens/vote_screen.dart';
 
 import '../../test_helpers/fakes.dart';
 
-class _EmptyProposals extends ProposalsNotifier {
-  @override
-  Future<List<ProposalModel>> build() async => const [];
-}
-
 // Renders with SCREENSHOT_FONTS set to Flutter's bin/cache/artifacts/material_fonts:
 // flutter test --update-goldens test/features/governance/governance_screenshots_test.dart
-// The proposal is a synthetic fixture.
+// The proposals are synthetic fixtures in the live response shape.
 void main() {
   final fonts = Platform.environment['SCREENSHOT_FONTS'];
 
@@ -34,6 +30,52 @@ void main() {
       );
     await loader.load();
   }
+
+  const advisory = AdvisoryProposalList(
+    featureActive: true,
+    observedAtHeight: 27412,
+    total: 3,
+    proposals: [
+      AdvisoryProposal(
+        id: 'adv-0000000000000001',
+        title: 'Sample advisory proposal',
+        summary: 'Synthetic text: should stations report every 10 minutes?',
+        status: 'active',
+        proposer: '0x0000000000000000000000000000000000000001',
+        createdAtBlock: 27028,
+        votingDeadline: 28148,
+        yesVotes: 1,
+        noVotes: 0,
+        eligibleCount: 14,
+        quorumMinVotes: 3,
+        approvalPercent: 51,
+        depositHeld: '100000000',
+      ),
+      AdvisoryProposal(
+        id: 'adv-0000000000000002',
+        title: 'Synthetic passed proposal',
+        summary: 'Synthetic text for this screenshot.',
+        status: 'passed',
+        votingDeadline: 26000,
+        finalizedAtBlock: 26001,
+        yesVotes: 4,
+        noVotes: 1,
+        quorumMinVotes: 3,
+        approvalPercent: 51,
+      ),
+      AdvisoryProposal(
+        id: 'adv-0000000000000003',
+        title: 'Synthetic proposal with too few votes',
+        status: 'failed_quorum',
+        votingDeadline: 25000,
+        finalizedAtBlock: 25001,
+        yesVotes: 1,
+        noVotes: 0,
+        quorumMinVotes: 3,
+        approvalPercent: 51,
+      ),
+    ],
+  );
 
   const proposal = ProposalModel(
     id: 'synthetic-1',
@@ -57,7 +99,9 @@ void main() {
           appPreferencesStoreProvider.overrideWithValue(
             TestAppPreferencesStore(),
           ),
-          proposalsProvider.overrideWith(_EmptyProposals.new),
+          governanceRepositoryProvider.overrideWithValue(
+            FakeGovernanceRepository(advisory: advisory),
+          ),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -72,7 +116,10 @@ void main() {
       );
       final screens = {
         'list': const ProposalListScreen(),
-        'detail': const ProposalDetailScreen(proposal: proposal),
+        'detail': ProposalDetailScreen(
+          proposalId: advisory.proposals.first.id,
+          initial: advisory.proposals.first,
+        ),
         'vote': const VoteScreen(proposal: proposal),
       };
       for (final MapEntry(key: screen, value: widget) in screens.entries) {

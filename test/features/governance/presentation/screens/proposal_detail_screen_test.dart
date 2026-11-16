@@ -1,120 +1,145 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wrfcoin_mobile/core/preferences/app_preferences.dart';
-import 'package:wrfcoin_mobile/features/governance/data/models/proposal_model.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:wrfcoin_mobile/features/governance/data/models/advisory_proposal.dart';
+import 'package:wrfcoin_mobile/features/governance/data/repositories/governance_repository_impl.dart';
 import 'package:wrfcoin_mobile/features/governance/presentation/screens/proposal_detail_screen.dart';
 
-import '../../../../test_helpers/fakes.dart';
+import '../../fixtures/advisory_api.dart';
+
+const _id = 'adv-a75dae543f5f9e16';
+
+Widget _app(
+  FakeAdvisoryApi api, {
+  AdvisoryProposal? initial,
+  UrlOpener? openUrl,
+}) => ProviderScope(
+  overrides: [
+    governanceRepositoryProvider.overrideWithValue(
+      GovernanceRepository(api.dio()),
+    ),
+  ],
+  child: MaterialApp(
+    home: openUrl == null
+        ? ProposalDetailScreen(proposalId: _id, initial: initial)
+        : ProposalDetailScreen(
+            proposalId: _id,
+            initial: initial,
+            openUrl: openUrl,
+          ),
+  ),
+);
 
 void main() {
-  const activeProposal = ProposalModel(
-    id: 'p1',
-    title: 'Upgrade Block Time',
-    description: 'Reduce target block time from 10s to 6s.',
-    proposalType: 'platform_upgrade',
-    status: 'active',
-    votesFor: 70,
-    votesAgainst: 20,
-    votesAbstain: 10,
-  );
-
-  const passedProposal = ProposalModel(
-    id: 'p2',
-    title: 'Treasury Grant Q1',
-    description: 'Allocate 50k WRF for development.',
-    proposalType: 'treasury_spending',
-    status: 'passed',
-    votesFor: 80,
-    votesAgainst: 10,
-    votesAbstain: 5,
-  );
-
-  const rejectedProposal = ProposalModel(
-    id: 'p3',
-    title: 'Deprecate Legacy Module',
-    description: 'Remove the old PoW consensus module.',
-    proposalType: 'module_deprecation',
-    status: 'rejected',
-    votesFor: 10,
-    votesAgainst: 90,
-    votesAbstain: 0,
-  );
-
-  Widget buildWidget(ProposalModel proposal) {
-    return ProviderScope(
-      overrides: [
-        appPreferencesStoreProvider.overrideWithValue(
-          TestAppPreferencesStore(),
-        ),
-      ],
-      child: MaterialApp(home: ProposalDetailScreen(proposal: proposal)),
-    );
-  }
-
-  testWidgets('renders title, description, and vote bars', (tester) async {
-    await tester.pumpWidget(buildWidget(activeProposal));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Upgrade Block Time'), findsWidgets);
-    expect(
-      find.text('Reduce target block time from 10s to 6s.'),
-      findsOneWidget,
-    );
-    expect(find.text('For'), findsOneWidget);
-    expect(find.text('Against'), findsOneWidget);
-    expect(find.text('Abstain'), findsNothing);
-    expect(find.text('Total: 90 votes'), findsOneWidget);
-  });
-
-  testWidgets('shows vote percentages for each option', (tester) async {
-    await tester.pumpWidget(buildWidget(activeProposal));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('70 (77.8%)'), findsOneWidget);
-    expect(find.text('20 (22.2%)'), findsOneWidget);
-  });
-
-  testWidgets('an active proposal says voting is closed, with no vote action', (
+  testWidgets('reads the proposal by id and shows votes, deadline, deposit', (
     tester,
   ) async {
-    await tester.pumpWidget(buildWidget(activeProposal));
-    await tester.pump(const Duration(milliseconds: 100));
+    final api = FakeAdvisoryApi([welcomeProposalJson()]);
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
 
-    expect(find.text("Voting isn't open on testnet yet"), findsOneWidget);
-    expect(find.text('Cast Your Vote'), findsNothing);
-    expect(find.byType(ElevatedButton), findsNothing);
-    expect(find.text('ACTIVE'), findsOneWidget);
-  });
-
-  testWidgets('a passed proposal shows no voting notice', (tester) async {
-    await tester.pumpWidget(buildWidget(passedProposal));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text("Voting isn't open on testnet yet"), findsNothing);
-    expect(find.text('PASSED'), findsOneWidget);
-  });
-
-  testWidgets('a rejected proposal shows no voting notice', (tester) async {
-    await tester.pumpWidget(buildWidget(rejectedProposal));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text("Voting isn't open on testnet yet"), findsNothing);
-    expect(find.text('REJECTED'), findsOneWidget);
-  });
-
-  testWidgets('shows zero-vote edge case with 0% bars', (tester) async {
-    const zeroVotes = ProposalModel(
-      id: 'p0',
-      title: 'New Proposal',
-      description: 'No votes yet.',
-      status: 'active',
+    expect(api.calls, ['GET /api/governance/advisory/proposals/$_id']);
+    expect(find.text('Welcome to Wrfcoin Governance'), findsWidgets);
+    expect(find.textContaining('first example proposal'), findsOneWidget);
+    expect(find.text('VOTING'), findsOneWidget);
+    expect(find.text('For 1'), findsOneWidget);
+    expect(find.text('Against 0'), findsOneWidget);
+    expect(
+      find.text('1 vote cast · needs 3 votes, 51% yes to pass'),
+      findsOneWidget,
     );
+    expect(find.text('14 wallets could vote'), findsOneWidget);
+    expect(
+      find.text('Voting ends at block 28148 (about 15 h 44 min from now)'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Estimated at about 77 s per block from block 27412.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        "Proposing holds 1 WRF from the proposer's wallet. It comes back "
+        'when the vote is decided, and stays held if fewer than 3 wallets '
+        'vote.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Proposed by 0x2796629fd0f56360264b76f938b691a408181e89'),
+      findsOneWidget,
+    );
+  });
 
-    await tester.pumpWidget(buildWidget(zeroVotes));
-    await tester.pump(const Duration(milliseconds: 100));
+  testWidgets('"Vote on wrfcoin.com" opens the website and posts nothing', (
+    tester,
+  ) async {
+    final api = FakeAdvisoryApi([welcomeProposalJson()]);
+    final opened = <Uri>[];
+    await tester.pumpWidget(
+      _app(
+        api,
+        openUrl: (url, {mode = LaunchMode.platformDefault}) async {
+          opened.add(url);
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Vote on wrfcoin.com'), 200);
+    await tester.tap(find.text('Vote on wrfcoin.com'));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Total: 0 votes'), findsOneWidget);
-    expect(find.text('Cast Your Vote'), findsNothing);
+    expect(opened, [Uri.parse('https://wrfcoin.com/governance/public')]);
+    expect(api.calls.where((c) => !c.startsWith('GET ')), isEmpty);
+    expect(api.calls.where((c) => c.contains('/vote')), isEmpty);
+  });
+
+  testWidgets('a decided proposal has no vote button', (tester) async {
+    // Tall enough that the whole list is built, so "nothing" means absent.
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = FakeAdvisoryApi([
+      {
+        ...welcomeProposalJson(),
+        'status': 'failed_quorum',
+        'finalized_at_block': 28149,
+      },
+    ]);
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
+    expect(find.text('TOO FEW VOTES'), findsOneWidget);
+    expect(find.text('Decided at block 28149'), findsOneWidget);
+    expect(find.text('Vote on wrfcoin.com'), findsNothing);
+  });
+
+  testWidgets('read failure with nothing to show: an error with retry', (
+    tester,
+  ) async {
+    final api = FakeAdvisoryApi([welcomeProposalJson()], detailStatus: 503);
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Vote on wrfcoin.com'), findsNothing);
+  });
+
+  testWidgets('read failure with the list copy: keeps it and says so', (
+    tester,
+  ) async {
+    final api = FakeAdvisoryApi([welcomeProposalJson()], detailStatus: 503);
+    await tester.pumpWidget(
+      _app(api, initial: AdvisoryProposal.fromJson(welcomeProposalJson())),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining("Couldn't refresh this proposal"),
+      findsOneWidget,
+    );
+    expect(find.text('For 1'), findsOneWidget);
+    // Without the node's height there is no time estimate, only the block.
+    expect(find.text('Voting ends at block 28148'), findsOneWidget);
   });
 }
