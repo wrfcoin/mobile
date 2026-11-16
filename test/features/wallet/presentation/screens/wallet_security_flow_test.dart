@@ -139,6 +139,79 @@ void main() {
     expect(screenSecurityClient.disableCalls, greaterThan(0));
   });
 
+  testWidgets(
+    'a wallet save that fails part way shows a plain error and no wallet',
+    (tester) async {
+      final keyStorage = _FailOnSlotStorage('wrf_private_key');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            keyManagerProvider.overrideWithValue(
+              KeyManager(
+                biometric: BiometricService(client: FakeLocalAuthClient()),
+                storage: keyStorage,
+              ),
+            ),
+            biometricServiceProvider.overrideWithValue(
+              BiometricService(
+                client: FakeLocalAuthClient(authenticateResult: true),
+              ),
+            ),
+            walletSecureStorageProvider.overrideWithValue(
+              FakeWalletSecureStorage(),
+            ),
+            referralServiceProvider.overrideWithValue(_FakeReferralService()),
+            screenSecurityClientProvider.overrideWithValue(
+              FakeScreenSecurityClient(),
+            ),
+          ],
+          child: const MaterialApp(home: ImportWalletScreen()),
+        ),
+      );
+      await _pumpFrame(tester);
+
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      );
+      await tester.tap(find.text('Verify Recovery'));
+      await _pumpFrame(tester);
+
+      final wordFields = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            (widget.decoration?.labelText?.startsWith('Word #') ?? false),
+      );
+      for (final element in tester.widgetList<TextField>(wordFields)) {
+        final label = element.decoration!.labelText!;
+        final index = int.parse(
+          RegExp(r'Word #(\d+)').firstMatch(label)!.group(1)!,
+        );
+        await tester.enterText(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField && widget.controller == element.controller,
+          ),
+          index == 12 ? 'about' : 'abandon',
+        );
+      }
+      await tester.scrollUntilVisible(
+        find.text('Complete Recovery'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await _pumpFrame(tester);
+      await tester.tap(find.text('Complete Recovery'));
+      await _pumpFrame(tester);
+
+      expect(find.textContaining('could not be saved'), findsOneWidget);
+      expect(find.textContaining('Bad state'), findsNothing);
+      expect(await keyStorage.read(key: 'wrf_address'), isNull);
+      expect(await keyStorage.read(key: 'wrf_mnemonic'), isNull);
+      expect(await keyStorage.read(key: 'wrf_private_key'), isNull);
+    },
+  );
+
   testWidgets('recovery requires successful biometric authentication', (
     tester,
   ) async {
@@ -333,5 +406,18 @@ class _FakeReferralService extends ReferralService {
     required String refereeAddress,
   }) async {
     return false;
+  }
+}
+
+/// Secure storage whose write of one slot fails.
+class _FailOnSlotStorage extends InMemoryKeyValueStorage {
+  _FailOnSlotStorage(this.failKey);
+  final String failKey;
+  @override
+  Future<void> write({required String key, String? value}) async {
+    if (key == failKey && value != null) {
+      throw StateError('secure storage write failed');
+    }
+    return super.write(key: key, value: value);
   }
 }

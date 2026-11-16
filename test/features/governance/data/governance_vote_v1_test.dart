@@ -75,6 +75,8 @@ void main() {
       keyScheme: scheme,
       loginAddress: loginAddress,
     );
+    // Count only what the vote opens, not the wallet setup above.
+    storage.privateReads = 0;
     requests = [];
     final dio = Dio()
       ..interceptors.add(

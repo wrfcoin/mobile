@@ -102,6 +102,8 @@ class SyntheticSigner {
         privateKey: syntheticSeedHex,
         address: syntheticAddress,
       );
+      // Saving the wallet reads the old slots; count only what signing opens.
+      storage.reads.clear();
       _stored = true;
     }
     final km = KeyManager(
