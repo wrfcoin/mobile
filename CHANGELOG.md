@@ -4,6 +4,12 @@ All notable changes to `wrfcoin_mobile` are recorded here.
 
 ## [Unreleased]
 
+### Security
+
+- No APK is debuggable any more: the profile build type (which Flutter derives from debug) and release both set `isDebuggable = false`. `scripts/build_profile_apk.sh` refuses a debuggable APK, and CI checks the Gradle file.
+- `scripts/build_profile_apk.sh` pins the signing certificate's SHA-256 (the tester debug key) and refuses any other key, so a build from another machine is never handed to a phone it would not upgrade.
+- Version 0.1.2, build 3: each published APK gets a higher build number.
+
 ### Added
 
 - Sky View: a full-screen sky map that follows the phone, drawn with no camera and no network. Stars, planets, Sun, Moon, grid and horizon; Android's fused rotation-vector sensor with an accelerometer/magnetometer fallback; automatic declination from WMM2025; "Align on a star" calibration.
