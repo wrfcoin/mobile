@@ -51,6 +51,8 @@ Future<Harness> harness({
   bool wallet = true,
   int nonce = 3,
   String? balance = '10900000000',
+  bool Function(FakeLocalAuthClient auth)? foreground,
+  Duration resumeTimeout = const Duration(seconds: 3),
 }) async {
   LoginAttemptGuard.resetIsolateStateForTest();
   final storage = CountingStorage();
@@ -84,7 +86,8 @@ Future<Harness> harness({
     advisorySigner: AdvisoryActionSigner(
       keyManager: keys,
       domain: const TransferSigningDomain(chainId: '888', networkId: 'testnet'),
-      isForeground: () => true,
+      isForeground: foreground == null ? () => true : () => foreground(auth),
+      resumeTimeout: resumeTimeout,
     ),
   );
   return Harness(api, repo, auth, storage);
@@ -329,6 +332,93 @@ void main() {
       );
       expect(refusalOf(r).kind, AdvisoryRefusalKind.unknown);
       expect(refusalOf(r).message, advisoryProposeUnknownNote);
+    });
+  });
+
+  group('after the device unlock (PIN screen pauses the app)', () {
+    // Foreground until the unlock; after it, not resumed for [lag] checks.
+    bool Function(FakeLocalAuthClient) resumesAfter(int lag) {
+      var after = 0;
+      return (auth) =>
+          auth.authenticateBiometricOnlyCalls.isEmpty || ++after > lag;
+    }
+
+    // Foreground until the unlock, never again (the person left the app).
+    bool stayPaused(FakeLocalAuthClient auth) =>
+        auth.authenticateBiometricOnlyCalls.isEmpty;
+
+    test('vote: inactive right after the unlock, then resumed: signs and '
+        'sends once', () async {
+      final h = await harness(foreground: resumesAfter(3));
+      final r = await h.repo.voteAdvisory(
+        proposalId: proposalId,
+        approve: false,
+      );
+      final sent = r.getOrElse((l) => fail('refused: ${l.message}'));
+      expect(sent.nonce, 7);
+      expect(h.unlockPrompts, 1);
+      expect(jsonEncode(h.api.posted.single), voteCase['data']);
+    });
+
+    test('propose: inactive right after the unlock, then resumed: signs and '
+        'sends once', () async {
+      final h = await harness(foreground: resumesAfter(3), nonce: 0);
+      final r = await h.repo.proposeAdvisory(
+        title: 'Welcome, café 🌧',
+        summary: 'Line one.\nLine two.',
+      );
+      r.getOrElse((l) => fail('refused: ${l.message}'));
+      expect(h.unlockPrompts, 1);
+      expect(jsonEncode(h.api.posted.single), proposeCase['data']);
+    });
+
+    test(
+      'vote: stays paused after the unlock: refused, nothing sent',
+      () async {
+        final h = await harness(
+          foreground: stayPaused,
+          resumeTimeout: const Duration(milliseconds: 300),
+        );
+        final r = await h.repo.voteAdvisory(
+          proposalId: proposalId,
+          approve: true,
+        );
+        final refusal = refusalOf(r);
+        expect(refusal.kind, AdvisoryRefusalKind.cantSign);
+        expect(
+          refusal.message,
+          'The app was not on screen after the unlock, so your vote was not '
+          'signed. Nothing was sent. Try again.',
+        );
+        expect(h.unlockPrompts, 1);
+        expect(h.posts, isEmpty);
+      },
+    );
+
+    test('propose: stays paused after the unlock: refused with propose '
+        'wording, nothing sent', () async {
+      final h = await harness(
+        foreground: stayPaused,
+        resumeTimeout: const Duration(milliseconds: 300),
+      );
+      final r = await h.repo.proposeAdvisory(title: 'T', summary: 'S');
+      final refusal = refusalOf(r);
+      expect(refusal.message, contains('your proposal was not signed'));
+      expect(refusal.message, contains('Nothing was sent.'));
+      expect(refusal.message, isNot(contains('vote')));
+      expect(h.posts, isEmpty);
+    });
+
+    test('propose: not on screen before the unlock: no unlock, propose '
+        'wording, nothing sent', () async {
+      final h = await harness(foreground: (_) => false);
+      final r = await h.repo.proposeAdvisory(title: 'T', summary: 'S');
+      expect(
+        refusalOf(r).message,
+        'Open the app to sign your proposal. Nothing was sent.',
+      );
+      expect(h.unlockPrompts, 0);
+      expect(h.posts, isEmpty);
     });
   });
 

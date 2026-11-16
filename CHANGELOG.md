@@ -10,6 +10,10 @@ All notable changes to `wrfcoin_mobile` are recorded here.
 - `scripts/build_profile_apk.sh` pins the signing certificate's SHA-256 (the tester debug key) and refuses any other key, so a build from another machine is never handed to a phone it would not upgrade.
 - Version 0.1.2, build 3: each published APK gets a higher build number.
 
+### Fixed
+
+- Proposing or voting right after unlocking with the device PIN no longer stops with "Open the app to sign your vote." The PIN screen pauses the app and the unlock finishes a moment before the app is back on screen; the app now waits up to 3 seconds for it, and refuses only if it really is not back, saying the proposal or vote was not signed and nothing was sent. Version 0.1.3, build 5.
+
 ### Added
 
 - Vote on advisory proposals in the app: Vote For / Vote Against on an open proposal, a sheet that says exactly what is signed (proposal, choice, wallet, network), then the device unlock. Signed with the app's own wallet key (core4 `advisory_action_message`, byte-identical to the website, pinned by core4's vectors); the recovery phrase is never shown or asked for. Says plainly why a wallet can't vote (held under 1 WRF when it was proposed, already voted, voting closed). The "Vote on wrfcoin.com" button is gone. After sending it says the vote counts once it is in a block (about 77 seconds) and reads the chain again; if the relay's answer is lost after sending, it says the vote may still count and waits for the chain read instead of saying it failed. Version 0.1.3, build 4.

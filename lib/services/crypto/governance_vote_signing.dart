@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
+import 'foreground_after_unlock.dart';
 import 'key_manager.dart';
 import 'signed_transfer.dart';
 import 'station_signing.dart' show chainAddressFromEd25519PublicKey;
@@ -31,6 +32,7 @@ class GovernanceVoteSigner {
     required KeyManager keyManager,
     bool Function()? isForeground,
     this.version = configuredVersion,
+    this.resumeTimeout = foregroundAfterUnlockTimeout,
   }) : _keys = keyManager,
        _isForeground = isForeground ?? _foreground;
 
@@ -41,6 +43,10 @@ class GovernanceVoteSigner {
   final int version;
   final KeyManager _keys;
   final bool Function() _isForeground;
+
+  /// How long to wait after the unlock for the app to be resumed (see
+  /// [waitForForeground]).
+  final Duration resumeTimeout;
 
   static bool _foreground() {
     try {
@@ -60,7 +66,7 @@ class GovernanceVoteSigner {
     final message = governanceVoteV1Message(proposalId, approve);
     if (!_isForeground()) {
       throw const GovernanceSigningUnavailable(
-        'Open the app to sign your vote.',
+        'Open the app to sign your vote. Nothing was sent.',
       );
     }
     if (!await _keys.canSignTransactions()) {
@@ -90,10 +96,12 @@ class GovernanceVoteSigner {
         'The wallet key does not match its address.',
       );
     }
-    // Authentication can await platform UI. Refuse if the app lost foreground.
-    if (!_isForeground()) {
+    // The unlock pauses the app and its result arrives before the resume:
+    // wait briefly for it, and refuse only if the app is not back on screen.
+    if (!await waitForForeground(_isForeground, timeout: resumeTimeout)) {
       throw const GovernanceSigningUnavailable(
-        'Open the app to sign your vote.',
+        'The app was not on screen after the unlock, so your vote was not '
+        'signed. Nothing was sent. Try again.',
       );
     }
     final signature = await signer.sign(message);

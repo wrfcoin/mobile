@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
+import 'foreground_after_unlock.dart';
 import 'key_manager.dart';
 import 'signed_transfer.dart';
 import 'station_signing.dart' show chainAddressFromEd25519PublicKey;
@@ -231,6 +232,7 @@ class AdvisoryActionSigner {
     required KeyManager keyManager,
     TransferSigningDomain? domain,
     bool Function()? isForeground,
+    this.resumeTimeout = foregroundAfterUnlockTimeout,
   }) : _keys = keyManager,
        _domain = domain ?? TransferSigningDomain.configured,
        _isForeground = isForeground ?? _foreground;
@@ -238,6 +240,10 @@ class AdvisoryActionSigner {
   final KeyManager _keys;
   final TransferSigningDomain _domain;
   final bool Function() _isForeground;
+
+  /// How long to wait after the unlock for the app to be resumed (see
+  /// [waitForForeground]).
+  final Duration resumeTimeout;
 
   static bool _foreground() {
     try {
@@ -267,13 +273,17 @@ class AdvisoryActionSigner {
   /// [nonce]. Throws [AdvisoryUnlockCancelled] if the unlock is refused,
   /// [AdvisorySigningUnavailable] if this wallet can't sign.
   Future<Map<String, dynamic>> sign(AdvisoryAction action, int nonce) async {
+    final what = action is AdvisoryPropose ? 'proposal' : 'vote';
+    final verb = action is AdvisoryPropose ? 'propose' : 'vote';
     if (_domain.chainId.isEmpty) {
       throw const AdvisorySigningUnavailable(
         'This build has no chain configured, so it cannot sign.',
       );
     }
     if (!_isForeground()) {
-      throw const AdvisorySigningUnavailable('Open the app to sign your vote.');
+      throw AdvisorySigningUnavailable(
+        'Open the app to sign your $what. Nothing was sent.',
+      );
     }
     final who = await voter();
     final address = who.address;
@@ -283,9 +293,7 @@ class AdvisoryActionSigner {
       );
     }
     if (!who.canSign) {
-      throw const AdvisorySigningUnavailable(
-        "This wallet type can't vote yet.",
-      );
+      throw AdvisorySigningUnavailable("This wallet type can't $verb yet.");
     }
     final seed = await _keys.getPrivateKey();
     if (seed == null || seed.isEmpty) throw const AdvisoryUnlockCancelled();
@@ -300,9 +308,14 @@ class AdvisoryActionSigner {
         'The wallet key does not match its address.',
       );
     }
-    // The unlock prompt can background the app; refuse if it did.
-    if (!_isForeground()) {
-      throw const AdvisorySigningUnavailable('Open the app to sign your vote.');
+    // The unlock (a PIN screen especially) pauses the app, and the unlock
+    // result arrives before the app is resumed. Wait briefly for the resume;
+    // refuse only if the app really is not back on screen.
+    if (!await waitForForeground(_isForeground, timeout: resumeTimeout)) {
+      throw AdvisorySigningUnavailable(
+        'The app was not on screen after the unlock, so your $what was not '
+        'signed. Nothing was sent. Try again.',
+      );
     }
     return signedEd25519AdvisoryAction(
       signer: signer,
