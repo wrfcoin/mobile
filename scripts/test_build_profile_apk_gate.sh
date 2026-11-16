@@ -31,21 +31,37 @@ EOF
 printf '#!/usr/bin/env bash\nexit 0\n' >"$work/jdk/bin/javac"
 chmod +x "$work/bin/getent" "$work/bin/flutter" "$work/jdk/bin/javac"
 
+pinned_sha=2f62129cfa4f5e34beb271d87f8e5621ea32f830bc74d366f7d560f5afe9d7e2
+other_sha=1111111111111111111111111111111111111111111111111111111111111111
 apksigner="$work/sdk/build-tools/36.0.0/apksigner"
 install_apksigner() {
-  cat >"$apksigner" <<'EOF'
+  cat >"$apksigner" <<EOF
 #!/usr/bin/env bash
-case "$STUB_SIGNER" in
-  debug) echo "Signer #1 certificate DN: C=US, O=Android, CN=Android Debug" ;;
-  release) echo "Signer #1 certificate DN: CN=WRFCoin Release, O=WRFCoin" ;;
-  lookalike) echo "Signer #1 certificate DN: C=US, O=Android, CN=Android Debugger" ;;
+case "\$STUB_SIGNER" in
+  debug) printf '%s\n' "Signer #1 certificate DN: C=US, O=Android, CN=Android Debug" \
+           "Signer #1 certificate SHA-256 digest: $pinned_sha" ;;
+  other-debug) printf '%s\n' "Signer #1 certificate DN: C=US, O=Android, CN=Android Debug" \
+           "Signer #1 certificate SHA-256 digest: $other_sha" ;;
+  release) printf '%s\n' "Signer #1 certificate DN: CN=WRFCoin Release, O=WRFCoin" \
+           "Signer #1 certificate SHA-256 digest: $pinned_sha" ;;
+  lookalike) printf '%s\n' "Signer #1 certificate DN: C=US, O=Android, CN=Android Debugger" \
+           "Signer #1 certificate SHA-256 digest: $pinned_sha" ;;
   two) printf '%s\n' "Signer #1 certificate DN: C=US, O=Android, CN=Android Debug" \
+         "Signer #1 certificate SHA-256 digest: $pinned_sha" \
          "Signer #2 certificate DN: CN=Someone Else" ;;
   verify-fails) echo "DOES NOT VERIFY" >&2; exit 1 ;;
 esac
 EOF
   chmod +x "$apksigner"
 }
+aapt2="$work/sdk/build-tools/36.0.0/aapt2"
+cat >"$aapt2" <<'EOF'
+#!/usr/bin/env bash
+echo "package: name='com.wrfcoin.wrfcoin_mobile' versionCode='3' versionName='0.1.2'"
+[[ "${STUB_DEBUGGABLE:-0}" == 1 ]] && echo "application-debuggable"
+exit 0
+EOF
+chmod +x "$aapt2"
 
 log="$work/log"
 export FLUTTER_MARKER="$work/flutter-ran"
@@ -58,7 +74,7 @@ run() {
   local rc=0
   local chain_env=(WRFCOIN_CHAIN_ID=888)
   if [[ "$label" == "unset chain" ]]; then chain_env=(); fi
-  env -u WRFCOIN_CHAIN_ID -u API_HOST_RESOLVER_OVERRIDE -u WRFCOIN_WALLET_AUTH_ORIGIN PATH="$work/bin:$PATH" JAVA_HOME="$work/jdk" \
+  env -u WRFCOIN_CHAIN_ID -u API_HOST_RESOLVER_OVERRIDE -u WRFCOIN_WALLET_AUTH_ORIGIN -u WRFCOIN_PROFILE_SIGNER_SHA256 PATH="$work/bin:$PATH" JAVA_HOME="$work/jdk" \
     ANDROID_HOME="$work/sdk" ANDROID_SDK_ROOT= STUB_SIGNER=debug "${chain_env[@]}" "$@" \
     bash "$repo/scripts/build_profile_apk.sh" "$url" >"$log" 2>&1 || rc=$?
   if [[ "$expect" == ok ]]; then
@@ -123,10 +139,29 @@ run refused "lookalike CN=Android Debugger" 'not debug-signed' "$good_url" STUB_
 run refused "two signers" 'exactly one APK signer' "$good_url" STUB_SIGNER=two
 run ok "debug signer" '^PROFILE_APK_OK$' "$good_url"
 grep -q '^SHA256=[0-9a-f]\{64\}$' "$log"
+grep -qxF "SIGNER_SHA256=$pinned_sha" "$log"
+grep -qxF "VERSION=0.1.2+3" "$log"
+
 if grep -q 'WRFCOIN_WALLET_AUTH_ORIGIN' "$FLUTTER_MARKER"; then
   echo "FAIL: portless URL without an origin passed an auth-origin define" >&2
   exit 1
 fi
+
+# Signer pin (audit 2026-11-16 B4): another machine's debug key has the same
+# DN but would not install over earlier tester APKs.
+run refused "other machine's debug key" 'signer certificate SHA-256 is 1111' "$good_url" STUB_SIGNER=other-debug
+run ok "explicitly pinned other key" '^PROFILE_APK_OK$' "$good_url" STUB_SIGNER=other-debug \
+  WRFCOIN_PROFILE_SIGNER_SHA256="$other_sha"
+run refused "malformed signer pin" 'WRFCOIN_PROFILE_SIGNER_SHA256 must be 64 lowercase hex' "$good_url" \
+  WRFCOIN_PROFILE_SIGNER_SHA256=ABC
+[[ ! -e "$FLUTTER_MARKER" ]] || { echo "FAIL: flutter ran with a malformed pin" >&2; exit 1; }
+
+# Debuggable gate (audit 2026-11-16 B2).
+run refused "debuggable APK" 'APK is debuggable' "$good_url" STUB_DEBUGGABLE=1
+chmod -x "$aapt2"
+run refused "aapt2 not executable" 'no executable aapt2' "$good_url"
+[[ ! -e "$FLUTTER_MARKER" ]] || { echo "FAIL: flutter ran without aapt2" >&2; exit 1; }
+chmod +x "$aapt2"
 
 # Wallet-login origin gate (mobile#44 / infra#1062 tailnet :9444 route). The app
 # derives the login origin from the API URL, so a ported API URL must name the
@@ -157,4 +192,4 @@ grep -qxF -- "--dart-define=API_BASE_URL=$port_url" "$FLUTTER_MARKER" ||
   { echo "FAIL: API URL was not passed to flutter" >&2; exit 1; }
 grep -qxF "WALLET_AUTH_ORIGIN=$good_origin" "$log"
 
-echo "build_profile_apk gate: URL, auth-origin and signer gates fail closed; debug-signed stub build GREEN"
+echo "build_profile_apk gate: URL, auth-origin, signer-pin and debuggable gates fail closed; pinned debug-signed stub build GREEN"
