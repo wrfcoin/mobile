@@ -40,7 +40,12 @@ void main() {
 
         final AppDatabase db = createTestDatabase();
         addTearDown(db.close);
-        await tester.pumpWidget(await buildTestApp(db: db));
+        // A fresh phone: with a wallet the replace guard shows first.
+        await (await SharedPreferences.getInstance()).setBool(
+          'welcome.seen',
+          true,
+        );
+        await tester.pumpWidget(await buildTestApp(db: db, withWallet: false));
         await pumpFrames(tester);
         ProviderScope.containerOf(
           tester.element(find.byType(Router<Object>).first),
