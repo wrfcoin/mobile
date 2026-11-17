@@ -241,8 +241,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        "This wallet can't vote on this one: it held under 1 WRF when the "
-        'proposal was made.',
+        "This wallet can't vote on this proposal: it held less than 1 WRF "
+        'when the proposal was created (block 27028). It can vote on '
+        'proposals created from now on, while it holds 1 WRF or more.',
       ),
       findsOneWidget,
     );

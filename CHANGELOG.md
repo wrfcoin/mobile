@@ -12,6 +12,8 @@ All notable changes to `wrfcoin_mobile` are recorded here.
 
 ### Fixed
 
+- A wallet that can't vote on a proposal now says why in plain words: it held less than 1 WRF when the proposal was created (with the block number), and it can vote on proposals created from now on while it holds 1 WRF or more. Version 0.1.3, build 6.
+- After a send, the transaction identifier in the receipt is a link: tap it to open the transaction's page on wrfcoin.com (it can take about a minute to show in a block) instead of pasting it into Explore.
 - Proposing or voting right after unlocking with the device PIN no longer stops with "Open the app to sign your vote." The PIN screen pauses the app and the unlock finishes a moment before the app is back on screen; the app now waits up to 3 seconds for it, and refuses only if it really is not back, saying the proposal or vote was not signed and nothing was sent. Version 0.1.3, build 5.
 
 ### Added
