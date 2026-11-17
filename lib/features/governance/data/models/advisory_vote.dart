@@ -44,7 +44,11 @@ class AdvisoryEligibility {
   }
 
   /// Why this wallet can't vote, in plain words, or null if it can.
-  AdvisoryRefusal? get refusal {
+  AdvisoryRefusal? get refusal => refusalFor();
+
+  /// [refusal], naming the block the proposal was created at (its balance
+  /// snapshot) when the caller knows it.
+  AdvisoryRefusal? refusalFor({int? createdAtBlock}) {
     if (canVote && nextNonce != null) return null;
     if (voted != null) {
       return AdvisoryRefusal(
@@ -58,7 +62,7 @@ class AdvisoryEligibility {
         'Voting on this proposal has closed.',
       );
     }
-    if (!eligible) return AdvisoryRefusal.notEligible;
+    if (!eligible) return AdvisoryRefusal.notEligibleAt(createdAtBlock);
     final why = reason;
     return AdvisoryRefusal(
       AdvisoryRefusalKind.other,
@@ -109,11 +113,26 @@ class AdvisoryRefusal {
     "can't propose yet. Nothing was sent.",
   );
 
+  /// Only wallets that held at least 1 WRF spendable when a proposal was
+  /// created can vote on it (core4 advisory governance snapshot).
   static const notEligible = AdvisoryRefusal(
     AdvisoryRefusalKind.notEligible,
-    "This wallet can't vote on this one: it held under 1 WRF when the "
-    'proposal was made.',
+    "This wallet can't vote on this proposal: it held less than 1 WRF when "
+    'the proposal was created. It can vote on proposals created from now '
+    'on, while it holds 1 WRF or more.',
   );
+
+  /// [notEligible], naming the creation block when it is known.
+  static AdvisoryRefusal notEligibleAt(int? createdAtBlock) =>
+      createdAtBlock == null
+      ? notEligible
+      : AdvisoryRefusal(
+          AdvisoryRefusalKind.notEligible,
+          "This wallet can't vote on this proposal: it held less than 1 WRF "
+          'when the proposal was created (block $createdAtBlock). It can '
+          'vote on proposals created from now on, while it holds 1 WRF or '
+          'more.',
+        );
 
   @override
   String toString() => message;

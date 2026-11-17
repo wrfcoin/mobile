@@ -73,7 +73,11 @@ class _AdvisoryVotePanelState extends ConsumerState<AdvisoryVotePanel> {
     });
     final result = await ref
         .read(governanceRepositoryProvider)
-        .voteAdvisory(proposalId: widget.proposal.id, approve: approve);
+        .voteAdvisory(
+          proposalId: widget.proposal.id,
+          approve: approve,
+          createdAtBlock: widget.proposal.createdAtBlock,
+        );
     if (!mounted) return;
     void watchChain() {
       _refresh(address);
@@ -202,7 +206,8 @@ class _AdvisoryVotePanelState extends ConsumerState<AdvisoryVotePanel> {
               )
             : const _Loading(),
       );
-    } else if (e.refusal case final refusal?) {
+    } else if (e.refusalFor(createdAtBlock: widget.proposal.createdAtBlock)
+        case final refusal?) {
       children.add(
         _Line(refusal.message, key: const Key('advisory-vote-status')),
       );

@@ -143,8 +143,9 @@ void main() {
       'not eligible': (
         notEligibleJson(),
         AdvisoryRefusalKind.notEligible,
-        "This wallet can't vote on this one: it held under 1 WRF when the "
-            'proposal was made.',
+        "This wallet can't vote on this proposal: it held less than 1 WRF "
+            'when the proposal was created. It can vote on proposals created '
+            'from now on, while it holds 1 WRF or more.',
       ),
       'already voted': (
         votedJson('for'),
@@ -202,8 +203,9 @@ void main() {
               'WRF spendable when the proposal was created',
         ),
         AdvisoryRefusalKind.notEligible,
-        "This wallet can't vote on this one: it held under 1 WRF when the "
-            'proposal was made.',
+        "This wallet can't vote on this proposal: it held less than 1 WRF "
+            'when the proposal was created. It can vote on proposals created '
+            'from now on, while it holds 1 WRF or more.',
       ),
       'node: voting closed': (
         422,

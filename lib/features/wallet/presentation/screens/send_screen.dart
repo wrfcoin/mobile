@@ -20,6 +20,7 @@ import '../providers/pending_send_provider.dart';
 import '../providers/transactions_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../providers/wallet_security_provider.dart';
+import '../widgets/tx_reference_link.dart';
 import '../widgets/pending_send_card.dart';
 import '../widgets/safety_notice.dart';
 
@@ -597,7 +598,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 const SizedBox(height: 12),
                 if (identifier != null) ...[
                   const Text('Transaction identifier'),
-                  SelectableText(identifier),
+                  TxReferenceLink(hash: identifier),
                 ] else
                   const Text(
                     'Transaction identifier unavailable. Check wallet history before sending again.',

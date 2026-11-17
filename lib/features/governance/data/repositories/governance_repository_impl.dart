@@ -301,6 +301,7 @@ class GovernanceRepository {
   Future<Either<AdvisoryRefusal, AdvisorySubmitted>> voteAdvisory({
     required String proposalId,
     required bool approve,
+    int? createdAtBlock,
   }) async {
     if (!isAdvisoryProposalId(proposalId)) {
       return const Left(
@@ -328,7 +329,7 @@ class GovernanceRepository {
       case Right(value: final value):
         e = value;
     }
-    final refusal = e.refusal;
+    final refusal = e.refusalFor(createdAtBlock: createdAtBlock);
     if (refusal != null) return Left(refusal);
 
     return _signAndRelay(
