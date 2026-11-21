@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 
+import '../../../../services/crypto/station_signing.dart';
+
 // Ownership read of the backend relay (backend#1459, spec rev e14b961): FLAT
 // camelCase. Parsing is strict: a missing or mistyped key throws
 // FormatException and is never defaulted into "not frozen / nothing pending".
@@ -101,6 +103,29 @@ class PendingRecovery {
   final int noticeBlocks;
 }
 
+/// The station's approved submitter key (`station_submitter_key`), as the
+/// ownership read reports it.
+@immutable
+class StationSubmitterKey {
+  const StationSubmitterKey({
+    required this.pubkey,
+    required this.submitterClass,
+  });
+
+  factory StationSubmitterKey.fromJson(Map<String, dynamic> j) {
+    final pubkey = _commitment(j['pubkey'], 'submitterKey.pubkey');
+    final cls = SubmitterClass.fromWire(j['class']);
+    if (cls == null) {
+      throw FormatException('ownership: bad submitterKey.class', j['class']);
+    }
+    return StationSubmitterKey(pubkey: pubkey, submitterClass: cls);
+  }
+
+  /// Lowercase hex ed25519 key.
+  final String pubkey;
+  final SubmitterClass submitterClass;
+}
+
 @immutable
 class OwnerLedger {
   const OwnerLedger({
@@ -116,6 +141,9 @@ class OwnerLedger {
     required this.actionsActive,
     required this.observedAtHeight,
     required this.settledHeight,
+    this.submitterKeyActive = false,
+    this.submitterKeyReported = false,
+    this.submitterKey,
   });
 
   factory OwnerLedger.fromJson(Object? body) {
@@ -140,6 +168,12 @@ class OwnerLedger {
     final commitment = _commitment(j['ownerCommitment'], 'ownerCommitment');
     final frozen = j['frozen'];
     final pending = j['pendingRecovery'];
+    // `station_submitter_key` fields are newer than the rest of this read: an
+    // older backend omits them, which reads as "not active" / "not reported".
+    // A present `submitterKey` is parsed as strictly as everything else.
+    final submitterFlag = features['stationSubmitterKey'];
+    final submitterReported = j.containsKey('submitterKey');
+    final submitter = j['submitterKey'];
     return OwnerLedger(
       owner: _str(j['owner'], 'owner'),
       ownerCommitment: commitment,
@@ -167,6 +201,15 @@ class OwnerLedger {
       ),
       observedAtHeight: _int(j['observedAtHeight'], 'observedAtHeight'),
       settledHeight: _int(j['settledHeight'], 'settledHeight'),
+      // Only a literal `true` turns the feature on; absent, false or any
+      // other value reads as off (backend#102: false when the node omits it).
+      submitterKeyActive: submitterFlag == true,
+      submitterKeyReported: submitterReported,
+      submitterKey: submitter == null
+          ? null
+          : submitter is Map
+          ? StationSubmitterKey.fromJson(Map<String, dynamic>.from(submitter))
+          : throw FormatException('ownership: bad submitterKey', submitter),
     );
   }
 
@@ -188,6 +231,17 @@ class OwnerLedger {
   final bool actionsActive;
   final int observedAtHeight;
   final int settledHeight;
+
+  /// Whether `station_submitter_key` is active at the next block. False when
+  /// the read does not report it.
+  final bool submitterKeyActive;
+
+  /// Whether the read reports the station's submitter key at all; when false,
+  /// [submitterKey] being null means "unknown", not "none".
+  final bool submitterKeyReported;
+
+  /// The approved submitter key, or null (none, or not reported).
+  final StationSubmitterKey? submitterKey;
 
   bool get frozen => frozenSinceHeight != null;
 

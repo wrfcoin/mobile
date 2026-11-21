@@ -228,7 +228,7 @@ void main() {
   ) async {
     await _pump(t, _FakeService(), ledger: ledgerJson(actions: false));
     expect(
-      find.textContaining('not active on the network yet'),
+      find.text('Theft protection is not active on the network yet.'),
       findsOneWidget,
     );
     expect(find.text('Report stolen'), findsNothing);

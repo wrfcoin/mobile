@@ -8,12 +8,13 @@ import 'package:wrfcoin_mobile/features/collector/data/models/station_owner_mode
 import 'package:wrfcoin_mobile/features/collector/data/services/station_owner_api.dart';
 
 // The backend contract fixture (backend#1459, __tests__/fixtures/
-// station-owner-contract.json), copied byte for byte. It is generated from the
+// station-owner-contract.json; now backend#102 head 9beee4e, which adds
+// features.stationSubmitterKey), copied byte for byte. It is generated from the
 // REAL relay routes; do not edit it here, regenerate it there.
 const _fixturePath =
     'test/features/collector/fixtures/station-owner-contract.json';
 const _fixtureSha256 =
-    '0b6cb2b4f9e60a77e56aa10b33ecbd6f5f2148dad65148913597705a593ba633';
+    '4f73964b49dfd0891736d3338ee2e826f5c8abd5d6defa62ec9b275644029315';
 
 late final Map<String, dynamic> _fixture;
 late final Map<String, dynamic> _cases;
@@ -105,6 +106,12 @@ void main() {
         expect(l.ownerNonce, body['ownerNonce']);
         expect(l.frozen, body['frozen'] != null);
         expect(l.consentActive, isTrue);
+        expect(
+          (body['features'] as Map)['stationSubmitterKey'],
+          isFalse,
+          reason: 'backend#102 reports the flag; the node does not yet',
+        );
+        expect(l.submitterKeyActive, isFalse);
         // The registered owner matches in either spelling of the same bytes.
         expect(l.ownerIs(_stationId, _ownerAddress), isTrue);
         expect(

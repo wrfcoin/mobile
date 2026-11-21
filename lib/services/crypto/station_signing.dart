@@ -425,6 +425,84 @@ Uint8List stationOwnerActionMessage({
   ]);
 }
 
+/// `set_submitter_key` (`station_submitter_key`, core4 #3565 design 1) is
+/// owner action discriminant 5 (core4 transaction.rs
+/// `StationOwnerActionKind::SetSubmitterKey`). It is NOT a [StationOwnerAction]
+/// value: its preimage and payload carry the approved key, so (as in core4's
+/// separate `StationSubmitterKeyPayload`) it has its own builder below and can
+/// never be signed with the plain [stationOwnerActionMessage].
+const int stationSetSubmitterKeyDiscriminant = 5;
+
+/// JSON `action` value of the set-submitter-key owner action.
+const String stationSetSubmitterKeyWireName = 'set_submitter_key';
+
+/// Who an approved submitter key belongs to. Discriminants are frozen on chain
+/// (core4 transaction.rs `SubmitterClass`).
+enum SubmitterClass {
+  /// The key lives on the device that measures (this phone's collect key).
+  device(1, 'device'),
+
+  /// A service relays readings it fetched elsewhere.
+  relay(2, 'relay');
+
+  const SubmitterClass(this.discriminant, this.wireName);
+  final int discriminant;
+
+  /// JSON `submitter_class` value (snake_case).
+  final String wireName;
+
+  /// The class for a JSON value, or null when unknown.
+  static SubmitterClass? fromWire(Object? v) {
+    for (final c in values) {
+      if (c.wireName == v) return c;
+    }
+    return null;
+  }
+}
+
+final RegExp _lowerHex64 = RegExp(r'^[0-9a-f]{64}$');
+
+/// core4 `station_owner_set_submitter_message_with_domain`: the
+/// [stationOwnerActionMessage] bytes with discriminant 5, then `0` to clear,
+/// or `1 || lv(submitter_pubkey) || u8(class)`. [submitterPubkey] must be
+/// canonical lowercase hex (64 chars) and is signed exactly as written; pass
+/// both [submitterPubkey] and [submitterClass], or neither to clear.
+Uint8List stationOwnerSetSubmitterMessage({
+  required String chainId,
+  required String networkId,
+  required String stationId,
+  required String ownerAddress,
+  required int actionNonce,
+  required int expiresAtHeight,
+  required String? submitterPubkey,
+  required SubmitterClass? submitterClass,
+}) {
+  _checkStationId(stationId);
+  if ((submitterPubkey == null) != (submitterClass == null)) {
+    throw ArgumentError('submitter key and class must be set together');
+  }
+  if (submitterPubkey != null && !_lowerHex64.hasMatch(submitterPubkey)) {
+    throw ArgumentError('submitter key must be 64 lowercase hex characters');
+  }
+  return Uint8List.fromList(<int>[
+    ...utf8.encode(_ownerActionDomain),
+    ..._lv(chainId),
+    ..._lv(networkId),
+    ..._lv(stationId),
+    ..._lv(ownerAddress),
+    stationSetSubmitterKeyDiscriminant,
+    ..._u64le(actionNonce),
+    ..._u64le(expiresAtHeight),
+    if (submitterPubkey == null)
+      0
+    else ...[
+      1,
+      ..._lv(submitterPubkey),
+      submitterClass!.discriminant,
+    ],
+  ]);
+}
+
 /// A sender's transfer offer: the fixed body plus the sender's signature.
 /// The body is what travels to the new owner (QR in slice B).
 @immutable
@@ -629,6 +707,27 @@ class StationSigningSession {
       ),
     );
   }
+
+  /// `set_submitter_key` for this wallet's own station: approve
+  /// [submitterPubkey] as [submitterClass], or clear the key when both are
+  /// null.
+  Future<SignedStationMessage> signSetSubmitterKey({
+    required String? submitterPubkey,
+    required SubmitterClass? submitterClass,
+    required int actionNonce,
+    required int expiresAtHeight,
+  }) => _sign(
+    stationOwnerSetSubmitterMessage(
+      chainId: _domain.chainId,
+      networkId: _domain.networkId,
+      stationId: stationId,
+      ownerAddress: ownerAddress,
+      actionNonce: actionNonce,
+      expiresAtHeight: expiresAtHeight,
+      submitterPubkey: submitterPubkey,
+      submitterClass: submitterClass,
+    ),
+  );
 
   /// 2.1: this wallet is the current owner of its own station and signs the
   /// fixed body. [toOwnerPubkey] must derive to [toOwnerAddress].
