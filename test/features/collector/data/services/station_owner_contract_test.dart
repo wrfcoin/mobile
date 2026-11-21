@@ -6,15 +6,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wrfcoin_mobile/features/collector/data/models/station_owner_models.dart';
 import 'package:wrfcoin_mobile/features/collector/data/services/station_owner_api.dart';
+import 'package:wrfcoin_mobile/services/crypto/station_signing.dart';
 
 // The backend contract fixture (backend#1459, __tests__/fixtures/
-// station-owner-contract.json; now backend#102 head 9beee4e, which adds
-// features.stationSubmitterKey), copied byte for byte. It is generated from the
+// station-owner-contract.json; now backend main f5d6658 / backend#103, which
+// adds features.stationSubmitterKey (#102) and submitterKey (#103)), copied
+// byte for byte. It is generated from the
 // REAL relay routes; do not edit it here, regenerate it there.
 const _fixturePath =
     'test/features/collector/fixtures/station-owner-contract.json';
 const _fixtureSha256 =
-    '4f73964b49dfd0891736d3338ee2e826f5c8abd5d6defa62ec9b275644029315';
+    '2060a6f87c99a9a605a03f1ec4ed15b9b49367ff4b4cd98025a676aea6ae4aba';
 
 late final Map<String, dynamic> _fixture;
 late final Map<String, dynamic> _cases;
@@ -112,6 +114,12 @@ void main() {
           reason: 'backend#102 reports the flag; the node does not yet',
         );
         expect(l.submitterKeyActive, isFalse);
+        // backend#103: `submitterKey: null` is reported, and means "no key"
+        // (not "unknown").
+        expect(body.containsKey('submitterKey'), isTrue);
+        expect(body['submitterKey'], isNull);
+        expect(l.submitterKeyReported, isTrue);
+        expect(l.submitterKey, isNull);
         // The registered owner matches in either spelling of the same bytes.
         expect(l.ownerIs(_stationId, _ownerAddress), isTrue);
         expect(
@@ -397,6 +405,51 @@ void main() {
         }),
         throwsFormatException,
       );
+    });
+  });
+
+  // backend#103 sends an approved key as exactly `{pubkey, class}` (core4
+  // #213's owner-ledger submitter_pubkey / submitter_class), class `device`
+  // or `relay`. Built on a real fixture body so only that field differs.
+  group('ownership submitterKey shape (backend#103)', () {
+    for (final cls in SubmitterClass.values) {
+      test('{pubkey, class: "${cls.wireName}"} parses', () async {
+        final response = jsonDecode(
+          jsonEncode(_cases['ownership_owner_view']['response']),
+        ) as Map<String, dynamic>;
+        final body = response['body'] as Map<String, dynamic>;
+        final key = '9f' * 32;
+        body['submitterKey'] = {'pubkey': key, 'class': cls.wireName};
+        final l = await _replying(response).readLedger(_stationId);
+        expect(l.submitterKeyReported, isTrue);
+        expect(l.submitterKey, isNotNull);
+        expect(l.submitterKey!.pubkey, key);
+        expect(l.submitterKey!.submitterClass, cls);
+      });
+    }
+
+    test('an unknown class or a non-canonical key is refused', () async {
+      for (final bad in <Map<String, Object>>[
+        {'pubkey': '9f' * 32, 'class': 'phone'},
+        {'pubkey': '9F' * 32, 'class': 'device'},
+        {'pubkey': '9f' * 31, 'class': 'relay'},
+      ]) {
+        final response = jsonDecode(
+          jsonEncode(_cases['ownership_owner_view']['response']),
+        ) as Map<String, dynamic>;
+        (response['body'] as Map<String, dynamic>)['submitterKey'] = bad;
+        await expectLater(
+          _replying(response).readLedger(_stationId),
+          throwsA(
+            isA<StationOwnerException>().having(
+              (e) => e.refusal,
+              'refusal',
+              StationOwnerRefusal.unavailable,
+            ),
+          ),
+          reason: '$bad',
+        );
+      }
     });
   });
 }
