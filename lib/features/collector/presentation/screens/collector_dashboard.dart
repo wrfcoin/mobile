@@ -23,6 +23,7 @@ import '../providers/mobile_station_status_provider.dart';
 import '../widgets/battery_exemption_dialog.dart';
 import '../widgets/notifications_off_banner.dart';
 import '../widgets/owner_ledger_banner.dart';
+import '../widgets/station_registrar_card.dart';
 import '../../data/services/collector_preferences.dart';
 import '../../data/services/mobile_station_status_service.dart';
 import '../../../../services/background/sync_worker.dart';
@@ -155,6 +156,13 @@ class CollectorDashboard extends ConsumerWidget {
                 ),
               ),
             ),
+          // core4 station_registrar_key: a station the backend holds but the
+          // chain doesn't can be requested once the feature is active (the
+          // card renders nothing until then).
+          if (owner != null &&
+              stationStatus?.asData?.value.phase == MobileStationPhase.dbOnly &&
+              !(stationStatus?.asData?.value.cached ?? true))
+            StationRegistrarCard(ownerAddress: owner),
           if (stationStatus?.asData?.value.phase ==
                   MobileStationPhase.onChain &&
               !(stationStatus?.asData?.value.cached ?? true))

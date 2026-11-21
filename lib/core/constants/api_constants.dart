@@ -262,6 +262,15 @@ class ApiConstants {
   static const String mobileStationChallenge =
       '/weather/stations/mobile/challenge';
   static const String mobileStationRegister = '/weather/stations/mobile';
+
+  /// Phone station registrar (core4 `station_registrar_key`; backend
+  /// station-registrar-routes.ts). POST the owner-signed row; GET one status.
+  static const String stationRegistrarRequests = '/station-registrar/requests';
+  static String stationRegistrarRequest(String stationId) =>
+      '/station-registrar/requests/$stationId';
+
+  /// Public network status; its `upgrades.active` names the active features.
+  static const String publicNetworkStatus = '/public/network-status';
   static const String sensorReading = '/sensors/reading';
 
   // Weather
