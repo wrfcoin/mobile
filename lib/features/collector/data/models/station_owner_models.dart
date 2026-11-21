@@ -170,7 +170,7 @@ class OwnerLedger {
     final pending = j['pendingRecovery'];
     // `station_submitter_key` fields are newer than the rest of this read: an
     // older backend omits them, which reads as "not active" / "not reported".
-    // When present they are parsed as strictly as everything else.
+    // A present `submitterKey` is parsed as strictly as everything else.
     final submitterFlag = features['stationSubmitterKey'];
     final submitterReported = j.containsKey('submitterKey');
     final submitter = j['submitterKey'];
@@ -201,9 +201,9 @@ class OwnerLedger {
       ),
       observedAtHeight: _int(j['observedAtHeight'], 'observedAtHeight'),
       settledHeight: _int(j['settledHeight'], 'settledHeight'),
-      submitterKeyActive: submitterFlag == null
-          ? false
-          : _bool(submitterFlag, 'stationSubmitterKey'),
+      // Only a literal `true` turns the feature on; absent, false or any
+      // other value reads as off (backend#102: false when the node omits it).
+      submitterKeyActive: submitterFlag == true,
       submitterKeyReported: submitterReported,
       submitterKey: submitter == null
           ? null

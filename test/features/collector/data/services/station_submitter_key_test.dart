@@ -98,11 +98,18 @@ void main() {
         expect(() => OwnerLedger.fromJson(j), throwsFormatException);
       }
       j['submitterKey'] = null;
-      j['features'] = <String, Object>{
-        ...(j['features'] as Map<String, dynamic>),
-        'stationSubmitterKey': 'yes',
-      };
-      expect(() => OwnerLedger.fromJson(j), throwsFormatException);
+      // Only a literal true is on.
+      for (final v in <Object>['yes', 'true', 1, false, <String, Object>{}]) {
+        j['features'] = <String, Object>{
+          ...(j['features'] as Map<String, dynamic>),
+          'stationSubmitterKey': v,
+        };
+        expect(
+          OwnerLedger.fromJson(j).submitterKeyActive,
+          isFalse,
+          reason: '$v',
+        );
+      }
     });
   });
 
