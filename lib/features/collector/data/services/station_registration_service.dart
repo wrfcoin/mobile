@@ -23,6 +23,14 @@ enum RegistrationProblem {
   requestFailed,
 }
 
+/// This phone's collect PUBLIC key (lowercase hex) for [ownerAddress], or null
+/// when the phone has none yet. Read only: never creates a key, and returns
+/// nothing that can sign. Lets the owner-action screens name this phone as the
+/// station's submitter without importing the collect key store (which only
+/// the files in sync_worker_collect_key_test's allowlist may import).
+Future<String?> thisPhoneCollectPublicKey(String ownerAddress) async =>
+    (await CollectKeyStore().load(ownerAddress))?.publicKeyHex;
+
 class StationRegistrationResult {
   const StationRegistrationResult.registered(this.stationId)
     : problem = null,

@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../../data/models/station_owner_models.dart';
 import '../../../../services/api/api_client.dart';
-import '../../../../services/crypto/collect_key_store.dart';
 import '../../../../services/crypto/key_manager.dart';
 import '../../../../services/crypto/station_signing.dart';
 import '../../data/services/station_owner_api.dart';
 import '../../data/services/station_owner_service.dart';
+import '../../data/services/station_registration_service.dart'
+    show thisPhoneCollectPublicKey;
 
 final stationOwnerServiceProvider = Provider<StationOwnerService>((ref) {
   final keyManager = ref.read(keyManagerProvider);
@@ -15,8 +16,7 @@ final stationOwnerServiceProvider = Provider<StationOwnerService>((ref) {
     api: DioStationOwnerApi(ref.read(apiClientProvider).dio),
     openSession: () =>
         StationSigningService(keyManager: keyManager).openSession(),
-    loadCollectPubkey: (owner) async =>
-        (await CollectKeyStore().load(owner))?.publicKeyHex,
+    loadCollectPubkey: thisPhoneCollectPublicKey,
   );
 });
 
