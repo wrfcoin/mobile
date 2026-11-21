@@ -57,10 +57,12 @@ class _Worker extends SyncWorker {
 void main() {
   late AppDatabase db;
   late int statusCalls;
+  late int registrarReads;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     db = AppDatabase(NativeDatabase.memory());
     statusCalls = 0;
+    registrarReads = 0;
   });
   tearDown(() async {
     await db.close();
@@ -82,6 +84,22 @@ void main() {
       ..interceptors.add(
         InterceptorsWrapper(
           onRequest: (o, h) {
+            if (o.path == '/public/network-status') {
+              // The registrar card's feature read: off here (the card then
+              // renders nothing), and not a status call.
+              registrarReads++;
+              h.reject(
+                DioException.badResponse(
+                  statusCode: 404,
+                  requestOptions: o,
+                  response: Response<dynamic>(
+                    requestOptions: o,
+                    statusCode: 404,
+                  ),
+                ),
+              );
+              return;
+            }
             if (o.path.endsWith('/ownership')) {
               // Owner-ledger banner (station theft protection): unavailable
               // here; it must show nothing, and is not a status call.
@@ -230,6 +248,10 @@ void main() {
     ) async {
       await pump(tester, status);
       expect(statusCalls, 1);
+      // Only a station still waiting on the backend (db_only) checks whether
+      // the registrar is open; it is off here, so no card.
+      expect(registrarReads, status == 'db_only' ? 1 : 0);
+      expect(find.byKey(const Key('station-registrar-card')), findsNothing);
       expect(
         find.text(MobileStationStatus.awaitingActivationMessage),
         findsOneWidget,
