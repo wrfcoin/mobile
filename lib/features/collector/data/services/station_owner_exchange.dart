@@ -213,6 +213,36 @@ String ownerActionPayloadJson({
   'owner_signature': ownerSignature,
 });
 
+/// The `tx.data` payload JSON for a `set_submitter_key` owner action (core4
+/// station_owner.rs `StationSubmitterKeyPayload`). The key and class are
+/// omitted together to clear the station's key.
+String setSubmitterKeyPayloadJson({
+  required String stationId,
+  required String ownerAddress,
+  required String ownerPubkey,
+  required String? submitterPubkey,
+  required SubmitterClass? submitterClass,
+  required int actionNonce,
+  required int expiresAtHeight,
+  required String ownerSignature,
+}) {
+  if ((submitterPubkey == null) != (submitterClass == null)) {
+    throw ArgumentError('submitter key and class must be set together');
+  }
+  return jsonEncode(<String, dynamic>{
+    'tx_kind': 'station_owner_action_v1',
+    'station_id': stationId,
+    'owner_address': ownerAddress,
+    'owner_pubkey': ownerPubkey,
+    'action': stationSetSubmitterKeyWireName,
+    'action_nonce': actionNonce,
+    'expires_at_height': expiresAtHeight,
+    'owner_signature': ownerSignature,
+    'submitter_pubkey': ?submitterPubkey,
+    'submitter_class': ?submitterClass?.wireName,
+  });
+}
+
 const _recoveryRequestKind = 'station_recovery_request_v1';
 const _recoveryAcceptKind = 'station_recovery_accept_v1';
 

@@ -18,6 +18,10 @@ const int ownerTxMaxValidityBlocks = 10000;
 /// Opens the biometric-gated signing session; null when the user declined.
 typedef StationSessionOpener = Future<StationSigningSession?> Function();
 
+/// This phone's collect public key (lowercase hex) for [ownerAddress], or null
+/// when the phone has none yet. Never creates a key.
+typedef CollectPubkeyLoader = Future<String?> Function(String ownerAddress);
+
 class StationOwnerCancelled implements Exception {
   const StationOwnerCancelled();
 }
@@ -96,6 +100,20 @@ class OwnerActionSubmission {
   final OwnerSubmitReceipt receipt;
 }
 
+/// A submitted `set_submitter_key`: [submitterPubkey] null means "clear".
+class SubmitterKeySubmission {
+  const SubmitterKeySubmission({
+    required this.stationId,
+    required this.submitterPubkey,
+    required this.baselineNonce,
+    required this.receipt,
+  });
+  final String stationId;
+  final String? submitterPubkey;
+  final int baselineNonce;
+  final OwnerSubmitReceipt receipt;
+}
+
 class RecoveryCancelSubmission {
   const RecoveryCancelSubmission({
     required this.stationId,
@@ -157,10 +175,17 @@ class RecoveryAcceptFlow {
 }
 
 class StationOwnerService {
-  StationOwnerService({required this.api, required this.openSession});
+  StationOwnerService({
+    required this.api,
+    required this.openSession,
+    CollectPubkeyLoader? loadCollectPubkey,
+  }) : loadCollectPubkey = loadCollectPubkey ?? _noCollectKey;
+
+  static Future<String?> _noCollectKey(String _) async => null;
 
   final StationOwnerApi api;
   final StationSessionOpener openSession;
+  final CollectPubkeyLoader loadCollectPubkey;
 
   Future<StationSigningSession> _open() async {
     final s = await openSession();
@@ -244,6 +269,111 @@ class StationOwnerService {
       );
     } finally {
       session.close();
+    }
+  }
+
+  /// Owner approves THIS phone's collect key as the station's Device
+  /// submitter key (`station_submitter_key`). The owner's own wallet signs on
+  /// this device; no key leaves the phone. Refused before any signature when
+  /// the feature is inactive, this wallet is not the owner, the station is
+  /// frozen, or the phone has no collect key yet.
+  Future<SubmitterKeySubmission> approveThisPhoneAsSubmitter() =>
+      _setSubmitter(approve: true);
+
+  /// Owner clears the station's submitter key (only the owner key may then
+  /// sign the station's commits).
+  Future<SubmitterKeySubmission> clearSubmitterKey() =>
+      _setSubmitter(approve: false);
+
+  Future<SubmitterKeySubmission> _setSubmitter({required bool approve}) async {
+    final session = await _open();
+    try {
+      final ledger = await api.readLedger(session.stationId);
+      if (!ledger.submitterKeyActive) {
+        throw const StationOwnerBlocked(
+          'Approving a phone to send readings is not active on the network '
+          'yet.',
+        );
+      }
+      if (!ledger.ownerIs(session.stationId, session.ownerAddress)) {
+        throw const StationOwnerBlocked(
+          'This wallet is not the owner of the station.',
+        );
+      }
+      if (ledger.frozen) {
+        throw const StationOwnerBlocked(
+          'The station is frozen. Unfreeze it first.',
+        );
+      }
+      String? pubkey;
+      if (approve) {
+        pubkey = (await loadCollectPubkey(session.ownerAddress))
+            ?.trim()
+            .toLowerCase();
+        if (pubkey == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(pubkey)) {
+          throw const StationOwnerBlocked(
+            'This phone has no collect key yet. Turn on Collect first.',
+          );
+        }
+        if (ledger.submitterKey?.pubkey == pubkey) {
+          throw const StationOwnerBlocked(
+            'This phone is already approved for this station.',
+          );
+        }
+      } else if (ledger.submitterKeyReported && ledger.submitterKey == null) {
+        throw const StationOwnerBlocked(
+          'This station has no approved phone to remove.',
+        );
+      }
+      final cls = approve ? SubmitterClass.device : null;
+      final expires = ledger.observedAtHeight + ownerTxExpiryBlocks;
+      final signed = await session.signSetSubmitterKey(
+        submitterPubkey: pubkey,
+        submitterClass: cls,
+        actionNonce: ledger.ownerNonce,
+        expiresAtHeight: expires,
+      );
+      final receipt = await api.submit(
+        SignedOwnerPayload(
+          stationId: session.stationId,
+          kind: 'owner_action',
+          payload: setSubmitterKeyPayloadJson(
+            stationId: session.stationId,
+            ownerAddress: session.ownerAddress,
+            ownerPubkey: signed.publicKeyHex,
+            submitterPubkey: pubkey,
+            submitterClass: cls,
+            actionNonce: ledger.ownerNonce,
+            expiresAtHeight: expires,
+            ownerSignature: signed.signatureHex,
+          ),
+        ),
+      );
+      return SubmitterKeySubmission(
+        stationId: session.stationId,
+        submitterPubkey: pubkey,
+        baselineNonce: ledger.ownerNonce,
+        receipt: receipt,
+      );
+    } finally {
+      session.close();
+    }
+  }
+
+  /// One ledger read: confirmed only when the nonce advanced AND the read
+  /// reports the expected key (or none, after a clear). A read that does not
+  /// report the key can never confirm.
+  Future<TransferStatus> checkSubmitterApplied(SubmitterKeySubmission s) async {
+    try {
+      final ledger = await api.readLedger(s.stationId);
+      final effect =
+          ledger.submitterKeyReported &&
+          ledger.submitterKey?.pubkey == s.submitterPubkey;
+      return effect && ledger.ownerNonce > s.baselineNonce
+          ? TransferStatus.confirmed
+          : TransferStatus.pendingConfirmation;
+    } on StationOwnerException {
+      return TransferStatus.unknown;
     }
   }
 

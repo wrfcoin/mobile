@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../../data/models/station_owner_models.dart';
 import '../../../../services/api/api_client.dart';
+import '../../../../services/crypto/collect_key_store.dart';
 import '../../../../services/crypto/key_manager.dart';
 import '../../../../services/crypto/station_signing.dart';
 import '../../data/services/station_owner_api.dart';
@@ -14,6 +15,8 @@ final stationOwnerServiceProvider = Provider<StationOwnerService>((ref) {
     api: DioStationOwnerApi(ref.read(apiClientProvider).dio),
     openSession: () =>
         StationSigningService(keyManager: keyManager).openSession(),
+    loadCollectPubkey: (owner) async =>
+        (await CollectKeyStore().load(owner))?.publicKeyHex,
   );
 });
 
@@ -52,3 +55,15 @@ final ownerStationLedgerProvider = FutureProvider.autoDispose<OwnerLedger>(
         .readLedger(deriveMobileStationId(address.trim().toLowerCase()));
   },
 );
+
+/// This phone's collect public key for the logged-in wallet, or null when the
+/// phone has none yet (read only; never creates a key).
+final thisPhoneCollectPubkeyProvider = FutureProvider.autoDispose<String?>((
+  ref,
+) async {
+  final address = (await ref.watch(walletProvider.future))?.address;
+  if (address == null) return null;
+  return ref
+      .read(stationOwnerServiceProvider)
+      .loadCollectPubkey(address.trim().toLowerCase());
+});

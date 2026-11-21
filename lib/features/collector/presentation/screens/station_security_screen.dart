@@ -73,6 +73,29 @@ const Map<StationOwnerAction, _ActionCopy> _copy = {
   ),
 };
 
+const _approvePhoneCopy = _ActionCopy(
+  button: 'Approve this phone',
+  title: 'Approve this phone to send readings?',
+  body:
+      'Your wallet signs, on this phone, that this phone may send readings '
+      'for your station. It replaces any phone approved before. You can '
+      'remove it later.',
+  yes: 'Approve this phone',
+  confirmed: 'This phone is approved to send readings for your station.',
+  pendingNote: 'The phone is approved only when the network ledger shows it.',
+);
+
+const _clearPhoneCopy = _ActionCopy(
+  button: 'Remove approved phone',
+  title: 'Remove the approved phone?',
+  body: 'After this, only your wallet key can send readings for this station.',
+  yes: 'Remove',
+  confirmed:
+      'No phone is approved now. Only your wallet key can send '
+      'readings.',
+  pendingNote: 'The phone is removed only when the network ledger shows it.',
+);
+
 const _cancelCopy = _ActionCopy(
   button: 'Cancel recovery',
   title: 'Cancel this recovery?',
@@ -118,6 +141,37 @@ class _State extends ConsumerState<StationSecurityScreen> {
       if (!mounted) return;
       setState(() {
         _checker = () => svc.checkActionApplied(sub);
+        _doing = copy;
+        _status = TransferStatus.pendingConfirmation;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = stationOwnerErrorText(e));
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _setSubmitter({required bool approve}) async {
+    if (_working) return;
+    final copy = approve ? _approvePhoneCopy : _clearPhoneCopy;
+    setState(() => _working = true);
+    try {
+      final ok = await showConfirmDialog(
+        context,
+        title: copy.title,
+        body: copy.body,
+        yes: copy.yes,
+        destructive: !approve,
+      );
+      if (!mounted || ok != true) return;
+      setState(() => _error = null);
+      final svc = ref.read(stationOwnerServiceProvider);
+      final sub = approve
+          ? await svc.approveThisPhoneAsSubmitter()
+          : await svc.clearSubmitterKey();
+      if (!mounted) return;
+      setState(() {
+        _checker = () => svc.checkSubmitterApplied(sub);
         _doing = copy;
         _status = TransferStatus.pendingConfirmation;
       });
@@ -232,6 +286,11 @@ class _State extends ConsumerState<StationSecurityScreen> {
                 working: _working,
                 onAct: _act,
                 onCancelRecovery: _cancelRecovery,
+                thisPhonePubkey: ref
+                    .watch(thisPhoneCollectPubkeyProvider)
+                    .whenOrNull(data: (k) => k),
+                onApprovePhone: () => _setSubmitter(approve: true),
+                onClearPhone: () => _setSubmitter(approve: false),
               ),
             ),
           if (_error != null) ...[
@@ -250,12 +309,18 @@ class _Status extends StatelessWidget {
     required this.working,
     required this.onAct,
     required this.onCancelRecovery,
+    required this.thisPhonePubkey,
+    required this.onApprovePhone,
+    required this.onClearPhone,
   });
 
   final OwnerLedger ledger;
   final bool working;
   final void Function(StationOwnerAction) onAct;
   final VoidCallback onCancelRecovery;
+  final String? thisPhonePubkey;
+  final VoidCallback onApprovePhone;
+  final VoidCallback onClearPhone;
 
   @override
   Widget build(BuildContext context) {
@@ -324,6 +389,93 @@ class _Status extends StatelessWidget {
                 child: Text(_copy[a]!.button),
               ),
             ),
+        const SizedBox(height: 24),
+        _SubmitterSection(
+          ledger: ledger,
+          working: working,
+          thisPhonePubkey: thisPhonePubkey,
+          onApprove: onApprovePhone,
+          onClear: onClearPhone,
+        ),
+      ],
+    );
+  }
+}
+
+/// `station_submitter_key`: the owner approves this phone's collect key as
+/// the one Device key that may send the station's readings. Shown only as
+/// plain text until the network reports the feature active.
+class _SubmitterSection extends StatelessWidget {
+  const _SubmitterSection({
+    required this.ledger,
+    required this.working,
+    required this.thisPhonePubkey,
+    required this.onApprove,
+    required this.onClear,
+  });
+
+  final OwnerLedger ledger;
+  final bool working;
+  final String? thisPhonePubkey;
+  final VoidCallback onApprove;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final key = ledger.submitterKey;
+    final mine = thisPhonePubkey;
+    final isThisPhone = key != null && mine != null && key.pubkey == mine;
+    final String status;
+    if (!ledger.submitterKeyReported) {
+      status = 'The network does not show the approved phone yet.';
+    } else if (key == null) {
+      status = 'No phone is approved. Only your wallet key can send readings.';
+    } else if (isThisPhone) {
+      status = 'This phone is approved to send readings.';
+    } else {
+      final tail = key.pubkey.substring(key.pubkey.length - 8);
+      status = 'Another device is approved (key ending $tail).';
+    }
+    final canClear = !ledger.submitterKeyReported || key != null;
+    return Column(
+      key: const Key('submitter-section'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Phone that sends readings',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        if (!ledger.submitterKeyActive)
+          const Text(
+            'Approving this phone to send readings is not active on the '
+            'network yet.',
+          )
+        else ...[
+          Text(status),
+          const SizedBox(height: 12),
+          if (ledger.frozen)
+            const Text('Unfreeze the station to change the approved phone.')
+          else ...[
+            if (mine == null)
+              const Text(
+                'This phone has no collect key yet. Turn on Collect first.',
+              )
+            else if (!isThisPhone)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ElevatedButton(
+                  onPressed: working ? null : onApprove,
+                  child: Text(_approvePhoneCopy.button),
+                ),
+              ),
+            if (canClear)
+              OutlinedButton(
+                onPressed: working ? null : onClear,
+                child: Text(_clearPhoneCopy.button),
+              ),
+          ],
+        ],
       ],
     );
   }
