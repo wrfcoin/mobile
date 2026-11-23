@@ -43,6 +43,7 @@ void main() {
       relativeHumidityPercent: 62,
       barometricPressureHpa: 1013.25,
       windSpeedKmh: 16,
+      observedAt: '2026-11-23T03:50:00Z',
     ),
     'observed-missing': CurrentConditions(
       relativeHumidityPercent: 62,

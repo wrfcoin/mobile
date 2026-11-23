@@ -39,6 +39,9 @@ class WeatherCard extends ConsumerWidget {
     // Forecast fallback keeps its dash; an observation that lacks a reading
     // says so, like humidity and pressure.
     final missing = current == null ? '—' : notAvailable;
+    // The time of the readings shown: the observation's when it is loaded
+    // (its readings are on screen), else the forecast period's.
+    final updatedAt = current == null ? forecast.timestamp : current.observedAt;
 
     // The big temperature leaves no room beside it at large text sizes.
     final stacked = MediaQuery.textScalerOf(context).scale(1) > 1.3;
@@ -141,11 +144,13 @@ class WeatherCard extends ConsumerWidget {
             _DataRow(
               icon: Icons.schedule,
               label: 'Updated',
-              value: AppFormatters.formatIsoTimestamp(
-                context,
-                preferences,
-                forecast.timestamp,
-              ),
+              value: updatedAt == null
+                  ? notAvailable
+                  : AppFormatters.formatIsoTimestamp(
+                      context,
+                      preferences,
+                      updatedAt,
+                    ),
             ),
           ],
         ),
