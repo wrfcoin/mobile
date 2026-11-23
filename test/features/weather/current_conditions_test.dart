@@ -359,6 +359,7 @@ void main() {
           return Future.value((
             200,
             _current({
+              'temperatureC': 20,
               'relativeHumidityPercent': 68,
               'barometricPressureHpa': 1010,
             }),

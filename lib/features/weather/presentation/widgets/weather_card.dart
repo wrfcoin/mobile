@@ -15,9 +15,11 @@ class WeatherCard extends ConsumerWidget {
 
   final ForecastModel forecast;
 
-  /// The latest observation (mobile#332). When present its humidity and
-  /// pressure are shown, null meaning "Not available"; when absent (not
-  /// loaded, or the call failed) the forecast's own values are used.
+  /// The latest observation (mobile#332). When present its temperature,
+  /// humidity, wind and pressure are shown, null meaning "Not available";
+  /// when absent (not loaded, or the call failed) the forecast's own values
+  /// are used. The forecast period can be "Tonight" (the overnight low), so
+  /// it must not stand in for the observed temperature when one exists.
   final CurrentConditions? current;
 
   const WeatherCard({super.key, required this.forecast, this.current});
@@ -30,18 +32,25 @@ class WeatherCard extends ConsumerWidget {
         ? forecast.humidity
         : current.relativeHumidityPercent;
     final pressure = current == null ? forecast.pressure : current.pressureHpa;
+    final temperatureC = current == null
+        ? forecast.temperature
+        : current.temperatureC;
+    final windKmh = current == null ? forecast.windSpeed : current.windSpeedKmh;
+    // Forecast fallback keeps its dash; an observation that lacks a reading
+    // says so, like humidity and pressure.
+    final missing = current == null ? '—' : notAvailable;
 
     // The big temperature leaves no room beside it at large text sizes.
     final stacked = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     final temperature = Text(
-      forecast.temperature == null
-          ? '—'
-          : AppFormatters.formatTemperature(
-              context,
-              preferences,
-              forecast.temperature!,
-            ),
-      style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+      temperatureC == null
+          ? missing
+          : AppFormatters.formatTemperature(context, preferences, temperatureC),
+      // "Not available" at 48 would push the details off a phone screen.
+      style: TextStyle(
+        fontSize: temperatureC == null && current != null ? 20 : 48,
+        fontWeight: FontWeight.bold,
+      ),
     );
     final details = Column(
       children: [
@@ -54,13 +63,9 @@ class WeatherCard extends ConsumerWidget {
         _DataRow(
           icon: Icons.air,
           label: 'Wind',
-          value: forecast.windSpeed == null
-              ? '—'
-              : AppFormatters.formatWindSpeed(
-                  context,
-                  preferences,
-                  forecast.windSpeed!,
-                ),
+          value: windKmh == null
+              ? missing
+              : AppFormatters.formatWindSpeed(context, preferences, windKmh),
         ),
         const SizedBox(height: 8),
         _DataRow(
