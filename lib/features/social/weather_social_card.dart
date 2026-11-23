@@ -15,6 +15,11 @@ typedef WeatherCardShareLauncher = Future<void> Function(
   String? text,
 });
 
+/// [ForecastModel.windSpeed] is km/h: the backend passes NOAA's text
+/// ("5 to 10 mph") through and `forecastFromEnvelope` converts it to km/h.
+/// Rounded like `AppFormatters.formatWindSpeed`'s metric output.
+String windKmhLabel(double kmh) => '${kmh.round()} km/h';
+
 /// A branded, share-ready weather card that can export itself as a PNG and
 /// open the system share sheet.
 class WeatherSocialCard extends StatefulWidget {
@@ -131,7 +136,7 @@ class WeatherSocialCardShareService {
     final earnings = weatherRewards == null
         ? 'Earned rewards: Not available.'
         : 'I\'ve earned $weatherRewards WRF with WRFCoin.';
-    return 'Current weather in ${forecast.location}: $summary. $earnings';
+    return 'Forecast for ${forecast.location}: $summary. $earnings';
   }
 
   static Future<void> _defaultShareLauncher(
@@ -165,8 +170,8 @@ class WeatherSocialCardShareService {
       if (forecast.windSpeed != null)
         forecast.windDirection != null &&
                 forecast.windDirection!.trim().isNotEmpty
-            ? '${forecast.windSpeed!.toStringAsFixed(1)} m/s ${forecast.windDirection}'
-            : '${forecast.windSpeed!.toStringAsFixed(1)} m/s wind',
+            ? '${windKmhLabel(forecast.windSpeed!)} ${forecast.windDirection}'
+            : '${windKmhLabel(forecast.windSpeed!)} wind',
     ];
 
     if (forecast.precipitation != null && forecast.precipitation! > 0) {
@@ -298,8 +303,8 @@ class _WeatherSocialCardSurface extends StatelessWidget {
                           ? '—'
                           : forecast.windDirection == null ||
                                 forecast.windDirection!.trim().isEmpty
-                          ? '${forecast.windSpeed!.toStringAsFixed(1)} m/s'
-                          : '${forecast.windSpeed!.toStringAsFixed(1)} m/s ${forecast.windDirection}',
+                          ? windKmhLabel(forecast.windSpeed!)
+                          : '${windKmhLabel(forecast.windSpeed!)} ${forecast.windDirection}',
                     ),
                     _MetricPill(
                       icon: Icons.compress,

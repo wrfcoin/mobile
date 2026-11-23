@@ -27,7 +27,10 @@ void main() {
         overrides: [
           appPreferencesStoreProvider.overrideWithValue(
             TestAppPreferencesStore(
-              const AppPreferences(unitSystem: UnitSystem.imperial),
+              const AppPreferences(
+                unitSystem: UnitSystem.imperial,
+                timezonePreference: TimezonePreference.utc,
+              ),
             ),
           ),
         ],
@@ -83,8 +86,8 @@ void main() {
     expect(find.text('0°F'), findsNothing);
     expect(find.text('32°F'), findsNothing);
     expect(find.text('0 mph'), findsNothing);
-    // Temperature and Wind; humidity and pressure are present.
-    expect(find.text(WeatherCard.notAvailable), findsNWidgets(2));
+    // Temperature, Wind and Updated; humidity and pressure are present.
+    expect(find.text(WeatherCard.notAvailable), findsNWidgets(3));
     expect(tester.takeException(), isNull);
   });
 
@@ -95,5 +98,44 @@ void main() {
     );
     expect(find.text('32°F'), findsOneWidget);
     expect(find.text('0 mph'), findsOneWidget);
+  });
+
+  group('Updated row', () {
+    String updated(WidgetTester tester) {
+      final row = find.ancestor(
+        of: find.text('Updated'),
+        matching: find.byType(Wrap),
+      );
+      return tester
+          .widgetList<Text>(
+            find.descendant(of: row.first, matching: find.byType(Text)),
+          )
+          .map((t) => t.data ?? '')
+          .firstWhere((t) => t != 'Updated');
+    }
+
+    testWidgets('observation present: its observedAt', (tester) async {
+      await pump(
+        tester,
+        current: const CurrentConditions(
+          temperatureC: 9,
+          observedAt: '2026-11-23T03:50:00Z',
+        ),
+      );
+      expect(updated(tester), contains('3:50'));
+      expect(updated(tester), isNot(contains('3:00')));
+    });
+
+    testWidgets('observation absent: the forecast timestamp', (tester) async {
+      await pump(tester);
+      expect(updated(tester), contains('3:00'));
+    });
+
+    testWidgets('observation without observedAt: Not available', (
+      tester,
+    ) async {
+      await pump(tester, current: const CurrentConditions(temperatureC: 9));
+      expect(updated(tester), WeatherCard.notAvailable);
+    });
   });
 }

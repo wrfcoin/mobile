@@ -61,6 +61,9 @@ void main() {
       expect(find.text('WRFCoin Social Weather'), findsOneWidget);
       expect(find.text('Portland, OR'), findsOneWidget);
       expect(find.text('23.4°C'), findsOneWidget);
+      // windSpeed is km/h (NOAA's "3 mph" → 4.8 km/h), never m/s.
+      expect(find.text('5 km/h NW'), findsOneWidget);
+      expect(find.textContaining('m/s'), findsNothing);
       expect(find.text('12.34 WRF earned'), findsOneWidget);
       expect(find.text('Share weather card'), findsOneWidget);
     });
@@ -100,12 +103,17 @@ void main() {
       expect(await sharedFile.readAsBytes(), [1, 2, 3, 4]);
     });
 
-    test('buildShareText summarizes current weather and earnings', () {
+    test('buildShareText summarizes the forecast and earnings', () {
       final text = WeatherSocialCardShareService.buildShareText(
         forecast: _sampleForecast(),
         weatherRewards: '12.34',
       );
 
+      // Forecast values are never captioned as current weather.
+      expect(text, startsWith('Forecast for Portland, OR: '));
+      expect(text, isNot(contains('Current weather')));
+      expect(text, contains('5 km/h NW'));
+      expect(text, isNot(contains('m/s')));
       expect(text, contains('Portland, OR'));
       expect(text, contains('23.4°C'));
       expect(text, contains('12.34 WRF'));
